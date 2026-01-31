@@ -1,9 +1,10 @@
 import { api } from "@gbarros-assistant/backend/convex/_generated/api";
-import { getConvexClient } from "../convex/client";
 import type { AuthenticationState, SignalDataTypeMap } from "baileys";
 import { initAuthCreds } from "baileys";
 
-export async function useConvexAuthState(): Promise<{
+import { getConvexClient } from "../convex/client";
+
+export async function getConvexAuthState(): Promise<{
   state: AuthenticationState;
   saveCreds: () => Promise<void>;
 }> {

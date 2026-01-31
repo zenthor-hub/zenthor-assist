@@ -18,7 +18,7 @@ export default function ChatPage() {
         <div className="flex h-full flex-col items-center justify-center gap-4">
           <p className="text-muted-foreground">Sign in to start chatting</p>
           <Link
-            href={"/sign-in" as any}
+            href={"/sign-in" as never}
             className="bg-primary text-primary-foreground px-4 py-2 text-sm font-medium"
           >
             Sign In

@@ -1,5 +1,6 @@
-import { Webhook } from "svix";
 import type { WebhookEvent } from "@clerk/backend";
+import { Webhook } from "svix";
+
 import { internal } from "../_generated/api";
 import { httpAction } from "../_generated/server";
 
@@ -34,7 +35,7 @@ export const webhook = httpAction(async (ctx, request) => {
   }
 
   const eventType = evt.type;
-  console.log(`[clerk webhook] Received event: ${eventType}`);
+  console.info(`[clerk webhook] Received event: ${eventType}`);
 
   try {
     switch (eventType) {
@@ -71,7 +72,7 @@ export const webhook = httpAction(async (ctx, request) => {
       }
 
       default:
-        console.log(`[clerk webhook] Unhandled event type: ${eventType}`);
+        console.info(`[clerk webhook] Unhandled event type: ${eventType}`);
     }
   } catch (err) {
     console.error(`[clerk webhook] Error handling ${eventType}:`, err);

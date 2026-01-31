@@ -14,5 +14,5 @@ export async function sendWhatsAppMessage(phone: string, text: string) {
 
   const jid = `${phone}@s.whatsapp.net`;
   await socket.sendMessage(jid, { text });
-  console.log(`[whatsapp] Sent message to ${phone}`);
+  console.info(`[whatsapp] Sent message to ${phone}`);
 }

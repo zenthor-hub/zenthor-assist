@@ -3,25 +3,32 @@ import makeWASocket, {
   fetchLatestBaileysVersion,
   makeCacheableSignalKeyStore,
 } from "baileys";
-import { useConvexAuthState } from "./convex-auth-state";
+
+import { getConvexAuthState } from "./convex-auth-state";
 import { handleIncomingMessage } from "./handler";
 import { setWhatsAppSocket } from "./sender";
 
 const logger = {
   level: "warn",
-  child() { return logger; },
+  child() {
+    return logger;
+  },
   trace() {},
   debug() {},
   info() {},
-  warn(obj: unknown, msg?: string) { console.warn("[baileys]", msg || obj); },
-  error(obj: unknown, msg?: string) { console.error("[baileys]", msg || obj); },
-} as any;
+  warn(obj: unknown, msg?: string) {
+    console.warn("[baileys]", msg || obj);
+  },
+  error(obj: unknown, msg?: string) {
+    console.error("[baileys]", msg || obj);
+  },
+} as never;
 
 export async function startWhatsApp() {
   const { version } = await fetchLatestBaileysVersion();
-  console.log(`[whatsapp] Using Baileys version ${version.join(".")}`);
+  console.info(`[whatsapp] Using Baileys version ${version.join(".")}`);
 
-  const { state, saveCreds } = await useConvexAuthState();
+  const { state, saveCreds } = await getConvexAuthState();
 
   const sock = makeWASocket({
     version,
@@ -41,21 +48,21 @@ export async function startWhatsApp() {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      console.log("[whatsapp] QR code printed above — scan with WhatsApp");
+      console.info("[whatsapp] QR code printed above — scan with WhatsApp");
     }
 
     if (connection === "close") {
       const error = lastDisconnect?.error as { output?: { statusCode?: number } } | undefined;
       const statusCode = error?.output?.statusCode;
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-      console.log(
+      console.info(
         `[whatsapp] Connection closed (status: ${statusCode}), reconnecting: ${shouldReconnect}`,
       );
       if (shouldReconnect) {
         startWhatsApp();
       }
     } else if (connection === "open") {
-      console.log("[whatsapp] Connected successfully");
+      console.info("[whatsapp] Connected successfully");
     }
   });
 

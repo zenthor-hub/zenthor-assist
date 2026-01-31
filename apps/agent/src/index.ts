@@ -2,9 +2,9 @@ import { startAgentLoop } from "./agent/loop";
 import { startWhatsApp } from "./whatsapp/connection";
 
 async function main() {
-  console.log("[main] Starting gbarros-assistant agent...");
+  console.info("[main] Starting gbarros-assistant agent...");
 
-  const requiredEnv = ["CONVEX_URL", "ANTHROPIC_API_KEY"];
+  const requiredEnv = ["CONVEX_URL", "AI_GATEWAY_API_KEY"];
   for (const key of requiredEnv) {
     if (!process.env[key]) {
       console.error(`[main] Missing required env var: ${key}`);
@@ -20,13 +20,13 @@ async function main() {
       await startWhatsApp();
     } catch (error) {
       console.error("[main] Failed to start WhatsApp:", error);
-      console.log("[main] Agent will continue without WhatsApp");
+      console.info("[main] Agent will continue without WhatsApp");
     }
   } else {
-    console.log("[main] WhatsApp disabled via ENABLE_WHATSAPP=false");
+    console.info("[main] WhatsApp disabled via ENABLE_WHATSAPP=false");
   }
 
-  console.log("[main] Agent is running");
+  console.info("[main] Agent is running");
 }
 
 main().catch((error) => {

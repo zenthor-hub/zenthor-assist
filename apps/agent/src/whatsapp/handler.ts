@@ -1,6 +1,7 @@
 import { api } from "@gbarros-assistant/backend/convex/_generated/api";
-import { getConvexClient } from "../convex/client";
 import type { WAMessage } from "baileys";
+
+import { getConvexClient } from "../convex/client";
 
 export async function handleIncomingMessage(message: WAMessage) {
   const client = getConvexClient();
@@ -13,7 +14,7 @@ export async function handleIncomingMessage(message: WAMessage) {
   if (!text) return;
 
   const phone = jid.replace("@s.whatsapp.net", "");
-  console.log(`[whatsapp] Incoming from ${phone}: ${text.substring(0, 50)}...`);
+  console.info(`[whatsapp] Incoming from ${phone}: ${text.substring(0, 50)}...`);
 
   let contact = await client.query(api.contacts.getByPhone, { phone });
 
@@ -27,7 +28,7 @@ export async function handleIncomingMessage(message: WAMessage) {
   }
 
   if (!contact || !contact.isAllowed) {
-    console.log(`[whatsapp] Ignoring message from non-allowed contact: ${phone}`);
+    console.info(`[whatsapp] Ignoring message from non-allowed contact: ${phone}`);
     return;
   }
 
@@ -42,5 +43,5 @@ export async function handleIncomingMessage(message: WAMessage) {
     channel: "whatsapp",
   });
 
-  console.log(`[whatsapp] Queued message from ${phone} for processing`);
+  console.info(`[whatsapp] Queued message from ${phone} for processing`);
 }

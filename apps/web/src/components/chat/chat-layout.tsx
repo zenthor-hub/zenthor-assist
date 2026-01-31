@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { useUser } from "@clerk/nextjs";
-import { useMutation } from "convex/react";
 import { api } from "@gbarros-assistant/backend/convex/_generated/api";
 import type { Id } from "@gbarros-assistant/backend/convex/_generated/dataModel";
-import { ConversationList } from "./conversation-list";
-import { ChatArea } from "./chat-area";
+import { useMutation } from "convex/react";
+import { useState, useEffect } from "react";
+
 import Loader from "@/components/loader";
+
+import { ChatArea } from "./chat-area";
+import { ConversationList } from "./conversation-list";
 
 export function ChatLayout() {
   const { user } = useUser();
@@ -39,7 +41,7 @@ export function ChatLayout() {
     }
 
     init();
-  }, [user]);
+  }, [user, getOrCreateUser, getOrCreateConversation]);
 
   if (loading || !userId || !conversationId) {
     return (

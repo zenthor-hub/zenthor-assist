@@ -1,4 +1,5 @@
 import { createClerkClient } from "@clerk/backend";
+
 import { internal } from "../_generated/api";
 import { internalAction } from "../_generated/server";
 
@@ -27,9 +28,7 @@ export const syncAllUsers = internalAction({
       if (users.length === 0) break;
 
       for (const user of users) {
-        const primaryEmail = user.emailAddresses.find(
-          (e) => e.id === user.primaryEmailAddressId,
-        );
+        const primaryEmail = user.emailAddresses.find((e) => e.id === user.primaryEmailAddressId);
         const name = [user.firstName, user.lastName].filter(Boolean).join(" ") || "User";
 
         const result = await ctx.runMutation(internal.clerk.webhooks.handleUserCreated, {
@@ -47,13 +46,15 @@ export const syncAllUsers = internalAction({
         synced++;
       }
 
-      console.log(`[clerk sync] Processed ${synced}/${totalCount} users...`);
+      console.info(`[clerk sync] Processed ${synced}/${totalCount} users...`);
       offset += limit;
 
       if (offset >= totalCount) break;
     }
 
-    console.log(`[clerk sync] Done. Synced ${synced} users (${created} created, ${updated} updated)`);
+    console.info(
+      `[clerk sync] Done. Synced ${synced} users (${created} created, ${updated} updated)`,
+    );
     return { synced, created, updated };
   },
 });
