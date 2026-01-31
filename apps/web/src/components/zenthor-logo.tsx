@@ -29,6 +29,35 @@ export function ZenthorMark({ className, ...props }: SVGProps<SVGSVGElement>) {
   );
 }
 
+export function ZenthorHeroMark({ className, ...props }: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 120 120"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+      {...props}
+    >
+      <path
+        d="M24 24h72L24 96h72"
+        stroke="currentColor"
+        strokeWidth="6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M24 24h72L24 96h72"
+        stroke="currentColor"
+        strokeWidth="6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity="0.15"
+        transform="translate(6, 6)"
+      />
+    </svg>
+  );
+}
+
 export function ZenthorLogo({ className, ...props }: SVGProps<SVGSVGElement>) {
   return (
     <svg
