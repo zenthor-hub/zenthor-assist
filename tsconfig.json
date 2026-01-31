@@ -1,0 +1,3 @@
+{
+  "extends": "@gbarros-assistant/config/tsconfig.base.json"
+}
