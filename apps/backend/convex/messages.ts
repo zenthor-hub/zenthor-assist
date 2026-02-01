@@ -17,6 +17,12 @@ export const send = mutation({
       status: "sent",
     });
 
+    const conversation = await ctx.db.get(args.conversationId);
+    if (conversation && (!conversation.title || conversation.title === "New chat")) {
+      const title = args.content.length > 50 ? `${args.content.slice(0, 50)}…` : args.content;
+      await ctx.db.patch(args.conversationId, { title });
+    }
+
     await ctx.db.insert("agentQueue", {
       messageId,
       conversationId: args.conversationId,

@@ -5,8 +5,6 @@ import { createContext, useContext } from "react";
 
 type AppContextType = {
   userId: Id<"users">;
-  conversationId: Id<"conversations"> | null;
-  setConversationId: (id: Id<"conversations">) => void;
 };
 
 export const AppContext = createContext<AppContextType | null>(null);

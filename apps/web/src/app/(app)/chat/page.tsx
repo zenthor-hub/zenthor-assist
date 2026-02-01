@@ -1,19 +1,22 @@
 "use client";
 
-import { ChatArea } from "@/components/chat/chat-area";
-import Loader from "@/components/loader";
+import { api } from "@zenthor-assist/backend/convex/_generated/api";
+import { useMutation } from "convex/react";
+import { MessageSquare, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
+
+import { Button } from "@/components/ui/button";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useAppContext } from "@/hooks/use-app-context";
 
 export default function ChatPage() {
-  const { conversationId } = useAppContext();
+  const { userId } = useAppContext();
+  const createConversation = useMutation(api.conversations.create);
+  const router = useRouter();
 
-  if (!conversationId) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <Loader />
-      </div>
-    );
+  async function handleNewChat() {
+    const id = await createConversation({ userId });
+    router.push(`/chat/${id}`);
   }
 
   return (
@@ -24,7 +27,14 @@ export default function ChatPage() {
           <h1 className="text-foreground truncate text-lg font-semibold tracking-tight">Chats</h1>
         </div>
       </header>
-      <ChatArea conversationId={conversationId} />
+      <div className="flex flex-1 flex-col items-center justify-center gap-4">
+        <MessageSquare className="text-muted-foreground size-12" />
+        <p className="text-muted-foreground text-sm">No conversation selected</p>
+        <Button onClick={handleNewChat}>
+          <Plus className="size-4" />
+          Start a new chat
+        </Button>
+      </div>
     </div>
   );
 }

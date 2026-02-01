@@ -23,7 +23,7 @@ function formatRelativeTime(timestamp: number) {
 }
 
 export default function Dashboard() {
-  const { userId, setConversationId } = useAppContext();
+  const { userId } = useAppContext();
   const conversations = useQuery(api.conversations.listRecentWithLastMessage, { userId });
 
   if (conversations === undefined) {
@@ -76,8 +76,7 @@ export default function Dashboard() {
               {conversations.map((conv) => (
                 <Link
                   key={conv._id}
-                  href="/chat"
-                  onClick={() => setConversationId(conv._id)}
+                  href={`/chat/${conv._id}` as "/"}
                   className="hover:bg-muted/50 flex items-center gap-3 px-4 py-3 transition-colors"
                 >
                   <MessageSquare className="text-muted-foreground size-4 shrink-0" />

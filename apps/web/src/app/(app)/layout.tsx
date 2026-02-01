@@ -14,10 +14,8 @@ import { AppContext } from "@/hooks/use-app-context";
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { user } = useUser();
   const getOrCreateUser = useMutation(api.users.getOrCreateFromClerk);
-  const getOrCreateConversation = useMutation(api.conversations.getOrCreate);
 
   const [userId, setUserId] = useState<Id<"users"> | null>(null);
-  const [conversationId, setConversationId] = useState<Id<"conversations"> | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,17 +29,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         image: user!.imageUrl,
       });
       setUserId(uId);
-
-      const convId = await getOrCreateConversation({
-        userId: uId,
-        channel: "web",
-      });
-      setConversationId(convId);
       setLoading(false);
     }
 
     init();
-  }, [user, getOrCreateUser, getOrCreateConversation]);
+  }, [user, getOrCreateUser]);
 
   if (loading || !userId) {
     return (
@@ -52,7 +44,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AppContext.Provider value={{ userId, conversationId, setConversationId }}>
+    <AppContext.Provider value={{ userId }}>
       <SidebarProvider className="h-screen overflow-hidden">
         <AppSidebar />
         <SidebarInset className="min-h-0 overflow-hidden">{children}</SidebarInset>

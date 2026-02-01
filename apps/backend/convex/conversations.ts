@@ -74,12 +74,48 @@ export const get = query({
   },
 });
 
+export const create = mutation({
+  args: {
+    userId: v.id("users"),
+    title: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("conversations", {
+      userId: args.userId,
+      channel: "web",
+      status: "active",
+      title: args.title ?? "New chat",
+    });
+  },
+});
+
+export const archive = mutation({
+  args: { id: v.id("conversations") },
+  handler: async (ctx, args) => {
+    const conv = await ctx.db.get(args.id);
+    if (!conv) throw new Error("Conversation not found");
+    if (conv.channel === "whatsapp") throw new Error("Cannot archive WhatsApp conversations");
+    await ctx.db.patch(args.id, { status: "archived" });
+  },
+});
+
+export const updateTitle = mutation({
+  args: {
+    id: v.id("conversations"),
+    title: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, { title: args.title });
+  },
+});
+
 export const listRecentWithLastMessage = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
     const conversations = await ctx.db
       .query("conversations")
       .withIndex("by_userId", (q) => q.eq("userId", args.userId))
+      .filter((q) => q.eq(q.field("status"), "active"))
       .collect();
 
     const results = await Promise.all(
