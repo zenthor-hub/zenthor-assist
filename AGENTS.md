@@ -8,8 +8,8 @@
 
 ## Slash Commands
 
-| Command | Description |
-| --- | --- |
+| Command       | Description                                                            |
+| ------------- | ---------------------------------------------------------------------- |
 | `/quick-test` | Run tests for a specific file or pattern (useful for Lambda functions) |
 
 # Repository Guidelines
@@ -75,10 +75,10 @@ A skill is a set of local instructions to follow that is stored in a `SKILL.md` 
 - Trigger rules: If the user names a skill (with `$SkillName` or plain text) OR the task clearly matches a skill's description shown above, you must use that skill for that turn. Multiple mentions mean use them all. Do not carry skills across turns unless re-mentioned.
 - Missing/blocked: If a named skill is not in the list or the path cannot be read, say so briefly and continue with the best fallback.
 - How to use a skill (progressive disclosure):
-  1) After deciding to use a skill, open its `SKILL.md`. Read only enough to follow the workflow.
-  2) If `SKILL.md` points to extra folders such as `references/`, load only the specific files needed for the request; do not bulk-load everything.
-  3) If `scripts/` exist, prefer running or patching them instead of retyping large code blocks.
-  4) If `assets/` or templates exist, reuse them instead of recreating from scratch.
+  1. After deciding to use a skill, open its `SKILL.md`. Read only enough to follow the workflow.
+  2. If `SKILL.md` points to extra folders such as `references/`, load only the specific files needed for the request; do not bulk-load everything.
+  3. If `scripts/` exist, prefer running or patching them instead of retyping large code blocks.
+  4. If `assets/` or templates exist, reuse them instead of recreating from scratch.
 - Coordination and sequencing:
   - If multiple skills apply, choose the minimal set that covers the request and state the order you will use them.
   - Announce which skill(s) you are using and why (one short line). If you skip an obvious skill, say why.

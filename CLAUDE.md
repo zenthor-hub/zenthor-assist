@@ -55,6 +55,7 @@ Web search is handled separately via `getWebSearchTool()` in `tools/web-search.t
 ### Database Schema (Convex)
 
 Key tables and relationships:
+
 - **users** — synced from Clerk via webhook, indexed by `externalId` and `email`
 - **contacts** — WhatsApp contacts with `isAllowed` whitelist flag, indexed by `phone`
 - **conversations** — channel (`whatsapp` | `web`), linked to either `userId` or `contactId`
