@@ -1,14 +1,7 @@
 "use client";
 
 import { SignedIn, SignedOut } from "@clerk/nextjs";
-import {
-  ArrowRight01Icon,
-  DashboardSquare01Icon,
-  Message01Icon,
-  SparklesIcon,
-  ZapIcon,
-} from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowRight, LayoutDashboard, MessageSquare, Sparkles, Zap } from "lucide-react";
 import Link from "next/link";
 
 import { ModeToggle } from "@/components/mode-toggle";
@@ -47,7 +40,7 @@ export default function Home() {
       >
         <div className="flex items-center gap-2.5">
           <ZenthorMark className="text-primary size-7" />
-          <span className="font-display text-foreground text-[15px] font-semibold tracking-tight">
+          <span className="text-foreground font-sans text-[15px] font-semibold tracking-tight">
             zenthor
           </span>
         </div>
@@ -64,7 +57,7 @@ export default function Home() {
 
           {/* Headline */}
           <h1
-            className="animate-fade-up font-display text-foreground text-center text-4xl leading-[1.1] font-bold tracking-tight md:text-6xl"
+            className="animate-fade-up text-foreground text-center font-sans text-4xl leading-[1.1] font-bold tracking-tight md:text-6xl"
             style={{ animationDelay: "0.3s" }}
           >
             Conversation,
@@ -90,7 +83,7 @@ export default function Home() {
               <Button asChild size="lg" className="gap-2 px-5">
                 <Link href={"/sign-in" as "/"}>
                   Sign in
-                  <HugeiconsIcon icon={ArrowRight01Icon} className="size-4" />
+                  <ArrowRight className="size-4" />
                 </Link>
               </Button>
             </SignedOut>
@@ -98,7 +91,7 @@ export default function Home() {
               <Button asChild size="lg" className="gap-2 px-5">
                 <Link href={"/dashboard" as "/"}>
                   Go to dashboard
-                  <HugeiconsIcon icon={DashboardSquare01Icon} className="size-4" />
+                  <LayoutDashboard className="size-4" />
                 </Link>
               </Button>
             </SignedIn>
@@ -115,7 +108,7 @@ export default function Home() {
         <div className="mx-auto grid max-w-3xl grid-cols-1 gap-6 sm:grid-cols-3">
           <div className="flex items-start gap-3">
             <div className="bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-md">
-              <HugeiconsIcon icon={Message01Icon} className="size-4" />
+              <MessageSquare className="size-4" />
             </div>
             <div>
               <p className="text-foreground text-sm font-medium">Natural dialogue</p>
@@ -126,7 +119,7 @@ export default function Home() {
           </div>
           <div className="flex items-start gap-3">
             <div className="bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-md">
-              <HugeiconsIcon icon={ZapIcon} className="size-4" />
+              <Zap className="size-4" />
             </div>
             <div>
               <p className="text-foreground text-sm font-medium">Instant answers</p>
@@ -137,7 +130,7 @@ export default function Home() {
           </div>
           <div className="flex items-start gap-3">
             <div className="bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-md">
-              <HugeiconsIcon icon={SparklesIcon} className="size-4" />
+              <Sparkles className="size-4" />
             </div>
             <div>
               <p className="text-foreground text-sm font-medium">Always improving</p>

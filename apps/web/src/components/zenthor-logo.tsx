@@ -87,7 +87,7 @@ export function ZenthorLogo({ className, ...props }: SVGProps<SVGSVGElement>) {
         x="48"
         y="28"
         fill="currentColor"
-        fontFamily="var(--font-display), sans-serif"
+        fontFamily="var(--font-sans), sans-serif"
         fontSize="20"
         fontWeight="600"
         letterSpacing="0.02em"

@@ -1,13 +1,17 @@
 "use client";
 
-import { Alert01Icon, ArrowLeft01Icon, Refresh01Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { Geist, Geist_Mono, Outfit } from "next/font/google";
+import { AlertTriangle, ArrowLeft, RotateCw } from "lucide-react";
+import { Geist, Geist_Mono, Noto_Sans } from "next/font/google";
 import Link from "next/link";
 
 import "../index.css";
 import { Button } from "@/components/ui/button";
 import { ZenthorHeroMark, ZenthorMark } from "@/components/zenthor-logo";
+
+const notoSans = Noto_Sans({
+  variable: "--font-sans",
+  subsets: ["latin"],
+});
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,11 +20,6 @@ const geistSans = Geist({
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-const outfit = Outfit({
-  variable: "--font-outfit",
   subsets: ["latin"],
 });
 
@@ -34,10 +33,8 @@ export default function GlobalError({
   const isDev = process.env.NODE_ENV === "development";
 
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} ${outfit.variable} antialiased`}
-      >
+    <html lang="en" className={notoSans.variable} suppressHydrationWarning>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <div className="noise-texture bg-background text-foreground relative flex min-h-svh flex-col overflow-hidden">
           <div
             className="animate-subtle-drift pointer-events-none absolute -top-[20%] -left-[10%] h-[640px] w-[640px] rounded-full opacity-[0.12] blur-[120px]"
@@ -63,7 +60,7 @@ export default function GlobalError({
           <nav className="animate-fade-up relative z-10 flex items-center justify-between px-6 py-5 md:px-10">
             <div className="flex items-center gap-2.5">
               <ZenthorMark className="text-primary size-7" />
-              <span className="font-display text-foreground text-[15px] font-semibold tracking-tight">
+              <span className="text-foreground font-sans text-[15px] font-semibold tracking-tight">
                 zenthor
               </span>
             </div>
@@ -82,7 +79,7 @@ export default function GlobalError({
                 system error
               </p>
               <h1
-                className="animate-fade-up font-display text-foreground mt-4 text-3xl leading-tight font-semibold tracking-tight md:text-5xl"
+                className="animate-fade-up text-foreground mt-4 font-sans text-3xl leading-tight font-semibold tracking-tight md:text-5xl"
                 style={{ animationDelay: "0.3s" }}
               >
                 Something slipped out of sync.
@@ -101,7 +98,7 @@ export default function GlobalError({
               >
                 <div className="flex items-start gap-3">
                   <div className="bg-destructive/10 text-destructive flex size-9 items-center justify-center rounded-md">
-                    <HugeiconsIcon icon={Alert01Icon} className="size-4" />
+                    <AlertTriangle className="size-4" />
                   </div>
                   <div>
                     <p className="text-sm font-semibold">Unexpected error</p>
@@ -126,12 +123,12 @@ export default function GlobalError({
               >
                 <Button size="lg" className="gap-2 px-5" onClick={() => reset()}>
                   Try again
-                  <HugeiconsIcon icon={Refresh01Icon} className="size-4" />
+                  <RotateCw className="size-4" />
                 </Button>
                 <Button asChild size="lg" variant="outline" className="gap-2 px-5">
                   <Link href="/">
                     Back home
-                    <HugeiconsIcon icon={ArrowLeft01Icon} className="size-4" />
+                    <ArrowLeft className="size-4" />
                   </Link>
                 </Button>
               </div>

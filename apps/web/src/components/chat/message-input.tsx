@@ -1,7 +1,6 @@
 "use client";
 
-import { PlaneIcon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { Send } from "lucide-react";
 import { useState, useRef, useCallback } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -51,7 +50,7 @@ export function MessageInput({ onSend, disabled }: MessageInputProps) {
         size="icon"
         className="shrink-0 self-end"
       >
-        <HugeiconsIcon icon={PlaneIcon} className="size-4" />
+        <Send className="size-4" />
       </Button>
     </div>
   );

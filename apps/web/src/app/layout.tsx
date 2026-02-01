@@ -1,11 +1,14 @@
 import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
-import { Outfit } from "next/font/google";
+import { Geist, Geist_Mono, Noto_Sans } from "next/font/google";
 
 import "../index.css";
-import { Geist, Geist_Mono } from "next/font/google";
-
 import Providers from "@/components/providers";
+
+const notoSans = Noto_Sans({
+  variable: "--font-sans",
+  subsets: ["latin"],
+});
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -14,11 +17,6 @@ const geistSans = Geist({
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-const outfit = Outfit({
-  variable: "--font-outfit",
   subsets: ["latin"],
 });
 
@@ -33,10 +31,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} ${outfit.variable} antialiased`}
-      >
+    <html lang="en" className={notoSans.variable} suppressHydrationWarning>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <ClerkProvider signInUrl="/sign-in" afterSignInUrl="/" afterSignUpUrl="/">
           <Providers>
             <div className="flex h-svh flex-col overflow-hidden">{children}</div>

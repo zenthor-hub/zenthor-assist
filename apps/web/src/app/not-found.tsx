@@ -1,7 +1,6 @@
 "use client";
 
-import { ArrowLeft01Icon, Compass01Icon, Satellite01Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { ArrowLeft, Compass, Satellite } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
@@ -34,7 +33,7 @@ export default function NotFound() {
       <nav className="animate-fade-up relative z-10 flex items-center justify-between px-6 py-5 md:px-10">
         <div className="flex items-center gap-2.5">
           <ZenthorMark className="text-primary size-7" />
-          <span className="font-display text-foreground text-[15px] font-semibold tracking-tight">
+          <span className="text-foreground font-sans text-[15px] font-semibold tracking-tight">
             zenthor
           </span>
         </div>
@@ -53,7 +52,7 @@ export default function NotFound() {
             404
           </p>
           <h1
-            className="animate-fade-up font-display text-foreground mt-4 text-3xl leading-tight font-semibold tracking-tight md:text-5xl"
+            className="animate-fade-up text-foreground mt-4 font-sans text-3xl leading-tight font-semibold tracking-tight md:text-5xl"
             style={{ animationDelay: "0.3s" }}
           >
             Signal lost.
@@ -73,13 +72,13 @@ export default function NotFound() {
             <Button asChild size="lg" className="gap-2 px-5">
               <Link href="/">
                 Back home
-                <HugeiconsIcon icon={ArrowLeft01Icon} className="size-4" />
+                <ArrowLeft className="size-4" />
               </Link>
             </Button>
             <Button asChild size="lg" variant="outline" className="gap-2 px-5">
               <Link href={"/chat" as "/"}>
                 Open chat
-                <HugeiconsIcon icon={Compass01Icon} className="size-4" />
+                <Compass className="size-4" />
               </Link>
             </Button>
           </div>
@@ -89,7 +88,7 @@ export default function NotFound() {
       <footer className="animate-fade-up relative z-10 border-t px-6 py-6 md:px-10">
         <div className="mx-auto flex max-w-2xl flex-col items-start gap-3 text-left sm:flex-row sm:items-center sm:justify-between">
           <div className="text-muted-foreground flex items-center gap-2 text-xs">
-            <HugeiconsIcon icon={Satellite01Icon} className="text-primary size-4" />
+            <Satellite className="text-primary size-4" />
             <span>Routing back to safe navigation.</span>
           </div>
           <span className="text-muted-foreground text-xs">
