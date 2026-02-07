@@ -43,8 +43,9 @@ lerna-debug.log*
 coverage
 .nyc_output
 
-# Playwright MCP
+# Playwright
 .playwright-mcp
+test-results
 
 # WhatsApp auth state
 .whatsapp-auth
