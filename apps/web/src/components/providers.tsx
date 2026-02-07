@@ -9,6 +9,7 @@ import { useTheme } from "next-themes";
 
 import { ThemeProvider } from "./theme-provider";
 import { Toaster } from "./ui/sonner";
+import { TooltipProvider } from "./ui/tooltip";
 
 const convex = new ConvexReactClient(env.NEXT_PUBLIC_CONVEX_URL);
 
@@ -24,7 +25,7 @@ function ThemedClerkProvider({ children }: { children: React.ReactNode }) {
         baseTheme: resolvedTheme === "dark" ? dark : undefined,
         variables: {
           fontFamily: "var(--font-sans)",
-          borderRadius: "0.625rem",
+          borderRadius: "0rem",
           colorPrimary: "var(--primary)",
           colorBackground: "var(--card)",
           colorInputBackground: "var(--input)",
@@ -45,7 +46,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <ThemedClerkProvider>
         <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-          {children}
+          <TooltipProvider>{children}</TooltipProvider>
         </ConvexProviderWithClerk>
         <Toaster richColors />
       </ThemedClerkProvider>

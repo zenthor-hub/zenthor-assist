@@ -1,16 +1,11 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Noto_Sans } from "next/font/google";
+import { Geist_Mono, Space_Grotesk } from "next/font/google";
 
 import "../index.css";
 import Providers from "@/components/providers";
 
-const notoSans = Noto_Sans({
-  variable: "--font-sans",
-  subsets: ["latin"],
-});
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const spaceGrotesk = Space_Grotesk({
+  variable: "--font-space-grotesk",
   subsets: ["latin"],
 });
 
@@ -30,8 +25,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={notoSans.variable} suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+    <html lang="en" className={spaceGrotesk.variable} suppressHydrationWarning>
+      <body className={`${geistMono.variable} antialiased`}>
         <Providers>
           <div className="flex h-svh flex-col overflow-hidden">{children}</div>
         </Providers>
