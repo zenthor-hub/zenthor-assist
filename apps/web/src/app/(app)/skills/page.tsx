@@ -5,6 +5,7 @@ import type { Id } from "@zenthor-assist/backend/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import { Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import Loader from "@/components/loader";
 import { PageWrapper } from "@/components/page-wrapper";
@@ -76,7 +77,13 @@ export default function SkillsPage() {
                 <div className="flex shrink-0 items-center gap-2">
                   <Switch
                     checked={skill.enabled}
-                    onCheckedChange={() => toggleSkill({ id: skill._id })}
+                    onCheckedChange={async () => {
+                      try {
+                        await toggleSkill({ id: skill._id });
+                      } catch {
+                        toast.error("Failed to toggle skill");
+                      }
+                    }}
                   />
                   <Button
                     variant="ghost"
@@ -88,7 +95,14 @@ export default function SkillsPage() {
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    onClick={() => removeSkill({ id: skill._id })}
+                    onClick={async () => {
+                      try {
+                        await removeSkill({ id: skill._id });
+                        toast.success("Skill removed");
+                      } catch {
+                        toast.error("Failed to remove skill");
+                      }
+                    }}
                   >
                     <Trash2 className="size-3.5" />
                   </Button>

@@ -4,6 +4,7 @@ import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import type { Id } from "@zenthor-assist/backend/convex/_generated/dataModel";
 import { useMutation } from "convex/react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -47,13 +48,18 @@ export function SkillForm({ open, onOpenChange, skill }: SkillFormProps) {
     e.preventDefault();
     const config = systemPrompt ? { systemPrompt } : undefined;
 
-    if (isEditing) {
-      await updateSkill({ id: skill._id, name, description, enabled, config });
-    } else {
-      await createSkill({ name, description, enabled, config });
+    try {
+      if (isEditing) {
+        await updateSkill({ id: skill._id, name, description, enabled, config });
+        toast.success("Skill updated");
+      } else {
+        await createSkill({ name, description, enabled, config });
+        toast.success("Skill created");
+      }
+      onOpenChange(false);
+    } catch {
+      toast.error(isEditing ? "Failed to update skill" : "Failed to create skill");
     }
-
-    onOpenChange(false);
   }
 
   return (
