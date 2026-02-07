@@ -11,6 +11,8 @@ import pino, {
   type TransportTargetOptions,
 } from "pino";
 
+import { captureSentryException } from "./sentry";
+
 type EventPayload = Record<string, unknown>;
 type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -21,6 +23,26 @@ function resolveServiceName() {
     return "agent-whatsapp";
   }
   return "agent";
+}
+
+function resolveRole() {
+  return (process.env["AGENT_ROLE"] ?? "all").toLowerCase();
+}
+
+function resolveWorkerRole(role: string) {
+  if (role === "core") return "core";
+  if (role === "whatsapp" || role === "whatsapp-ingress" || role === "whatsapp-egress") {
+    return "whatsapp";
+  }
+  return "all";
+}
+
+function resolveChannel(role: string): string | undefined {
+  if (role === "core") return "web";
+  if (role === "whatsapp" || role === "whatsapp-ingress" || role === "whatsapp-egress") {
+    return "whatsapp";
+  }
+  return undefined;
 }
 
 const runtimeContext = getDefaultRuntimeContext();
@@ -34,14 +56,29 @@ const isTest = process.env["NODE_ENV"] === "test";
 const defaultPretty = process.stdout.isTTY && !isProduction && !isTest;
 const usePrettyLogs = prettyOverride === "true" || (prettyOverride !== "false" && defaultPretty);
 
+const role = resolveRole();
 const service = resolveServiceName();
-const baseFields = {
-  service,
+const workerRole = resolveWorkerRole(role);
+const channel = resolveChannel(role);
+const baseFields: EventPayload = {
+  app: "agent",
+  deployment: runtimeContext.env,
   env: runtimeContext.env,
   release: runtimeContext.release,
-  workerId: env.WORKER_ID,
+  role,
   runtime: "bun",
+  service,
+  worker_role: workerRole,
 };
+
+if (channel) {
+  baseFields["channel"] = channel;
+}
+
+if (env.WORKER_ID) {
+  baseFields["worker_id"] = env.WORKER_ID;
+  baseFields["workerId"] = env.WORKER_ID;
+}
 
 function createPinoInstance(): PinoLogger {
   const options: LoggerOptions = {
@@ -113,6 +150,7 @@ function buildSampleKey(event: string, payload: EventPayload | undefined) {
     payload?.["approvalId"],
     payload?.["accountId"],
     payload?.["workerId"],
+    payload?.["worker_id"],
   ]
     .filter((value) => value !== undefined)
     .map((value) => String(value));
@@ -179,6 +217,7 @@ export const logger = {
   },
   exception: async (event: string, error: unknown, payload?: EventPayload) => {
     emit("error", event, payload, error);
+    captureSentryException(event, error, payload);
   },
   flush: async () => {
     try {

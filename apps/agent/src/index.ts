@@ -1,8 +1,10 @@
 import { startAgentLoop } from "./agent/loop";
 import { logger } from "./observability/logger";
+import { initSentry } from "./observability/sentry";
 import { startWhatsAppRuntime } from "./whatsapp/runtime";
 
 async function main() {
+  initSentry();
   await logger.lineInfo("[main] Starting zenthor-assist agent...");
   void logger.info("agent.starting", {
     role: process.env["AGENT_ROLE"] ?? "all",

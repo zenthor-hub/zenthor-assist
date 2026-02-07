@@ -17,6 +17,14 @@ const envSchema = z.object({
   WHATSAPP_HEARTBEAT_MS: z.coerce.number().optional(),
   AXIOM_TOKEN: z.string().min(1).optional(),
   AXIOM_DATASET: z.string().min(1).optional(),
+  SENTRY_DSN: z.string().min(1).optional(),
+  SENTRY_ENABLED: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => value !== "false"),
+  SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).optional().default(0),
+  SENTRY_ENVIRONMENT: z.string().min(1).optional(),
+  SENTRY_RELEASE: z.string().min(1).optional(),
   OBS_ENABLED: z
     .enum(["true", "false"])
     .optional()
