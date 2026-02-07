@@ -1,5 +1,7 @@
 import { env } from "@zenthor-assist/env/agent";
 import {
+  type OperationalEventMap,
+  type OperationalEventName,
   getDefaultRuntimeContext,
   redactPayload,
   shouldSample,
@@ -223,5 +225,34 @@ export const logger = {
     try {
       pinoLogger.flush();
     } catch {}
+  },
+};
+
+/**
+ * Type-safe event emitters.
+ *
+ * Use these instead of `logger.info(...)` when you want compile-time
+ * validation of event names and payload shapes against the
+ * `OperationalEventMap` defined in `@zenthor-assist/observability`.
+ *
+ * Existing untyped `logger.*` methods remain available for ad-hoc logging.
+ */
+export const typedEvent = {
+  info: <E extends OperationalEventName>(event: E, payload: OperationalEventMap[E]) => {
+    emit("info", event, payload as EventPayload);
+  },
+  warn: <E extends OperationalEventName>(event: E, payload: OperationalEventMap[E]) => {
+    emit("warn", event, payload as EventPayload);
+  },
+  error: <E extends OperationalEventName>(event: E, payload: OperationalEventMap[E]) => {
+    emit("error", event, payload as EventPayload);
+  },
+  exception: <E extends OperationalEventName>(
+    event: E,
+    error: unknown,
+    payload: OperationalEventMap[E],
+  ) => {
+    emit("error", event, payload as EventPayload, error);
+    captureSentryException(event, error, payload as EventPayload);
   },
 };

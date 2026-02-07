@@ -9,7 +9,8 @@
     "./logger": "./src/logger.ts",
     "./redact": "./src/redact.ts",
     "./sampling": "./src/sampling.ts",
-    "./context": "./src/context.ts"
+    "./context": "./src/context.ts",
+    "./events": "./src/events.ts"
   },
   "devDependencies": {
     "@zenthor-assist/config": "workspace:*",
