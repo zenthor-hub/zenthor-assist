@@ -8,6 +8,8 @@ import { cn } from "@/lib/utils";
 import { MarkdownContent } from "./markdown-content";
 import { ToolCallCard } from "./tool-call-card";
 
+export type MessagePosition = "first" | "middle" | "last" | "single";
+
 interface ToolCall {
   name: string;
   input: unknown;
@@ -18,24 +20,37 @@ interface MessageBubbleProps {
   content: string;
   toolCalls?: ToolCall[];
   streaming?: boolean;
+  position?: MessagePosition;
 }
 
-export function MessageBubble({ role, content, toolCalls, streaming }: MessageBubbleProps) {
+export function MessageBubble({
+  role,
+  content,
+  toolCalls,
+  streaming,
+  position = "single",
+}: MessageBubbleProps) {
   const isUser = role === "user";
 
   if (role === "system") return null;
 
+  const showAvatar = position === "first" || position === "single";
+
   return (
     <div className={cn("flex gap-3", isUser && "flex-row-reverse")}>
-      <Avatar className={cn("mt-0.5", isUser ? "bg-primary" : "bg-muted")}>
-        <AvatarFallback>
-          {isUser ? (
-            <User className="text-primary-foreground size-4" />
-          ) : (
-            <Bot className="text-foreground size-4" />
-          )}
-        </AvatarFallback>
-      </Avatar>
+      {showAvatar ? (
+        <Avatar className={cn("mt-0.5", isUser ? "bg-primary" : "bg-muted")}>
+          <AvatarFallback>
+            {isUser ? (
+              <User className="text-primary-foreground size-4" />
+            ) : (
+              <Bot className="text-foreground size-4" />
+            )}
+          </AvatarFallback>
+        </Avatar>
+      ) : (
+        <div className="size-8 shrink-0" />
+      )}
       <div
         className={cn(
           "max-w-[75%] rounded-sm px-3 py-2 text-sm",
@@ -48,7 +63,7 @@ export function MessageBubble({ role, content, toolCalls, streaming }: MessageBu
           <>
             {content ? (
               <div className="inline">
-                <MarkdownContent content={content} />
+                <MarkdownContent content={content} streaming={streaming} />
                 {streaming && (
                   <span className="bg-foreground ml-0.5 inline-block h-4 w-0.5 animate-pulse" />
                 )}

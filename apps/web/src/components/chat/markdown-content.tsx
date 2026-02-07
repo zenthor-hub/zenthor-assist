@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useMemo } from "react";
 import type { Components } from "react-markdown";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -51,14 +52,36 @@ const components: Components = {
   td: ({ children }) => <td className="border-border border-b px-2 py-1">{children}</td>,
 };
 
+const remarkPlugins = [remarkGfm];
+
 interface MarkdownContentProps {
   content: string;
+  streaming?: boolean;
 }
 
-export function MarkdownContent({ content }: MarkdownContentProps) {
-  return (
-    <Markdown remarkPlugins={[remarkGfm]} components={components}>
-      {content}
-    </Markdown>
-  );
-}
+export const MarkdownContent = React.memo(
+  function MarkdownContent({ content, streaming }: MarkdownContentProps) {
+    const rendered = useMemo(() => {
+      if (streaming) return null;
+      return (
+        <Markdown remarkPlugins={remarkPlugins} components={components}>
+          {content}
+        </Markdown>
+      );
+    }, [content, streaming]);
+
+    if (streaming) {
+      return (
+        <Markdown remarkPlugins={remarkPlugins} components={components}>
+          {content}
+        </Markdown>
+      );
+    }
+
+    return rendered;
+  },
+  (prev, next) => {
+    if (prev.streaming || next.streaming) return false;
+    return prev.content === next.content;
+  },
+);
