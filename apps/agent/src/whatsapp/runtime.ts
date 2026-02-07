@@ -55,6 +55,7 @@ async function startOutboundLoop(accountId: string, ownerId: string): Promise<vo
   while (true) {
     try {
       const job = await client.mutation(api.delivery.claimNextOutbound, {
+        serviceKey: env.AGENT_SECRET,
         processorId: ownerId,
         channel: "whatsapp",
         accountId,
@@ -67,6 +68,7 @@ async function startOutboundLoop(accountId: string, ownerId: string): Promise<vo
 
       if (!job.to) {
         await client.mutation(api.delivery.failOutbound, {
+          serviceKey: env.AGENT_SECRET,
           id: job._id,
           error: "Missing recipient phone for WhatsApp outbound message",
           retry: false,
@@ -76,10 +78,14 @@ async function startOutboundLoop(accountId: string, ownerId: string): Promise<vo
 
       try {
         await sendWhatsAppMessage(job.to, job.payload.content);
-        await client.mutation(api.delivery.completeOutbound, { id: job._id });
+        await client.mutation(api.delivery.completeOutbound, {
+          serviceKey: env.AGENT_SECRET,
+          id: job._id,
+        });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         await client.mutation(api.delivery.failOutbound, {
+          serviceKey: env.AGENT_SECRET,
           id: job._id,
           error: errorMessage,
           retry: true,

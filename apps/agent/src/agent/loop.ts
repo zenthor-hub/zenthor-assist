@@ -72,7 +72,9 @@ export function startAgentLoop() {
     void logger.exception("agent.plugins.sync.failed", error);
   });
 
-  client.onUpdate(api.agent.getPendingJobs, {}, async (jobs) => {
+  const serviceKey = env.AGENT_SECRET;
+
+  client.onUpdate(api.agent.getPendingJobs, { serviceKey }, async (jobs) => {
     if (!jobs || jobs.length === 0) return;
 
     for (const job of jobs) {
@@ -80,6 +82,7 @@ export function startAgentLoop() {
       let heartbeatInterval: ReturnType<typeof setInterval> | undefined;
       try {
         const claimed = await client.mutation(api.agent.claimJob, {
+          serviceKey,
           jobId: job._id,
           processorId: workerId,
           lockMs,
@@ -90,6 +93,7 @@ export function startAgentLoop() {
         heartbeatInterval = setInterval(() => {
           client
             .mutation(api.agent.heartbeatJob, {
+              serviceKey,
               jobId: job._id,
               processorId: workerId,
               lockMs,
@@ -116,10 +120,11 @@ export function startAgentLoop() {
         });
 
         const context = await client.query(api.agent.getConversationContext, {
+          serviceKey,
           conversationId: job.conversationId,
         });
         if (!context) {
-          await client.mutation(api.agent.failJob, { jobId: job._id });
+          await client.mutation(api.agent.failJob, { serviceKey, jobId: job._id });
           continue;
         }
 
@@ -321,6 +326,7 @@ export function startAgentLoop() {
 
           if (channel === "whatsapp" && context.contact?.phone) {
             await client.mutation(api.delivery.enqueueOutbound, {
+              serviceKey,
               channel: "whatsapp",
               accountId: env.WHATSAPP_ACCOUNT_ID ?? "default",
               conversationId: job.conversationId,
@@ -348,7 +354,7 @@ export function startAgentLoop() {
           continue;
         }
 
-        await client.mutation(api.agent.completeJob, { jobId: job._id, modelUsed });
+        await client.mutation(api.agent.completeJob, { serviceKey, jobId: job._id, modelUsed });
         void logger.lineInfo(
           `[agent] Completed job ${job._id}${modelUsed ? ` (model: ${modelUsed})` : ""}`,
           {
@@ -387,7 +393,7 @@ export function startAgentLoop() {
 
         if (isRetryable(reason)) {
           const retried = await client
-            .mutation(api.agent.retryJob, { jobId: job._id })
+            .mutation(api.agent.retryJob, { serviceKey, jobId: job._id })
             .catch(() => false);
           if (retried) {
             void logger.lineInfo(`[agent] Retrying job ${job._id} (${reason})`, {
@@ -406,6 +412,7 @@ export function startAgentLoop() {
 
         await client
           .mutation(api.agent.failJob, {
+            serviceKey,
             jobId: job._id,
             errorReason: reason,
             errorMessage: errorMessage.slice(0, 500),

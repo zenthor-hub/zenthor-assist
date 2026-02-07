@@ -9,6 +9,7 @@ import {
   isJobStale,
   resolveStaleAction,
 } from "./agent_queue_helpers";
+import { getConversationIfOwner, isValidServiceKey } from "./lib/auth";
 
 const agentQueueDoc = v.object({
   _id: v.id("agentQueue"),
@@ -122,9 +123,10 @@ const messageDoc = v.object({
 });
 
 export const getPendingJobs = query({
-  args: {},
+  args: { serviceKey: v.optional(v.string()) },
   returns: v.array(agentQueueDoc),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
+    if (!isValidServiceKey(args.serviceKey)) return [];
     return await ctx.db
       .query("agentQueue")
       .withIndex("by_status", (q) => q.eq("status", "pending"))
@@ -134,12 +136,14 @@ export const getPendingJobs = query({
 
 export const claimJob = mutation({
   args: {
+    serviceKey: v.optional(v.string()),
     jobId: v.id("agentQueue"),
     processorId: v.string(),
     lockMs: v.optional(v.number()),
   },
   returns: v.union(agentQueueDoc, v.null()),
   handler: async (ctx, args) => {
+    if (!isValidServiceKey(args.serviceKey)) return null;
     const job = await ctx.db.get(args.jobId);
     if (!job || job.status !== "pending") return null;
 
@@ -197,11 +201,13 @@ export const claimJob = mutation({
 
 export const completeJob = mutation({
   args: {
+    serviceKey: v.optional(v.string()),
     jobId: v.id("agentQueue"),
     modelUsed: v.optional(v.string()),
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
+    if (!isValidServiceKey(args.serviceKey)) return false;
     const job = await ctx.db.get(args.jobId);
     if (!job || job.status !== "processing") return false;
 
@@ -217,12 +223,14 @@ export const completeJob = mutation({
 
 export const failJob = mutation({
   args: {
+    serviceKey: v.optional(v.string()),
     jobId: v.id("agentQueue"),
     errorReason: v.optional(v.string()),
     errorMessage: v.optional(v.string()),
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
+    if (!isValidServiceKey(args.serviceKey)) return false;
     const job = await ctx.db.get(args.jobId);
     if (!job || job.status !== "processing") return false;
 
@@ -238,9 +246,10 @@ export const failJob = mutation({
 });
 
 export const retryJob = mutation({
-  args: { jobId: v.id("agentQueue") },
+  args: { serviceKey: v.optional(v.string()), jobId: v.id("agentQueue") },
   returns: v.boolean(),
   handler: async (ctx, args) => {
+    if (!isValidServiceKey(args.serviceKey)) return false;
     const job = await ctx.db.get(args.jobId);
     if (!job) return false;
     if (!canRetry(job.attemptCount)) return false;
@@ -260,12 +269,14 @@ export const retryJob = mutation({
 
 export const heartbeatJob = mutation({
   args: {
+    serviceKey: v.optional(v.string()),
     jobId: v.id("agentQueue"),
     processorId: v.string(),
     lockMs: v.optional(v.number()),
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
+    if (!isValidServiceKey(args.serviceKey)) return false;
     const job = await ctx.db.get(args.jobId);
     if (!job) return false;
     if (!isHeartbeatValid(job, args.processorId, Date.now())) return false;
@@ -320,6 +331,8 @@ export const isProcessing = query({
   args: { conversationId: v.id("conversations") },
   returns: v.boolean(),
   handler: async (ctx, args) => {
+    const conv = await getConversationIfOwner(ctx, args.conversationId);
+    if (!conv) return false;
     const jobs = await ctx.db
       .query("agentQueue")
       .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))
@@ -329,7 +342,7 @@ export const isProcessing = query({
 });
 
 export const getConversationContext = query({
-  args: { conversationId: v.id("conversations") },
+  args: { serviceKey: v.optional(v.string()), conversationId: v.id("conversations") },
   returns: v.union(
     v.object({
       conversation: conversationDoc,
@@ -342,6 +355,7 @@ export const getConversationContext = query({
     v.null(),
   ),
   handler: async (ctx, args) => {
+    if (!isValidServiceKey(args.serviceKey)) return null;
     const conversation = await ctx.db.get(args.conversationId);
     if (!conversation) return null;
 

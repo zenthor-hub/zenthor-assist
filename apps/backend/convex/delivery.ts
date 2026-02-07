@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 
 import { mutation, query } from "./_generated/server";
+import { isValidServiceKey } from "./lib/auth";
 
 const outboundStatus = v.union(
   v.literal("pending"),
@@ -32,6 +33,7 @@ const outboundDoc = v.object({
 
 export const enqueueOutbound = mutation({
   args: {
+    serviceKey: v.optional(v.string()),
     channel: v.union(v.literal("web"), v.literal("whatsapp")),
     accountId: v.optional(v.string()),
     conversationId: v.id("conversations"),
@@ -40,8 +42,9 @@ export const enqueueOutbound = mutation({
     content: v.string(),
     metadata: v.optional(v.any()),
   },
-  returns: v.id("outboundMessages"),
+  returns: v.union(v.id("outboundMessages"), v.null()),
   handler: async (ctx, args) => {
+    if (!isValidServiceKey(args.serviceKey)) return null;
     const now = Date.now();
     return await ctx.db.insert("outboundMessages", {
       channel: args.channel,
@@ -63,6 +66,7 @@ export const enqueueOutbound = mutation({
 
 export const claimNextOutbound = mutation({
   args: {
+    serviceKey: v.optional(v.string()),
     processorId: v.string(),
     channel: v.union(v.literal("web"), v.literal("whatsapp")),
     accountId: v.optional(v.string()),
@@ -70,6 +74,7 @@ export const claimNextOutbound = mutation({
   },
   returns: v.union(outboundDoc, v.null()),
   handler: async (ctx, args) => {
+    if (!isValidServiceKey(args.serviceKey)) return null;
     const now = Date.now();
     const lockMs = Math.max(1_000, args.lockMs ?? 30_000);
 
@@ -133,9 +138,10 @@ export const claimNextOutbound = mutation({
 });
 
 export const completeOutbound = mutation({
-  args: { id: v.id("outboundMessages") },
+  args: { serviceKey: v.optional(v.string()), id: v.id("outboundMessages") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    if (!isValidServiceKey(args.serviceKey)) return null;
     await ctx.db.patch(args.id, {
       status: "sent",
       updatedAt: Date.now(),
@@ -148,12 +154,14 @@ export const completeOutbound = mutation({
 
 export const failOutbound = mutation({
   args: {
+    serviceKey: v.optional(v.string()),
     id: v.id("outboundMessages"),
     error: v.string(),
     retry: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    if (!isValidServiceKey(args.serviceKey)) return null;
     const now = Date.now();
     const current = await ctx.db.get(args.id);
     if (!current) return null;
@@ -173,9 +181,10 @@ export const failOutbound = mutation({
 });
 
 export const listPendingByConversation = query({
-  args: { conversationId: v.id("conversations") },
+  args: { serviceKey: v.optional(v.string()), conversationId: v.id("conversations") },
   returns: v.array(outboundDoc),
   handler: async (ctx, args) => {
+    if (!isValidServiceKey(args.serviceKey)) return [];
     const all = await ctx.db
       .query("outboundMessages")
       .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))

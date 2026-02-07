@@ -103,6 +103,7 @@ export function wrapToolsWithApproval(
             channel: "whatsapp",
           });
           await client.mutation(api.delivery.enqueueOutbound, {
+            serviceKey: env.AGENT_SECRET,
             channel: "whatsapp",
             accountId: env.WHATSAPP_ACCOUNT_ID ?? "default",
             conversationId: context.conversationId as Id<"conversations">,
