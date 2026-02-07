@@ -3,10 +3,12 @@
 import { AlertTriangle, ArrowLeft, RotateCw } from "lucide-react";
 import { Geist, Geist_Mono, Noto_Sans } from "next/font/google";
 import Link from "next/link";
+import { useEffect } from "react";
 
 import "../index.css";
 import { Button } from "@/components/ui/button";
 import { ZenthorHeroMark, ZenthorMark } from "@/components/zenthor-logo";
+import { logWebClientEvent } from "@/lib/observability/client";
 
 const notoSans = Noto_Sans({
   variable: "--font-sans",
@@ -31,6 +33,19 @@ export default function GlobalError({
   reset: () => void;
 }) {
   const isDev = process.env.NODE_ENV === "development";
+
+  useEffect(() => {
+    logWebClientEvent({
+      event: "web.global_error.rendered",
+      level: "error",
+      payload: {
+        errorName: error.name,
+        errorMessage: isDev ? error.message : undefined,
+        digest: error.digest,
+        pathname: window.location.pathname,
+      },
+    });
+  }, [error.digest, error.message, error.name, isDev]);
 
   return (
     <html lang="en" className={notoSans.variable} suppressHydrationWarning>
