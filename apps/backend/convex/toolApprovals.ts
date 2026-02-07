@@ -1,6 +1,9 @@
 import { v } from "convex/values";
 
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
+
+/** Must match APPROVAL_TIMEOUT_MS in apps/agent/src/agent/tool-approval.ts */
+const APPROVAL_TTL_MS = 5 * 60 * 1_000;
 
 const toolApprovalDoc = v.object({
   _id: v.id("toolApprovals"),
@@ -89,5 +92,29 @@ export const getByJob = query({
       .query("toolApprovals")
       .withIndex("by_jobId", (q) => q.eq("jobId", args.jobId))
       .collect();
+  },
+});
+
+/** Expire pending approvals older than the approval timeout. Called by cron. */
+export const expireStale = internalMutation({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    const cutoff = Date.now() - APPROVAL_TTL_MS;
+    // Query all pending approvals (no status-only index, so scan by conversationId_status)
+    // Use a broad query and filter by createdAt
+    const stale = await ctx.db
+      .query("toolApprovals")
+      .filter((q) => q.and(q.eq(q.field("status"), "pending"), q.lt(q.field("createdAt"), cutoff)))
+      .collect();
+
+    for (const approval of stale) {
+      await ctx.db.patch(approval._id, {
+        status: "rejected",
+        resolvedAt: Date.now(),
+      });
+    }
+
+    return stale.length;
   },
 });

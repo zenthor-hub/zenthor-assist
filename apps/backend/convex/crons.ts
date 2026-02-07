@@ -32,4 +32,7 @@ crons.daily(
 // Requeue stale agent jobs with expired leases — runs every minute
 crons.interval("requeue stale agent jobs", { minutes: 1 }, internal.agent.requeueStaleJobs);
 
+// Expire stale tool approvals (pending > 5min) — runs every 10 minutes
+crons.interval("expire stale tool approvals", { minutes: 10 }, internal.toolApprovals.expireStale);
+
 export default crons;
