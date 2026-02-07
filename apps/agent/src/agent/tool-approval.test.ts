@@ -1,5 +1,5 @@
 import type { Tool } from "ai";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@zenthor-assist/env/agent", () => ({
   env: {
@@ -15,6 +15,7 @@ vi.mock("../convex/client", () => ({
 }));
 
 const { wrapToolsWithApproval } = await import("./tool-approval");
+const { getGlobalRegistry } = await import("./plugins/registry");
 
 const makeTool = (name: string): Tool =>
   ({
@@ -30,7 +31,11 @@ const baseContext = {
 };
 
 describe("wrapToolsWithApproval", () => {
-  it("returns all tools when HIGH_RISK_TOOLS is empty", () => {
+  afterEach(() => {
+    getGlobalRegistry().clear();
+  });
+
+  it("returns all tools unchanged when no high-risk plugins are registered", () => {
     const tools: Record<string, Tool> = {
       search: makeTool("search"),
       calculate: makeTool("calculate"),
@@ -86,5 +91,81 @@ describe("wrapToolsWithApproval", () => {
       phone: "5511999999999",
     });
     expect(Object.keys(wrapped)).toEqual(["t"]);
+  });
+
+  it("wraps tools from medium-risk plugins with approval", () => {
+    const registry = getGlobalRegistry();
+    registry.activate({
+      name: "risky-plugin",
+      version: "1.0.0",
+      source: "builtin",
+      manifest: {
+        id: "risky-plugin",
+        version: "1.0.0",
+        tools: ["dangerous_action"],
+        riskLevel: "medium",
+        source: "builtin",
+      },
+      tools: { dangerous_action: makeTool("dangerous_action") },
+    });
+
+    const tools: Record<string, Tool> = {
+      safe_tool: makeTool("safe_tool"),
+      dangerous_action: makeTool("dangerous_action"),
+    };
+
+    const wrapped = wrapToolsWithApproval(tools, baseContext);
+    // safe_tool should be the same reference (not wrapped)
+    expect(wrapped["safe_tool"]).toBe(tools["safe_tool"]);
+    // dangerous_action should be wrapped (different reference)
+    expect(wrapped["dangerous_action"]).not.toBe(tools["dangerous_action"]);
+  });
+
+  it("wraps tools from high-risk plugins with approval", () => {
+    const registry = getGlobalRegistry();
+    registry.activate({
+      name: "high-risk-plugin",
+      version: "1.0.0",
+      source: "builtin",
+      manifest: {
+        id: "high-risk-plugin",
+        version: "1.0.0",
+        tools: ["delete_data"],
+        riskLevel: "high",
+        source: "builtin",
+      },
+      tools: { delete_data: makeTool("delete_data") },
+    });
+
+    const tools: Record<string, Tool> = {
+      delete_data: makeTool("delete_data"),
+    };
+
+    const wrapped = wrapToolsWithApproval(tools, baseContext);
+    expect(wrapped["delete_data"]).not.toBe(tools["delete_data"]);
+  });
+
+  it("does not wrap tools from low-risk plugins", () => {
+    const registry = getGlobalRegistry();
+    registry.activate({
+      name: "safe-plugin",
+      version: "1.0.0",
+      source: "builtin",
+      manifest: {
+        id: "safe-plugin",
+        version: "1.0.0",
+        tools: ["read_data"],
+        riskLevel: "low",
+        source: "builtin",
+      },
+      tools: { read_data: makeTool("read_data") },
+    });
+
+    const tools: Record<string, Tool> = {
+      read_data: makeTool("read_data"),
+    };
+
+    const wrapped = wrapToolsWithApproval(tools, baseContext);
+    expect(wrapped["read_data"]).toBe(tools["read_data"]);
   });
 });

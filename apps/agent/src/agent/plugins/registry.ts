@@ -134,6 +134,19 @@ export class PluginRegistry {
     return merged;
   }
 
+  /** Return tool names from plugins with riskLevel "medium" or "high". */
+  getHighRiskToolNames(): Set<string> {
+    const names = new Set<string>();
+    for (const plugin of this.active.values()) {
+      if (plugin.manifest.riskLevel === "medium" || plugin.manifest.riskLevel === "high") {
+        for (const toolName of Object.keys(plugin.tools)) {
+          names.add(toolName);
+        }
+      }
+    }
+    return names;
+  }
+
   clear(): void {
     this.active.clear();
     this.toolOwners.clear();

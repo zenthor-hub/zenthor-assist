@@ -5,8 +5,7 @@ import type { Tool } from "ai";
 
 import { getConvexClient } from "../convex/client";
 import { logger } from "../observability/logger";
-
-const HIGH_RISK_TOOLS: Set<string> = new Set();
+import { getGlobalRegistry } from "./plugins/registry";
 
 const POLL_INTERVAL_MS = 1_000;
 const APPROVAL_TIMEOUT_MS = 5 * 60 * 1_000;
@@ -58,8 +57,10 @@ export function wrapToolsWithApproval(
 ): Record<string, Tool> {
   const wrapped: Record<string, Tool> = {};
 
+  const highRiskTools = getGlobalRegistry().getHighRiskToolNames();
+
   for (const [name, t] of Object.entries(tools)) {
-    if (!HIGH_RISK_TOOLS.has(name)) {
+    if (!highRiskTools.has(name)) {
       wrapped[name] = t;
       continue;
     }
