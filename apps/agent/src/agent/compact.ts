@@ -4,6 +4,7 @@ import { env } from "@zenthor-assist/env/agent";
 import { generateText } from "ai";
 
 import { getConvexClient } from "../convex/client";
+import { logger } from "../observability/logger";
 import {
   DEFAULT_CONTEXT_WINDOW,
   estimateMessagesTokens,
@@ -143,7 +144,8 @@ export async function compactMessages(
     });
   } catch {
     // Non-critical: don't fail compaction if memory storage fails
-    console.warn("[compact] Failed to store compaction summary as memory");
+    void logger.lineWarn("[compact] Failed to store compaction summary as memory");
+    void logger.warn("agent.compact.memory_store_failed");
   }
 
   const summaryMessage: Message = {

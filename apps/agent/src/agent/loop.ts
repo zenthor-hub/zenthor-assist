@@ -9,7 +9,12 @@ import { evaluateContext } from "./context-guard";
 import { classifyError, isRetryable } from "./errors";
 import type { AgentConfig } from "./generate";
 import { generateResponse, generateResponseStreaming } from "./generate";
-import { resolvePluginTools, syncBuiltinPluginDefinitions } from "./plugins/loader";
+import {
+  discoverAndActivate,
+  resolvePluginTools,
+  syncBuiltinPluginDefinitions,
+  syncDiagnostics,
+} from "./plugins/loader";
 import { wrapToolsWithApproval } from "./tool-approval";
 import { filterTools, getDefaultPolicy, mergeToolPolicies } from "./tool-policy";
 
@@ -37,8 +42,24 @@ function sanitizeForWhatsApp(text: string): string {
 
 export function startAgentLoop() {
   const client = getConvexClient();
+  const workerId = env.WORKER_ID ?? `worker-${process.pid}`;
+  const lockMs = env.AGENT_JOB_LOCK_MS ?? 60_000;
+  const heartbeatMs = env.AGENT_JOB_HEARTBEAT_MS ?? 15_000;
+
   void logger.lineInfo("[agent] Starting agent loop — subscribing to pending jobs...");
-  void logger.info("agent.loop.started");
+  void logger.info("agent.loop.started", { workerId });
+
+  // Activate plugins into the global registry and persist diagnostics
+  const activationResults = discoverAndActivate();
+  syncDiagnostics(client, activationResults).catch((error) => {
+    void logger.lineWarn("[agent] Failed to sync plugin diagnostics", {
+      error:
+        error instanceof Error
+          ? { name: error.name, message: error.message, stack: error.stack }
+          : String(error),
+    });
+    void logger.exception("agent.plugins.sync.failed", error);
+  });
   syncBuiltinPluginDefinitions(client).catch((error) => {
     void logger.lineWarn("[agent] Failed to sync builtin plugin definitions", {
       error:
@@ -54,9 +75,30 @@ export function startAgentLoop() {
 
     for (const job of jobs) {
       const startedAt = Date.now();
+      let heartbeatInterval: ReturnType<typeof setInterval> | undefined;
       try {
-        const claimed = await client.mutation(api.agent.claimJob, { jobId: job._id });
+        const claimed = await client.mutation(api.agent.claimJob, {
+          jobId: job._id,
+          processorId: workerId,
+          lockMs,
+        });
         if (!claimed) continue;
+
+        let leaseLost = false;
+        heartbeatInterval = setInterval(() => {
+          client
+            .mutation(api.agent.heartbeatJob, {
+              jobId: job._id,
+              processorId: workerId,
+              lockMs,
+            })
+            .then((ok) => {
+              if (!ok) leaseLost = true;
+            })
+            .catch(() => {
+              leaseLost = true;
+            });
+        }, heartbeatMs);
 
         void logger.lineInfo(
           `[agent] Processing job ${job._id} for conversation ${job.conversationId}`,
@@ -68,6 +110,7 @@ export function startAgentLoop() {
         void logger.info("agent.job.claimed", {
           jobId: job._id,
           conversationId: job.conversationId,
+          workerId,
         });
 
         const context = await client.query(api.agent.getConversationContext, {
@@ -140,6 +183,20 @@ export function startAgentLoop() {
             jobId: job._id,
             messageCount: conversationMessages.length,
           });
+        }
+
+        // Check lease before generation (expensive operation)
+        if (leaseLost) {
+          void logger.lineWarn(`[agent] Lease lost before generation for job ${job._id}`, {
+            jobId: job._id,
+            conversationId: job.conversationId,
+          });
+          void logger.warn("agent.job.lease_lost", {
+            jobId: job._id,
+            conversationId: job.conversationId,
+            phase: "pre_generate",
+          });
+          continue;
         }
 
         const channel = context.conversation.channel as "web" | "whatsapp";
@@ -242,6 +299,20 @@ export function startAgentLoop() {
           }
         }
 
+        // Check lease before completing (avoid overwriting a requeued job)
+        if (leaseLost) {
+          void logger.lineWarn(`[agent] Lease lost before completion for job ${job._id}`, {
+            jobId: job._id,
+            conversationId: job.conversationId,
+          });
+          void logger.warn("agent.job.lease_lost", {
+            jobId: job._id,
+            conversationId: job.conversationId,
+            phase: "pre_complete",
+          });
+          continue;
+        }
+
         await client.mutation(api.agent.completeJob, { jobId: job._id, modelUsed });
         void logger.lineInfo(
           `[agent] Completed job ${job._id}${modelUsed ? ` (model: ${modelUsed})` : ""}`,
@@ -305,6 +376,8 @@ export function startAgentLoop() {
             errorMessage: errorMessage.slice(0, 500),
           })
           .catch(() => {});
+      } finally {
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
       }
     }
   });

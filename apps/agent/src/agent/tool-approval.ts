@@ -77,7 +77,7 @@ export function wrapToolsWithApproval(
       execute: async (args: unknown, execOptions: unknown) => {
         const client = getConvexClient();
 
-        console.info(`[tool-approval] Requesting approval for tool '${name}'`);
+        void logger.lineInfo(`[tool-approval] Requesting approval for tool '${name}'`);
 
         const approvalId = await client.mutation(api.toolApprovals.create, {
           conversationId: context.conversationId as Id<"conversations">,
@@ -115,12 +115,14 @@ export function wrapToolsWithApproval(
           });
         }
 
-        console.info(`[tool-approval] Waiting for approval on tool '${name}' (id: ${approvalId})`);
+        void logger.lineInfo(
+          `[tool-approval] Waiting for approval on tool '${name}' (id: ${approvalId})`,
+        );
 
         const result = await waitForApproval(context.jobId, approvalId as string);
 
         if (result === "approved") {
-          console.info(`[tool-approval] Tool '${name}' approved, executing`);
+          void logger.lineInfo(`[tool-approval] Tool '${name}' approved, executing`);
           void logger.info("agent.tool.approval.approved", {
             approvalId,
             toolName: name,
@@ -132,7 +134,7 @@ export function wrapToolsWithApproval(
         }
 
         if (result === "timeout") {
-          console.info(`[tool-approval] Tool '${name}' approval timed out`);
+          void logger.lineInfo(`[tool-approval] Tool '${name}' approval timed out`);
           void logger.warn("agent.tool.approval.timeout", {
             approvalId,
             toolName: name,
@@ -143,7 +145,7 @@ export function wrapToolsWithApproval(
           return `Tool '${name}' approval timed out.`;
         }
 
-        console.info(`[tool-approval] Tool '${name}' was rejected`);
+        void logger.lineInfo(`[tool-approval] Tool '${name}' was rejected`);
         void logger.warn("agent.tool.approval.rejected", {
           approvalId,
           toolName: name,

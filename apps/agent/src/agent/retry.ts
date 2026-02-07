@@ -1,3 +1,4 @@
+import { logger } from "../observability/logger";
 import { classifyError, isRetryable } from "./errors";
 
 interface RetryConfig {
@@ -46,9 +47,15 @@ export async function withRetry<T>(
         delay += Math.random() * delay * 0.2;
       }
 
-      console.info(
+      void logger.lineInfo(
         `[retry] Attempt ${attempt + 1}/${maxRetries} after ${reason}, waiting ${Math.round(delay)}ms`,
       );
+      void logger.info("agent.retry.attempt", {
+        attempt: attempt + 1,
+        maxRetries,
+        reason,
+        delayMs: Math.round(delay),
+      });
 
       await new Promise((resolve) => setTimeout(resolve, delay));
     }

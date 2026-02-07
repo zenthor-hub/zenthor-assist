@@ -27,7 +27,7 @@ export async function runWithFallback<T>(params: FallbackParams<T>): Promise<Fal
     }
 
     // Primary retries are exhausted — try fallback
-    console.info(
+    void logger.lineWarn(
       `[fallback] Primary model ${params.primaryModel} failed (${reason}), trying fallback ${params.fallbackModel}`,
     );
     void logger.warn("agent.model.fallback.used", {
