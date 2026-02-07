@@ -6,6 +6,12 @@ import { mutation, query } from "./_generated/server";
 
 const channelValidator = v.union(v.literal("web"), v.literal("whatsapp"));
 
+const diagnosticStatusValidator = v.union(
+  v.literal("activated"),
+  v.literal("conflict"),
+  v.literal("invalid"),
+);
+
 const pluginDefinitionDoc = v.object({
   _id: v.id("pluginDefinitions"),
   _creationTime: v.number(),
@@ -15,6 +21,9 @@ const pluginDefinitionDoc = v.object({
   status: v.union(v.literal("active"), v.literal("inactive")),
   manifest: v.any(),
   checksum: v.optional(v.string()),
+  diagnosticStatus: v.optional(diagnosticStatusValidator),
+  diagnosticMessages: v.optional(v.array(v.string())),
+  lastDiagnosticAt: v.optional(v.number()),
   createdAt: v.number(),
   updatedAt: v.number(),
 });
@@ -287,5 +296,52 @@ export const getEffectivePolicy = query({
       ...(allow ? { allow } : {}),
       ...(deny.length > 0 ? { deny: [...new Set(deny)] } : {}),
     };
+  },
+});
+
+export const upsertDiagnostics = mutation({
+  args: {
+    name: v.string(),
+    diagnosticStatus: diagnosticStatusValidator,
+    diagnosticMessages: v.array(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("pluginDefinitions")
+      .withIndex("by_name", (q) => q.eq("name", args.name))
+      .first();
+
+    const now = Date.now();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        diagnosticStatus: args.diagnosticStatus,
+        diagnosticMessages: args.diagnosticMessages,
+        lastDiagnosticAt: now,
+        updatedAt: now,
+      });
+    }
+  },
+});
+
+export const listDiagnostics = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      name: v.string(),
+      diagnosticStatus: v.optional(diagnosticStatusValidator),
+      diagnosticMessages: v.optional(v.array(v.string())),
+      lastDiagnosticAt: v.optional(v.number()),
+    }),
+  ),
+  handler: async (ctx) => {
+    const defs = await ctx.db.query("pluginDefinitions").collect();
+    return defs.map((d) => ({
+      name: d.name,
+      diagnosticStatus: d.diagnosticStatus,
+      diagnosticMessages: d.diagnosticMessages,
+      lastDiagnosticAt: d.lastDiagnosticAt,
+    }));
   },
 });

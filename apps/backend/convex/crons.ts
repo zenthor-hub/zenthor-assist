@@ -21,4 +21,15 @@ crons.daily(
   internal.phoneVerification.cleanupExpired,
 );
 
+// Cleanup old inbound dedupe entries (24h TTL) — runs daily at 5am UTC
+crons.daily(
+  "cleanup old dedupe entries",
+  { hourUTC: 5, minuteUTC: 0 },
+  internal.inboundDedupe.cleanup,
+  {},
+);
+
+// Requeue stale agent jobs with expired leases — runs every minute
+crons.interval("requeue stale agent jobs", { minutes: 1 }, internal.agent.requeueStaleJobs);
+
 export default crons;

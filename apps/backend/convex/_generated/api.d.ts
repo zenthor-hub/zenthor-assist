@@ -9,6 +9,7 @@
  */
 
 import type * as agent from "../agent.js";
+import type * as agent_queue_helpers from "../agent_queue_helpers.js";
 import type * as agents from "../agents.js";
 import type * as clerk_http from "../clerk/http.js";
 import type * as clerk_sync from "../clerk/sync.js";
@@ -19,6 +20,7 @@ import type * as crons from "../crons.js";
 import type * as delivery from "../delivery.js";
 import type * as healthCheck from "../healthCheck.js";
 import type * as http from "../http.js";
+import type * as inboundDedupe from "../inboundDedupe.js";
 import type * as memories from "../memories.js";
 import type * as messages from "../messages.js";
 import type * as phoneVerification from "../phoneVerification.js";
@@ -39,6 +41,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   agent: typeof agent;
+  agent_queue_helpers: typeof agent_queue_helpers;
   agents: typeof agents;
   "clerk/http": typeof clerk_http;
   "clerk/sync": typeof clerk_sync;
@@ -49,6 +52,7 @@ declare const fullApi: ApiFromModules<{
   delivery: typeof delivery;
   healthCheck: typeof healthCheck;
   http: typeof http;
+  inboundDedupe: typeof inboundDedupe;
   memories: typeof memories;
   messages: typeof messages;
   phoneVerification: typeof phoneVerification;

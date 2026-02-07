@@ -29,6 +29,9 @@
       "oxlint",
       "oxfmt",
       "knip"
+    ],
+    "ignore": [
+      "convex/agent_queue_helpers.ts"
     ]
   }
 }

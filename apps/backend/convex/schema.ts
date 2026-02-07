@@ -119,6 +119,10 @@ export default defineSchema({
     errorMessage: v.optional(v.string()),
     attemptCount: v.optional(v.number()),
     modelUsed: v.optional(v.string()),
+    processorId: v.optional(v.string()),
+    lockedUntil: v.optional(v.number()),
+    startedAt: v.optional(v.number()),
+    lastHeartbeatAt: v.optional(v.number()),
   })
     .index("by_status", ["status"])
     .index("by_conversationId", ["conversationId"]),
@@ -215,6 +219,11 @@ export default defineSchema({
     status: v.union(v.literal("active"), v.literal("inactive")),
     manifest: v.any(),
     checksum: v.optional(v.string()),
+    diagnosticStatus: v.optional(
+      v.union(v.literal("activated"), v.literal("conflict"), v.literal("invalid")),
+    ),
+    diagnosticMessages: v.optional(v.array(v.string())),
+    lastDiagnosticAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_name", ["name"]),
@@ -241,4 +250,13 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("by_scope_agent_channel", ["workspaceScope", "agentId", "channel"]),
+
+  inboundDedupe: defineTable({
+    channel: v.union(v.literal("whatsapp"), v.literal("web")),
+    channelMessageId: v.string(),
+    accountId: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_channel_messageId", ["channel", "channelMessageId"])
+    .index("by_createdAt", ["createdAt"]),
 });

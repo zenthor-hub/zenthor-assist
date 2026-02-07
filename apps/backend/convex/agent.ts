@@ -1,6 +1,14 @@
 import { v } from "convex/values";
 
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
+import {
+  canRetry,
+  DEFAULT_JOB_LOCK_MS,
+  hasActiveJobForConversation,
+  isHeartbeatValid,
+  isJobStale,
+  resolveStaleAction,
+} from "./agent_queue_helpers";
 
 const agentQueueDoc = v.object({
   _id: v.id("agentQueue"),
@@ -18,6 +26,10 @@ const agentQueueDoc = v.object({
   errorMessage: v.optional(v.string()),
   attemptCount: v.optional(v.number()),
   modelUsed: v.optional(v.string()),
+  processorId: v.optional(v.string()),
+  lockedUntil: v.optional(v.number()),
+  startedAt: v.optional(v.number()),
+  lastHeartbeatAt: v.optional(v.number()),
 });
 
 const toolPolicyValidator = v.optional(
@@ -121,14 +133,65 @@ export const getPendingJobs = query({
 });
 
 export const claimJob = mutation({
-  args: { jobId: v.id("agentQueue") },
+  args: {
+    jobId: v.id("agentQueue"),
+    processorId: v.string(),
+    lockMs: v.optional(v.number()),
+  },
   returns: v.union(agentQueueDoc, v.null()),
   handler: async (ctx, args) => {
     const job = await ctx.db.get(args.jobId);
     if (!job || job.status !== "pending") return null;
 
-    await ctx.db.patch(args.jobId, { status: "processing" });
-    return job;
+    const now = Date.now();
+    const lockMs = args.lockMs ?? DEFAULT_JOB_LOCK_MS;
+
+    // Inline stale cleanup: requeue expired processing jobs
+    const processingJobs = await ctx.db
+      .query("agentQueue")
+      .withIndex("by_status", (q) => q.eq("status", "processing"))
+      .collect();
+
+    for (const stale of processingJobs) {
+      if (!isJobStale(stale, now)) continue;
+
+      const action = resolveStaleAction(stale.attemptCount);
+      if (action === "fail") {
+        await ctx.db.patch(stale._id, {
+          status: "failed",
+          errorReason: "stale_lease",
+          errorMessage: "Job exceeded max attempts after lease expiry",
+          processorId: undefined,
+          lockedUntil: undefined,
+        });
+      } else {
+        await ctx.db.patch(stale._id, {
+          status: "pending",
+          attemptCount: (stale.attemptCount ?? 0) + 1,
+          processorId: undefined,
+          lockedUntil: undefined,
+          startedAt: undefined,
+          lastHeartbeatAt: undefined,
+        });
+      }
+    }
+
+    // Per-conversation guard: reject if another non-expired processing job exists
+    const conversationJobs = await ctx.db
+      .query("agentQueue")
+      .withIndex("by_conversationId", (q) => q.eq("conversationId", job.conversationId))
+      .collect();
+
+    if (hasActiveJobForConversation(conversationJobs, args.jobId, now)) return null;
+
+    await ctx.db.patch(args.jobId, {
+      status: "processing",
+      processorId: args.processorId,
+      lockedUntil: now + lockMs,
+      startedAt: now,
+      lastHeartbeatAt: now,
+    });
+    return { ...job, status: "processing" as const };
   },
 });
 
@@ -142,6 +205,8 @@ export const completeJob = mutation({
     await ctx.db.patch(args.jobId, {
       status: "completed",
       modelUsed: args.modelUsed,
+      processorId: undefined,
+      lockedUntil: undefined,
     });
   },
 });
@@ -158,6 +223,8 @@ export const failJob = mutation({
       status: "failed",
       errorReason: args.errorReason,
       errorMessage: args.errorMessage,
+      processorId: undefined,
+      lockedUntil: undefined,
     });
   },
 });
@@ -168,15 +235,76 @@ export const retryJob = mutation({
   handler: async (ctx, args) => {
     const job = await ctx.db.get(args.jobId);
     if (!job) return false;
-    const attemptCount = (job.attemptCount ?? 0) + 1;
-    if (attemptCount >= 3) return false;
+    if (!canRetry(job.attemptCount)) return false;
     await ctx.db.patch(args.jobId, {
       status: "pending",
-      attemptCount,
+      attemptCount: (job.attemptCount ?? 0) + 1,
       errorReason: undefined,
       errorMessage: undefined,
+      processorId: undefined,
+      lockedUntil: undefined,
+      startedAt: undefined,
+      lastHeartbeatAt: undefined,
     });
     return true;
+  },
+});
+
+export const heartbeatJob = mutation({
+  args: {
+    jobId: v.id("agentQueue"),
+    processorId: v.string(),
+    lockMs: v.optional(v.number()),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const job = await ctx.db.get(args.jobId);
+    if (!job) return false;
+    if (!isHeartbeatValid(job, args.processorId, Date.now())) return false;
+
+    const lockMs = args.lockMs ?? DEFAULT_JOB_LOCK_MS;
+    const now = Date.now();
+    await ctx.db.patch(args.jobId, {
+      lockedUntil: now + lockMs,
+      lastHeartbeatAt: now,
+    });
+    return true;
+  },
+});
+
+export const requeueStaleJobs = internalMutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const now = Date.now();
+    const processingJobs = await ctx.db
+      .query("agentQueue")
+      .withIndex("by_status", (q) => q.eq("status", "processing"))
+      .collect();
+
+    for (const job of processingJobs) {
+      if (!isJobStale(job, now)) continue;
+
+      const action = resolveStaleAction(job.attemptCount);
+      if (action === "fail") {
+        await ctx.db.patch(job._id, {
+          status: "failed",
+          errorReason: "stale_lease",
+          errorMessage: "Job exceeded max attempts after lease expiry",
+          processorId: undefined,
+          lockedUntil: undefined,
+        });
+      } else {
+        await ctx.db.patch(job._id, {
+          status: "pending",
+          attemptCount: (job.attemptCount ?? 0) + 1,
+          processorId: undefined,
+          lockedUntil: undefined,
+          startedAt: undefined,
+          lastHeartbeatAt: undefined,
+        });
+      }
+    }
   },
 });
 
