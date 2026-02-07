@@ -1,5 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("../observability/logger", () => ({
+  logger: {
+    lineInfo: vi.fn(),
+    lineWarn: vi.fn(),
+    lineError: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    exception: vi.fn(),
+  },
+}));
+
 import { withRetry } from "./retry";
 
 describe("withRetry", () => {
