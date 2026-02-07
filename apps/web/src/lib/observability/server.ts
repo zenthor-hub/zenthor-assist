@@ -5,7 +5,7 @@ import { createLogger, getDefaultRuntimeContext } from "@zenthor-assist/observab
 const runtimeContext = getDefaultRuntimeContext();
 
 export const webLogger = createLogger({
-  service: "web",
+  service: "web-next",
   enabled: env.OBS_ENABLED,
   token: env.AXIOM_TOKEN,
   dataset: env.AXIOM_DATASET,
@@ -15,6 +15,9 @@ export const webLogger = createLogger({
   environment: runtimeContext.env,
   release: runtimeContext.release,
   staticFields: {
-    runtime: "next",
+    app: "web",
+    channel: "web",
+    deployment: runtimeContext.env,
+    runtime: "nextjs",
   },
 });
