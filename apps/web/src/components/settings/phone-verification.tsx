@@ -16,8 +16,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useAppContext } from "@/hooks/use-app-context";
-
 const COUNTRY_CODES = [
   { value: "55", label: "BR +55" },
   { value: "1", label: "US +1" },
@@ -37,9 +35,8 @@ const COUNTRY_CODES = [
 ] as const;
 
 export function PhoneVerification() {
-  const { userId } = useAppContext();
   const user = useQuery(api.users.getCurrentUser);
-  const pendingVerification = useQuery(api.phoneVerification.getVerificationStatus, { userId });
+  const pendingVerification = useQuery(api.phoneVerification.getVerificationStatus, {});
 
   const requestVerification = useMutation(api.phoneVerification.requestVerification);
   const confirmVerification = useMutation(api.phoneVerification.confirmVerification);
@@ -63,7 +60,7 @@ export function PhoneVerification() {
     const fullPhone = countryCode + digits;
     setLoading(true);
     try {
-      const result = await requestVerification({ userId, phone: fullPhone });
+      const result = await requestVerification({ phone: fullPhone });
       if (result.success) {
         toast.success("Verification code sent via WhatsApp");
       } else {
@@ -84,7 +81,7 @@ export function PhoneVerification() {
 
     setLoading(true);
     try {
-      const result = await confirmVerification({ userId, code });
+      const result = await confirmVerification({ code });
       if (result.success) {
         toast.success("Phone verified successfully");
         setCode("");
@@ -102,7 +99,7 @@ export function PhoneVerification() {
   async function handleUnlink() {
     setLoading(true);
     try {
-      await unlinkPhone({ userId });
+      await unlinkPhone({});
       toast.success("Phone unlinked");
     } catch {
       toast.error("Failed to unlink phone");

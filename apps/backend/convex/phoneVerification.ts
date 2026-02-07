@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 
 import { internalMutation, mutation, query } from "./_generated/server";
+import { getAuthUser } from "./lib/auth";
 
 const VERIFICATION_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const CLEANUP_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -11,11 +12,13 @@ function generateCode(): string {
 
 export const requestVerification = mutation({
   args: {
-    userId: v.id("users"),
     phone: v.string(),
   },
   returns: v.object({ success: v.boolean(), error: v.optional(v.string()) }),
   handler: async (ctx, args) => {
+    const user = await getAuthUser(ctx);
+    if (!user) return { success: false, error: "Not authenticated" };
+
     // Validate phone format: digits only, 10-15 chars
     if (!/^\d{10,15}$/.test(args.phone)) {
       return { success: false, error: "Invalid phone number format" };
@@ -27,14 +30,14 @@ export const requestVerification = mutation({
       .withIndex("by_phone", (q) => q.eq("phone", args.phone))
       .first();
 
-    if (existingUser && existingUser._id !== args.userId) {
+    if (existingUser && existingUser._id !== user._id) {
       return { success: false, error: "Phone number already linked to another account" };
     }
 
     // Expire any existing pending verifications for this user
     const pending = await ctx.db
       .query("phoneVerifications")
-      .withIndex("by_userId_status", (q) => q.eq("userId", args.userId).eq("status", "pending"))
+      .withIndex("by_userId_status", (q) => q.eq("userId", user._id).eq("status", "pending"))
       .collect();
 
     for (const verification of pending) {
@@ -46,7 +49,7 @@ export const requestVerification = mutation({
     const now = Date.now();
 
     await ctx.db.insert("phoneVerifications", {
-      userId: args.userId,
+      userId: user._id,
       phone: args.phone,
       code,
       status: "pending",
@@ -123,7 +126,6 @@ export const requestVerification = mutation({
 
 export const confirmVerification = mutation({
   args: {
-    userId: v.id("users"),
     code: v.string(),
   },
   returns: v.object({
@@ -132,9 +134,12 @@ export const confirmVerification = mutation({
     error: v.optional(v.string()),
   }),
   handler: async (ctx, args) => {
+    const user = await getAuthUser(ctx);
+    if (!user) return { success: false, error: "Not authenticated" };
+
     const pending = await ctx.db
       .query("phoneVerifications")
-      .withIndex("by_userId_status", (q) => q.eq("userId", args.userId).eq("status", "pending"))
+      .withIndex("by_userId_status", (q) => q.eq("userId", user._id).eq("status", "pending"))
       .first();
 
     if (!pending) {
@@ -157,7 +162,7 @@ export const confirmVerification = mutation({
     await ctx.db.patch(pending._id, { status: "verified", verifiedAt: now });
 
     // Set phone on user
-    await ctx.db.patch(args.userId, { phone: pending.phone, updatedAt: now });
+    await ctx.db.patch(user._id, { phone: pending.phone, updatedAt: now });
 
     // Link contact to user
     const contact = await ctx.db
@@ -166,7 +171,7 @@ export const confirmVerification = mutation({
       .first();
 
     if (contact) {
-      await ctx.db.patch(contact._id, { userId: args.userId });
+      await ctx.db.patch(contact._id, { userId: user._id });
     }
 
     return { success: true, phone: pending.phone };
@@ -174,7 +179,7 @@ export const confirmVerification = mutation({
 });
 
 export const getVerificationStatus = query({
-  args: { userId: v.id("users") },
+  args: {},
   returns: v.union(
     v.object({
       phone: v.string(),
@@ -182,10 +187,13 @@ export const getVerificationStatus = query({
     }),
     v.null(),
   ),
-  handler: async (ctx, args) => {
+  handler: async (ctx) => {
+    const user = await getAuthUser(ctx);
+    if (!user) return null;
+
     const pending = await ctx.db
       .query("phoneVerifications")
-      .withIndex("by_userId_status", (q) => q.eq("userId", args.userId).eq("status", "pending"))
+      .withIndex("by_userId_status", (q) => q.eq("userId", user._id).eq("status", "pending"))
       .first();
 
     if (!pending) return null;
@@ -200,19 +208,21 @@ export const getVerificationStatus = query({
 });
 
 export const unlinkPhone = mutation({
-  args: { userId: v.id("users") },
+  args: {},
   returns: v.null(),
-  handler: async (ctx, args) => {
-    const user = await ctx.db.get(args.userId);
-    if (!user?.phone) return null;
+  handler: async (ctx) => {
+    const user = await getAuthUser(ctx);
+    if (!user) return null;
+    const { phone } = user;
+    if (!phone) return null;
 
     // Clear user phone
-    await ctx.db.patch(args.userId, { phone: undefined, updatedAt: Date.now() });
+    await ctx.db.patch(user._id, { phone: undefined, updatedAt: Date.now() });
 
     // Clear contact userId link
     const contact = await ctx.db
       .query("contacts")
-      .withIndex("by_phone", (q) => q.eq("phone", user.phone!))
+      .withIndex("by_phone", (q) => q.eq("phone", phone))
       .first();
 
     if (contact) {
