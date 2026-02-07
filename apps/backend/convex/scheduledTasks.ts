@@ -95,16 +95,27 @@ export const cleanupOldJobs = internalMutation({
   returns: v.null(),
   handler: async (ctx) => {
     const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-    const oldJobs = await ctx.db
+
+    const oldCompleted = await ctx.db
       .query("agentQueue")
       .withIndex("by_status", (q) => q.eq("status", "completed"))
       .filter((q) => q.lt(q.field("_creationTime"), sevenDaysAgo))
       .collect();
+
+    const oldFailed = await ctx.db
+      .query("agentQueue")
+      .withIndex("by_status", (q) => q.eq("status", "failed"))
+      .filter((q) => q.lt(q.field("_creationTime"), sevenDaysAgo))
+      .collect();
+
+    const oldJobs = [...oldCompleted, ...oldFailed];
     for (const job of oldJobs) {
       await ctx.db.delete(job._id);
     }
     if (oldJobs.length > 0) {
-      console.info(`[cron] Cleaned up ${oldJobs.length} old completed jobs`);
+      console.info(
+        `[cron] Cleaned up ${oldJobs.length} old jobs (${oldCompleted.length} completed, ${oldFailed.length} failed)`,
+      );
     }
   },
 });

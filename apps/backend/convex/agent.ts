@@ -200,14 +200,18 @@ export const completeJob = mutation({
     jobId: v.id("agentQueue"),
     modelUsed: v.optional(v.string()),
   },
-  returns: v.null(),
+  returns: v.boolean(),
   handler: async (ctx, args) => {
+    const job = await ctx.db.get(args.jobId);
+    if (!job || job.status !== "processing") return false;
+
     await ctx.db.patch(args.jobId, {
       status: "completed",
       modelUsed: args.modelUsed,
       processorId: undefined,
       lockedUntil: undefined,
     });
+    return true;
   },
 });
 
@@ -217,8 +221,11 @@ export const failJob = mutation({
     errorReason: v.optional(v.string()),
     errorMessage: v.optional(v.string()),
   },
-  returns: v.null(),
+  returns: v.boolean(),
   handler: async (ctx, args) => {
+    const job = await ctx.db.get(args.jobId);
+    if (!job || job.status !== "processing") return false;
+
     await ctx.db.patch(args.jobId, {
       status: "failed",
       errorReason: args.errorReason,
@@ -226,6 +233,7 @@ export const failJob = mutation({
       processorId: undefined,
       lockedUntil: undefined,
     });
+    return true;
   },
 });
 
