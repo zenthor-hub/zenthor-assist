@@ -36,6 +36,7 @@ import { ZenthorMark } from "@/components/zenthor-logo";
 import { useAppContext } from "@/hooks/use-app-context";
 
 import { NavUser } from "./nav-user";
+import { ThemeSwitcher } from "./theme-switcher";
 
 type SidebarMode = "nav" | "chats";
 
@@ -199,6 +200,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         )}
       </SidebarContent>
       <SidebarFooter>
+        <ThemeSwitcher />
         <NavUser />
       </SidebarFooter>
       <SidebarRail />

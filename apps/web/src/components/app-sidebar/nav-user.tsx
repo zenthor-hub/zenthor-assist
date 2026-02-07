@@ -1,8 +1,7 @@
 "use client";
 
 import { SignOutButton, useUser } from "@clerk/nextjs";
-import { ChevronsUpDown, LogOut, Moon, Settings, Sun } from "lucide-react";
-import { useTheme } from "next-themes";
+import { ChevronsUpDown, LogOut, Settings } from "lucide-react";
 import Link from "next/link";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -24,7 +23,6 @@ import {
 export function NavUser() {
   const { user } = useUser();
   const { isMobile } = useSidebar();
-  const { theme, setTheme } = useTheme();
 
   if (!user) return null;
 
@@ -76,10 +74,6 @@ export function NavUser() {
                 <Settings />
                 Settings
               </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
-              {theme === "dark" ? <Sun /> : <Moon />}
-              {theme === "dark" ? "Light mode" : "Dark mode"}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <SignOutButton>
