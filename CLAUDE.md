@@ -51,8 +51,11 @@ cd apps/agent && bun run dev:core
 
 ### Backend notes
 
+- **Convex URL domains**: `.convex.cloud` is for the client/functions API (queries, mutations). `.convex.site` is for HTTP actions (httpRouter endpoints like webhooks). Never use `.convex.cloud` for webhook callback URLs.
 - Schema in `apps/backend/convex/schema.ts`.
-- HTTP router in `apps/backend/convex/http.ts` exposes Clerk webhook at `/clerk/webhook`.
+- HTTP router in `apps/backend/convex/http.ts` exposes webhooks at `.convex.site` paths:
+  - `/clerk/webhook` (POST) — Clerk user sync
+  - `/whatsapp-cloud/webhook` (GET/POST) — Meta WhatsApp Cloud API
 - Cron orchestration in `apps/backend/convex/crons.ts` handles stale-job requeue, scheduled tasks, and cleanups.
 - Optional Todoist OAuth/task integration lives in `apps/backend/convex/todoist.ts`.
 - Public function auth wrappers are in `apps/backend/convex/auth/`:
