@@ -77,9 +77,9 @@ function redactValue(
   }
 
   if (Array.isArray(value)) {
-    return value.slice(0, MAX_ARRAY_LENGTH).map((item) =>
-      redactValue(item, key, options, depth + 1),
-    );
+    return value
+      .slice(0, MAX_ARRAY_LENGTH)
+      .map((item) => redactValue(item, key, options, depth + 1));
   }
 
   if (typeof value === "object") {

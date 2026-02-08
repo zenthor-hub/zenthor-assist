@@ -87,8 +87,8 @@ export function createLogger(config: LoggerConfig): Logger {
     if (getComparableLevel(level) < minLevel) return;
 
     const normalizedPayload: TelemetryPayload = {
-      ...(config.staticFields ?? {}),
-      ...(payload ?? {}),
+      ...config.staticFields,
+      ...payload,
     };
 
     if (error !== undefined) {
@@ -148,7 +148,7 @@ export function createLogger(config: LoggerConfig): Logger {
     exception: (event, error, payload) => emit("error", event, payload, error),
     flush: async () => {
       if (pending.size === 0) return;
-      await Promise.allSettled([...pending]);
+      await Promise.allSettled(pending);
     },
   };
 }
