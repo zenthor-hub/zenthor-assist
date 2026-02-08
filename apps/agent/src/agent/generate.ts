@@ -32,9 +32,15 @@ interface Message {
   content: string;
 }
 
+interface ToolCallRecord {
+  name: string;
+  input: unknown;
+  output?: unknown;
+}
+
 interface GenerateResult {
   content: string;
-  toolCalls?: unknown[];
+  toolCalls?: ToolCallRecord[];
   modelUsed: string;
 }
 
