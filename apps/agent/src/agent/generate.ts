@@ -5,6 +5,7 @@ import { generateText, stepCountIs, streamText } from "ai";
 
 import { logger } from "../observability/logger";
 import { runWithFallback } from "./model-fallback";
+import { selectModel } from "./model-router";
 import { tools } from "./tools";
 import { getWebSearchTool } from "./tools/web-search";
 
@@ -109,30 +110,59 @@ function getDefaultTools(modelName: string): Record<string, Tool> {
   };
 }
 
+interface GenerateOptions {
+  modelOverride?: string;
+  toolsOverride?: Record<string, Tool>;
+  agentConfig?: AgentConfig;
+  channel?: "web" | "whatsapp";
+  toolCount?: number;
+}
+
+function resolveModels(options?: GenerateOptions): {
+  primaryModel: string;
+  fallbackModels: string[];
+} {
+  // Explicit agent config takes priority (skip routing)
+  if (options?.agentConfig?.model) {
+    const fallbacks: string[] = [];
+    if (options.agentConfig.fallbackModel) fallbacks.push(options.agentConfig.fallbackModel);
+    else if (env.AI_FALLBACK_MODEL) fallbacks.push(env.AI_FALLBACK_MODEL);
+    return { primaryModel: options.agentConfig.model, fallbackModels: fallbacks };
+  }
+
+  // Explicit model override takes priority
+  if (options?.modelOverride) {
+    const fallbacks: string[] = [];
+    if (env.AI_FALLBACK_MODEL) fallbacks.push(env.AI_FALLBACK_MODEL);
+    return { primaryModel: options.modelOverride, fallbackModels: fallbacks };
+  }
+
+  // Use router for dynamic selection
+  const route = selectModel({
+    channel: options?.channel ?? "web",
+    toolCount: options?.toolCount ?? 0,
+  });
+  return { primaryModel: route.primary, fallbackModels: route.fallbacks };
+}
+
 export async function generateResponse(
   conversationMessages: Message[],
   skills?: Skill[],
-  options?: {
-    modelOverride?: string;
-    toolsOverride?: Record<string, Tool>;
-    agentConfig?: AgentConfig;
-    channel?: "web" | "whatsapp";
-  },
+  options?: GenerateOptions,
 ): Promise<GenerateResult> {
   const startedAt = Date.now();
-  const primaryModel = options?.agentConfig?.model ?? options?.modelOverride ?? env.AI_MODEL;
-  const fallbackModel = options?.agentConfig?.fallbackModel ?? env.AI_FALLBACK_MODEL;
+  const { primaryModel, fallbackModels } = resolveModels(options);
   void logger.info("agent.model.generate.started", {
     mode: "non_streaming",
     primaryModel,
-    hasFallbackModel: Boolean(fallbackModel),
+    fallbackModels,
     messageCount: conversationMessages.length,
     channel: options?.channel,
   });
 
   const { result, modelUsed } = await runWithFallback({
     primaryModel,
-    fallbackModel,
+    fallbackModels,
     run: async (modelName) => {
       const m = getModel(modelName);
       const result = await generateText({
@@ -178,27 +208,21 @@ export async function generateResponseStreaming(
   conversationMessages: Message[],
   skills?: Skill[],
   callbacks?: StreamCallbacks,
-  options?: {
-    modelOverride?: string;
-    toolsOverride?: Record<string, Tool>;
-    agentConfig?: AgentConfig;
-    channel?: "web" | "whatsapp";
-  },
+  options?: GenerateOptions,
 ): Promise<GenerateResult> {
   const startedAt = Date.now();
-  const primaryModel = options?.agentConfig?.model ?? options?.modelOverride ?? env.AI_MODEL;
-  const fallbackModel = options?.agentConfig?.fallbackModel ?? env.AI_FALLBACK_MODEL;
+  const { primaryModel, fallbackModels } = resolveModels(options);
   void logger.info("agent.model.generate.started", {
     mode: "streaming",
     primaryModel,
-    hasFallbackModel: Boolean(fallbackModel),
+    fallbackModels,
     messageCount: conversationMessages.length,
     channel: options?.channel,
   });
 
   const { result, modelUsed } = await runWithFallback({
     primaryModel,
-    fallbackModel,
+    fallbackModels,
     run: async (modelName) => {
       const m = getModel(modelName);
       const streamResult = streamText({

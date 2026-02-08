@@ -4,7 +4,7 @@ import { withRetry } from "./retry";
 
 interface FallbackParams<T> {
   primaryModel: string;
-  fallbackModel?: string;
+  fallbackModels: string[];
   run: (modelName: string) => Promise<T>;
 }
 
@@ -19,24 +19,36 @@ export async function runWithFallback<T>(params: FallbackParams<T>): Promise<Fal
     const result = await withRetry(() => params.run(params.primaryModel));
     return { result, modelUsed: params.primaryModel };
   } catch (primaryError) {
-    const reason = classifyError(primaryError);
+    const primaryReason = classifyError(primaryError);
 
-    // If no fallback configured, re-throw
-    if (!params.fallbackModel) {
+    if (params.fallbackModels.length === 0) {
       throw primaryError;
     }
 
-    // Primary retries are exhausted — try fallback
-    void logger.lineWarn(
-      `[fallback] Primary model ${params.primaryModel} failed (${reason}), trying fallback ${params.fallbackModel}`,
-    );
-    void logger.warn("agent.model.fallback.used", {
-      primaryModel: params.primaryModel,
-      fallbackModel: params.fallbackModel,
-      reason,
-    });
+    // Cascade through fallback models in order
+    let lastError: unknown = primaryError;
+    for (const fallbackModel of params.fallbackModels) {
+      void logger.lineWarn(
+        `[fallback] Primary model ${params.primaryModel} failed (${primaryReason}), trying fallback ${fallbackModel}`,
+      );
+      void logger.warn("agent.model.fallback.used", {
+        primaryModel: params.primaryModel,
+        fallbackModel,
+        reason: primaryReason,
+      });
 
-    const result = await withRetry(() => params.run(params.fallbackModel!));
-    return { result, modelUsed: params.fallbackModel };
+      try {
+        const result = await withRetry(() => params.run(fallbackModel));
+        return { result, modelUsed: fallbackModel };
+      } catch (fallbackError) {
+        lastError = fallbackError;
+        const fallbackReason = classifyError(fallbackError);
+        void logger.lineWarn(
+          `[fallback] Fallback model ${fallbackModel} also failed (${fallbackReason})`,
+        );
+      }
+    }
+
+    throw lastError;
   }
 }
