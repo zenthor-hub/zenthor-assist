@@ -159,6 +159,22 @@ export interface AgentToolApprovalResolvedPayload {
 }
 
 // ---------------------------------------------------------------------------
+// WhatsApp Cloud API
+// ---------------------------------------------------------------------------
+
+export interface WhatsAppCloudSendSuccessPayload {
+  phone: string;
+  wamid: string;
+  messageLength: number;
+}
+
+export interface WhatsAppCloudSendFailedPayload {
+  phone: string;
+  error: string;
+  statusCode: number;
+}
+
+// ---------------------------------------------------------------------------
 // WhatsApp connection
 // ---------------------------------------------------------------------------
 
@@ -280,6 +296,17 @@ export interface OperationalEventMap {
   "whatsapp.outbound.sent": WhatsAppOutboundSentPayload;
   "whatsapp.outbound.loop.started": WhatsAppOutboundLoopStartedPayload;
   "whatsapp.outbound.loop.error": WhatsAppOutboundLoopErrorPayload;
+
+  // WhatsApp Cloud API
+  "whatsapp.cloud.lease.acquire.success": WhatsAppLeaseAcquireSuccessPayload;
+  "whatsapp.cloud.lease.acquire.contended": WhatsAppLeaseAcquireContendedPayload;
+  "whatsapp.cloud.lease.heartbeat.lost": WhatsAppLeaseHeartbeatLostPayload;
+  "whatsapp.cloud.lease.heartbeat.error": WhatsAppLeaseHeartbeatErrorPayload;
+  "whatsapp.cloud.lease.released": WhatsAppLeaseReleasedPayload;
+  "whatsapp.cloud.outbound.loop.started": WhatsAppOutboundLoopStartedPayload;
+  "whatsapp.cloud.outbound.loop.error": WhatsAppOutboundLoopErrorPayload;
+  "whatsapp.cloud.send.success": WhatsAppCloudSendSuccessPayload;
+  "whatsapp.cloud.send.failed": WhatsAppCloudSendFailedPayload;
 
   // Plugin lifecycle
   "agent.plugins.sync.failed": AgentPluginsSyncFailedPayload;

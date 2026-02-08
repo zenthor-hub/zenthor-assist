@@ -8,7 +8,9 @@ const envSchema = z.object({
   AI_CONTEXT_WINDOW: z.coerce.number().optional(),
   AI_EMBEDDING_MODEL: z.string().default("openai/text-embedding-3-small"),
   AGENT_SECRET: z.string().min(1).optional(),
-  AGENT_ROLE: z.enum(["all", "core", "whatsapp", "whatsapp-ingress", "whatsapp-egress"]).optional(),
+  AGENT_ROLE: z
+    .enum(["all", "core", "whatsapp", "whatsapp-ingress", "whatsapp-egress", "whatsapp-cloud"])
+    .optional(),
   WORKER_ID: z.string().min(1).optional(),
   AGENT_JOB_LOCK_MS: z.coerce.number().optional(),
   AGENT_JOB_HEARTBEAT_MS: z.coerce.number().optional(),
@@ -18,6 +20,10 @@ const envSchema = z.object({
   WHATSAPP_LEASE_TTL_MS: z.coerce.number().optional(),
   WHATSAPP_AUTH_MODE: z.enum(["local", "convex"]).optional().default("local"),
   WHATSAPP_HEARTBEAT_MS: z.coerce.number().optional(),
+  WHATSAPP_CLOUD_ACCESS_TOKEN: z.string().min(1).optional(),
+  WHATSAPP_CLOUD_PHONE_NUMBER_ID: z.string().min(1).optional(),
+  WHATSAPP_CLOUD_ACCOUNT_ID: z.string().min(1).optional(),
+  WHATSAPP_CLOUD_PHONE: z.string().min(1).optional(),
   AXIOM_TOKEN: z.string().min(1).optional(),
   AXIOM_DATASET: z.string().min(1).optional(),
   SENTRY_DSN: z.string().min(1).optional(),

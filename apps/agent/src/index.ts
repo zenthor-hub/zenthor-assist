@@ -1,6 +1,7 @@
 import { startAgentLoop } from "./agent/loop";
 import { logger } from "./observability/logger";
 import { initSentry } from "./observability/sentry";
+import { startWhatsAppCloudRuntime } from "./whatsapp-cloud/runtime";
 import { startWhatsAppRuntime } from "./whatsapp/runtime";
 
 async function main() {
@@ -36,6 +37,8 @@ async function main() {
     await startWhatsAppRuntime({ enableIngress: true, enableEgress: false });
   } else if (role === "whatsapp-egress") {
     await startWhatsAppRuntime({ enableIngress: false, enableEgress: true });
+  } else if (role === "whatsapp-cloud") {
+    await startWhatsAppCloudRuntime();
   }
 
   await logger.lineInfo(`[main] Agent is running (role: ${role})`, { role, enableWhatsApp });
