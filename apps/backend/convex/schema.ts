@@ -6,6 +6,7 @@ export default defineSchema({
     externalId: v.string(),
     name: v.string(),
     email: v.string(),
+    role: v.optional(v.union(v.literal("admin"), v.literal("member"))),
     emailVerified: v.optional(v.boolean()),
     image: v.optional(v.string()),
     phone: v.optional(v.string()),

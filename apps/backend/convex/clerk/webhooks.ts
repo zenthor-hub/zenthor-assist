@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 
 import { internalMutation } from "../_generated/server";
+import { resolveRoleForEmail } from "../auth";
 
 export const handleUserCreated = internalMutation({
   args: {
@@ -23,6 +24,7 @@ export const handleUserCreated = internalMutation({
       await ctx.db.patch(existing._id, {
         name: args.name,
         email: args.email.toLowerCase(),
+        role: existing.role ?? resolveRoleForEmail(args.email),
         image: args.image,
         updatedAt: Date.now(),
       });
@@ -34,6 +36,7 @@ export const handleUserCreated = internalMutation({
       externalId: args.externalId,
       name: args.name,
       email: args.email.toLowerCase(),
+      role: resolveRoleForEmail(args.email),
       image: args.image,
       status: "active",
       createdAt: now,
@@ -66,6 +69,7 @@ export const handleUserUpdated = internalMutation({
       await ctx.db.patch(existing._id, {
         name: args.name,
         email: args.email.toLowerCase(),
+        role: existing.role ?? resolveRoleForEmail(args.email),
         image: args.image,
         updatedAt: now,
       });
@@ -76,6 +80,7 @@ export const handleUserUpdated = internalMutation({
       externalId: args.externalId,
       name: args.name,
       email: args.email.toLowerCase(),
+      role: resolveRoleForEmail(args.email),
       image: args.image,
       status: "active",
       createdAt: now,
