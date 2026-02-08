@@ -26,6 +26,7 @@ const PROFESSIONAL_WHATSAPP_ALLOWLIST = [
   "memory_search",
   "memory_store",
   "schedule_task",
+  "browse_url",
   "web_search",
   "google_search",
   "todoist_capture_task",
