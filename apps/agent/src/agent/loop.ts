@@ -264,6 +264,7 @@ export function startAgentLoop() {
           conversationId: job.conversationId,
           channel,
           phone: context.contact?.phone,
+          accountId: context.conversation.accountId ?? undefined,
         });
 
         const isWeb = context.conversation.channel === "web";
@@ -351,7 +352,7 @@ export function startAgentLoop() {
             await client.mutation(api.delivery.enqueueOutbound, {
               serviceKey,
               channel: "whatsapp",
-              accountId: env.WHATSAPP_ACCOUNT_ID ?? "default",
+              accountId: context.conversation.accountId ?? env.WHATSAPP_ACCOUNT_ID ?? "default",
               conversationId: job.conversationId,
               messageId: assistantMessageId,
               to: context.contact.phone,

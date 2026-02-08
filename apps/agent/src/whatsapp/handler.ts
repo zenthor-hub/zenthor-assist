@@ -69,6 +69,7 @@ export async function handleIncomingMessage(message: WAMessage) {
     serviceKey: env.AGENT_SECRET,
     contactId: contact._id,
     channel: "whatsapp",
+    accountId: env.WHATSAPP_ACCOUNT_ID ?? "default",
   });
 
   // Check for pending tool approvals before normal message handling

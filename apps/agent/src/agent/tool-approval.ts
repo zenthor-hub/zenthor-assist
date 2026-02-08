@@ -15,6 +15,7 @@ interface ApprovalContext {
   conversationId: string;
   channel: "web" | "whatsapp";
   phone?: string;
+  accountId?: string;
 }
 
 function sleep(ms: number): Promise<void> {
@@ -111,7 +112,7 @@ export function wrapToolsWithApproval(
             await client.mutation(api.delivery.enqueueOutbound, {
               serviceKey: env.AGENT_SECRET,
               channel: "whatsapp",
-              accountId: env.WHATSAPP_ACCOUNT_ID ?? "default",
+              accountId: context.accountId ?? env.WHATSAPP_ACCOUNT_ID ?? "default",
               conversationId: context.conversationId as Id<"conversations">,
               messageId,
               to: context.phone,
