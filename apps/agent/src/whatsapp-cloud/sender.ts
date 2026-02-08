@@ -2,7 +2,7 @@ import { env } from "@zenthor-assist/env/agent";
 
 import { logger, typedEvent } from "../observability/logger";
 
-const GRAPH_API_VERSION = "v22.0";
+const GRAPH_API_VERSION = "v24.0";
 
 interface CloudApiResponse {
   messages?: Array<{ id: string }>;
