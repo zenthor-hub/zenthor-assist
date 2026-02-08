@@ -36,6 +36,8 @@ import type * as skills from "../skills.js";
 import type * as todoist from "../todoist.js";
 import type * as toolApprovals from "../toolApprovals.js";
 import type * as users from "../users.js";
+import type * as whatsappCloud_mutations from "../whatsappCloud/mutations.js";
+import type * as whatsappCloud_webhook from "../whatsappCloud/webhook.js";
 import type * as whatsappLeases from "../whatsappLeases.js";
 import type * as whatsappSession from "../whatsappSession.js";
 
@@ -74,6 +76,8 @@ declare const fullApi: ApiFromModules<{
   todoist: typeof todoist;
   toolApprovals: typeof toolApprovals;
   users: typeof users;
+  "whatsappCloud/mutations": typeof whatsappCloud_mutations;
+  "whatsappCloud/webhook": typeof whatsappCloud_webhook;
   whatsappLeases: typeof whatsappLeases;
   whatsappSession: typeof whatsappSession;
 }>;
