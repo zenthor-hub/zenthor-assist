@@ -2,14 +2,14 @@ import { env } from "@zenthor-assist/env/agent";
 
 import { logger } from "../observability/logger";
 
-export interface RouteContext {
+interface RouteContext {
   channel: "web" | "whatsapp";
   toolCount: number;
 }
 
-export type ModelTier = "lite" | "standard" | "power";
+type ModelTier = "lite" | "standard" | "power";
 
-export interface RouteResult {
+interface RouteResult {
   primary: string;
   fallbacks: string[];
   tier: ModelTier;
