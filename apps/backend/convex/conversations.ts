@@ -10,6 +10,7 @@ const conversationDoc = v.object({
   userId: v.optional(v.id("users")),
   contactId: v.optional(v.id("contacts")),
   agentId: v.optional(v.id("agents")),
+  accountId: v.optional(v.string()),
   title: v.optional(v.string()),
   status: v.union(v.literal("active"), v.literal("archived")),
 });
@@ -20,6 +21,7 @@ export const getOrCreate = serviceMutation({
     contactId: v.optional(v.id("contacts")),
     channel: v.union(v.literal("whatsapp"), v.literal("web")),
     agentId: v.optional(v.id("agents")),
+    accountId: v.optional(v.string()),
   },
   returns: v.id("conversations"),
   handler: async (ctx, args) => {
@@ -42,11 +44,14 @@ export const getOrCreate = serviceMutation({
     }
 
     if (args.channel === "whatsapp" && args.contactId) {
+      const accountId = args.accountId ?? "default";
+
       const existing = await ctx.db
         .query("conversations")
         .withIndex("by_contactId", (q) => q.eq("contactId", args.contactId))
         .filter((q) => q.eq(q.field("channel"), "whatsapp"))
         .filter((q) => q.eq(q.field("status"), "active"))
+        .filter((q) => q.eq(q.field("accountId"), accountId))
         .first();
 
       if (existing) return existing._id;
@@ -54,6 +59,7 @@ export const getOrCreate = serviceMutation({
       return await ctx.db.insert("conversations", {
         contactId: args.contactId,
         channel: "whatsapp",
+        accountId,
         status: "active",
         ...(args.agentId && { agentId: args.agentId }),
       });
@@ -130,6 +136,7 @@ export const listRecentWithLastMessage = authQuery({
       userId: v.optional(v.id("users")),
       contactId: v.optional(v.id("contacts")),
       agentId: v.optional(v.id("agents")),
+      accountId: v.optional(v.string()),
       title: v.optional(v.string()),
       status: v.union(v.literal("active"), v.literal("archived")),
       lastMessage: v.union(

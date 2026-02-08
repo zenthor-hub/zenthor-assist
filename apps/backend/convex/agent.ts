@@ -104,6 +104,7 @@ const conversationDoc = v.object({
   userId: v.optional(v.id("users")),
   contactId: v.optional(v.id("contacts")),
   agentId: v.optional(v.id("agents")),
+  accountId: v.optional(v.string()),
   title: v.optional(v.string()),
   status: v.union(v.literal("active"), v.literal("archived")),
 });
