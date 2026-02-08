@@ -19,6 +19,7 @@ import { wrapToolsWithApproval } from "./tool-approval";
 import { filterTools, getDefaultPolicy, mergeToolPolicies } from "./tool-policy";
 import { createMemoryTools } from "./tools/memory";
 import { createScheduleTask } from "./tools/schedule";
+import { createTodoistTools } from "./tools/todoist";
 
 /** Convert any remaining markdown syntax to WhatsApp-compatible formatting */
 function sanitizeForWhatsApp(text: string): string {
@@ -228,6 +229,21 @@ export function startAgentLoop() {
         }
         if (pluginTools.tools.memory_store) {
           pluginTools.tools.memory_store = scopedMemory.memory_store;
+        }
+
+        // Bind Todoist tools to this conversation's owner scope
+        const scopedTodoist = createTodoistTools(job.conversationId);
+        if (pluginTools.tools.todoist_capture_task) {
+          pluginTools.tools.todoist_capture_task = scopedTodoist.todoist_capture_task;
+        }
+        if (pluginTools.tools.todoist_list_tasks) {
+          pluginTools.tools.todoist_list_tasks = scopedTodoist.todoist_list_tasks;
+        }
+        if (pluginTools.tools.todoist_complete_task) {
+          pluginTools.tools.todoist_complete_task = scopedTodoist.todoist_complete_task;
+        }
+        if (pluginTools.tools.todoist_reschedule_task) {
+          pluginTools.tools.todoist_reschedule_task = scopedTodoist.todoist_reschedule_task;
         }
 
         // Build channel-aware tool policy

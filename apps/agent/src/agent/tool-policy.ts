@@ -13,6 +13,10 @@ const PROFESSIONAL_WEB_ALLOWLIST = [
   "browse_url",
   "web_search",
   "google_search",
+  "todoist_capture_task",
+  "todoist_list_tasks",
+  "todoist_complete_task",
+  "todoist_reschedule_task",
 ];
 
 const PROFESSIONAL_WHATSAPP_ALLOWLIST = [
@@ -24,6 +28,10 @@ const PROFESSIONAL_WHATSAPP_ALLOWLIST = [
   "schedule_task",
   "web_search",
   "google_search",
+  "todoist_capture_task",
+  "todoist_list_tasks",
+  "todoist_complete_task",
+  "todoist_reschedule_task",
 ];
 
 export function getDefaultPolicy(channel: "web" | "whatsapp"): ToolPolicy {

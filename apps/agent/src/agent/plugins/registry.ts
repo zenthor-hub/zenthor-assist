@@ -6,6 +6,12 @@ import { currentTime } from "../tools/current-time";
 import { dateCalc } from "../tools/date-calc";
 import { memorySearch, memoryStore } from "../tools/memory";
 import { scheduleTask } from "../tools/schedule";
+import {
+  todoistCaptureTask,
+  todoistCompleteTask,
+  todoistListTasks,
+  todoistRescheduleTask,
+} from "../tools/todoist";
 import type { ActivationResult, RuntimePlugin } from "./types";
 import { validateManifest } from "./validators";
 
@@ -58,6 +64,31 @@ const coreSchedulePlugin: RuntimePlugin = {
   },
   tools: {
     schedule_task: scheduleTask,
+  },
+};
+
+const coreTodoistPlugin: RuntimePlugin = {
+  name: "core-todoist",
+  version: "1.0.0",
+  source: "builtin",
+  manifest: {
+    id: "core-todoist",
+    version: "1.0.0",
+    tools: [
+      "todoist_capture_task",
+      "todoist_list_tasks",
+      "todoist_complete_task",
+      "todoist_reschedule_task",
+    ],
+    riskLevel: "medium",
+    source: "builtin",
+    description: "Todoist task capture, planning, completion, and rescheduling",
+  },
+  tools: {
+    todoist_capture_task: todoistCaptureTask,
+    todoist_list_tasks: todoistListTasks,
+    todoist_complete_task: todoistCompleteTask,
+    todoist_reschedule_task: todoistRescheduleTask,
   },
 };
 
@@ -116,6 +147,7 @@ const builtinPlugins: RuntimePlugin[] = [
   coreTimePlugin,
   coreMemoryPlugin,
   coreSchedulePlugin,
+  coreTodoistPlugin,
   coreWebBrowsePlugin,
   coreCalculatorPlugin,
   coreDateCalcPlugin,
