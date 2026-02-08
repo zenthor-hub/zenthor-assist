@@ -3,13 +3,34 @@ interface ToolPolicy {
   deny?: string[];
 }
 
+const PROFESSIONAL_WEB_ALLOWLIST = [
+  "get_current_time",
+  "calculate",
+  "date_calc",
+  "memory_search",
+  "memory_store",
+  "schedule_task",
+  "browse_url",
+  "web_search",
+  "google_search",
+];
+
+const PROFESSIONAL_WHATSAPP_ALLOWLIST = [
+  "get_current_time",
+  "calculate",
+  "date_calc",
+  "memory_search",
+  "memory_store",
+  "schedule_task",
+  "web_search",
+  "google_search",
+];
+
 export function getDefaultPolicy(channel: "web" | "whatsapp"): ToolPolicy {
-  // For now, both channels get the same permissive policy.
-  // WhatsApp deny list can be extended later for UI-dependent tools.
   if (channel === "whatsapp") {
-    return {};
+    return { allow: PROFESSIONAL_WHATSAPP_ALLOWLIST };
   }
-  return {};
+  return { allow: PROFESSIONAL_WEB_ALLOWLIST };
 }
 
 export function filterTools<T extends Record<string, unknown>>(

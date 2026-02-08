@@ -47,13 +47,17 @@ describe("mergeToolPolicies", () => {
 });
 
 describe("getDefaultPolicy", () => {
-  it("returns policy for web", () => {
+  it("returns an explicit web allowlist", () => {
     const policy = getDefaultPolicy("web");
-    expect(policy).toBeDefined();
+    expect(policy.allow).toBeDefined();
+    expect(policy.allow).toContain("schedule_task");
+    expect(policy.allow).toContain("browse_url");
   });
 
-  it("returns policy for whatsapp", () => {
+  it("returns an explicit whatsapp allowlist", () => {
     const policy = getDefaultPolicy("whatsapp");
-    expect(policy).toBeDefined();
+    expect(policy.allow).toBeDefined();
+    expect(policy.allow).toContain("schedule_task");
+    expect(policy.allow).not.toContain("browse_url");
   });
 });
