@@ -30,3 +30,30 @@ export const backfillUserRoles = internalMutation({
     return { updated, total: users.length };
   },
 });
+
+/**
+ * Backfill unowned skills to a specific owner user. Safe to run multiple times.
+ */
+export const backfillSkillOwners = internalMutation({
+  args: {
+    ownerUserId: v.id("users"),
+  },
+  returns: v.object({
+    updated: v.number(),
+    total: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    const skills = await ctx.db.query("skills").collect();
+    let updated = 0;
+
+    for (const skill of skills) {
+      if (skill.ownerUserId !== undefined) continue;
+      await ctx.db.patch(skill._id, {
+        ownerUserId: args.ownerUserId,
+      });
+      updated += 1;
+    }
+
+    return { updated, total: skills.length };
+  },
+});

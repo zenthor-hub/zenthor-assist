@@ -44,6 +44,7 @@ const toolPolicyValidator = v.optional(
 const skillDoc = v.object({
   _id: v.id("skills"),
   _creationTime: v.number(),
+  ownerUserId: v.optional(v.id("users")),
   name: v.string(),
   description: v.string(),
   enabled: v.boolean(),
@@ -353,16 +354,31 @@ export const getConversationContext = serviceQuery({
 
     const user = conversation.userId ? await ctx.db.get(conversation.userId) : null;
     const contact = conversation.contactId ? await ctx.db.get(conversation.contactId) : null;
+    const ownerUserId = conversation.userId ?? contact?.userId;
 
     const messages = await ctx.db
       .query("messages")
       .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))
       .collect();
 
-    const skills = await ctx.db
-      .query("skills")
-      .withIndex("by_enabled", (q) => q.eq("enabled", true))
-      .collect();
+    let skills = ownerUserId
+      ? await ctx.db
+          .query("skills")
+          .withIndex("by_ownerUserId_enabled", (q) =>
+            q.eq("ownerUserId", ownerUserId).eq("enabled", true),
+          )
+          .collect()
+      : [];
+
+    // Legacy compatibility: if no scoped skills are found, use unowned enabled skills.
+    if (skills.length === 0) {
+      skills = await ctx.db
+        .query("skills")
+        .withIndex("by_ownerUserId_enabled", (q) =>
+          q.eq("ownerUserId", undefined).eq("enabled", true),
+        )
+        .collect();
+    }
 
     const agent = conversation.agentId ? await ctx.db.get(conversation.agentId) : null;
 

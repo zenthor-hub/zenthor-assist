@@ -73,6 +73,7 @@ export default defineSchema({
   }).index("by_conversationId", ["conversationId"]),
 
   skills: defineTable({
+    ownerUserId: v.optional(v.id("users")),
     name: v.string(),
     description: v.string(),
     enabled: v.boolean(),
@@ -89,7 +90,9 @@ export default defineSchema({
     ),
   })
     .index("by_name", ["name"])
-    .index("by_enabled", ["enabled"]),
+    .index("by_enabled", ["enabled"])
+    .index("by_ownerUserId", ["ownerUserId"])
+    .index("by_ownerUserId_enabled", ["ownerUserId", "enabled"]),
 
   whatsappSession: defineTable({
     key: v.string(),
