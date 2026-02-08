@@ -71,10 +71,9 @@ export async function handleIncomingMessage(message: WAMessage) {
     channel: "whatsapp",
   });
 
-  if (!conversationId) return;
-
   // Check for pending tool approvals before normal message handling
-  const pendingApprovals = await client.query(api.toolApprovals.getPendingByConversation, {
+  const pendingApprovals = await client.query(api.toolApprovals.getPendingByConversationService, {
+    serviceKey: env.AGENT_SECRET,
     conversationId,
   });
 
@@ -85,7 +84,8 @@ export async function handleIncomingMessage(message: WAMessage) {
 
     if (approveWords.has(normalized) || rejectWords.has(normalized)) {
       const status = approveWords.has(normalized) ? "approved" : "rejected";
-      await client.mutation(api.toolApprovals.resolve, {
+      await client.mutation(api.toolApprovals.resolveService, {
+        serviceKey: env.AGENT_SECRET,
         approvalId: pendingApprovals[0]!._id,
         status,
       });
@@ -102,7 +102,8 @@ export async function handleIncomingMessage(message: WAMessage) {
     }
   }
 
-  await client.mutation(api.messages.send, {
+  await client.mutation(api.messages.sendService, {
+    serviceKey: env.AGENT_SECRET,
     conversationId,
     content: text,
     channel: "whatsapp",

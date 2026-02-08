@@ -30,12 +30,14 @@ async function waitForApproval(
 
   while (Date.now() < deadline) {
     const pending = await client.query(api.toolApprovals.getPendingByJob, {
+      serviceKey: env.AGENT_SECRET,
       jobId: jobId as Id<"agentQueue">,
     });
 
     const stillPending = pending.some((a) => a._id === approvalId);
     if (!stillPending) {
       const all = await client.query(api.toolApprovals.getByJob, {
+        serviceKey: env.AGENT_SECRET,
         jobId: jobId as Id<"agentQueue">,
       });
       const resolved = all.find((a) => a._id === approvalId);

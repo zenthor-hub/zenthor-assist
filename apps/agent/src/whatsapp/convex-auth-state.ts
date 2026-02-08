@@ -1,4 +1,5 @@
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
+import { env } from "@zenthor-assist/env/agent";
 import { BufferJSON, initAuthCreds, proto } from "baileys";
 import type { AuthenticationState, SignalDataSet, SignalDataTypeMap } from "baileys";
 
@@ -16,18 +17,28 @@ export async function createConvexAuthState(): Promise<{
   const client = getConvexClient();
 
   const readData = async (key: string) => {
-    const raw = await client.query(api.whatsappSession.get, { key });
+    const raw = await client.query(api.whatsappSession.get, {
+      serviceKey: env.AGENT_SECRET,
+      key,
+    });
     if (!raw) return null;
     return JSON.parse(raw, BufferJSON.reviver);
   };
 
   const writeData = async (key: string, value: unknown) => {
     const data = JSON.stringify(value, BufferJSON.replacer);
-    await client.mutation(api.whatsappSession.set, { key, data });
+    await client.mutation(api.whatsappSession.set, {
+      serviceKey: env.AGENT_SECRET,
+      key,
+      data,
+    });
   };
 
   const removeData = async (key: string) => {
-    await client.mutation(api.whatsappSession.remove, { key });
+    await client.mutation(api.whatsappSession.remove, {
+      serviceKey: env.AGENT_SECRET,
+      key,
+    });
   };
 
   const creds = (await readData("creds")) || initAuthCreds();
