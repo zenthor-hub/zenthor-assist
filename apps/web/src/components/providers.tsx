@@ -25,7 +25,7 @@ function ThemedClerkProvider({ children }: { children: React.ReactNode }) {
         baseTheme: resolvedTheme === "dark" ? dark : undefined,
         variables: {
           fontFamily: "var(--font-sans)",
-          borderRadius: "0rem",
+          borderRadius: "0.375rem",
           colorPrimary: "var(--primary)",
           colorBackground: "var(--card)",
           colorInputBackground: "var(--input)",
