@@ -33,6 +33,7 @@ import type * as plugins from "../plugins.js";
 import type * as privateData from "../privateData.js";
 import type * as scheduledTasks from "../scheduledTasks.js";
 import type * as skills from "../skills.js";
+import type * as todoist from "../todoist.js";
 import type * as toolApprovals from "../toolApprovals.js";
 import type * as users from "../users.js";
 import type * as whatsappLeases from "../whatsappLeases.js";
@@ -70,6 +71,7 @@ declare const fullApi: ApiFromModules<{
   privateData: typeof privateData;
   scheduledTasks: typeof scheduledTasks;
   skills: typeof skills;
+  todoist: typeof todoist;
   toolApprovals: typeof toolApprovals;
   users: typeof users;
   whatsappLeases: typeof whatsappLeases;

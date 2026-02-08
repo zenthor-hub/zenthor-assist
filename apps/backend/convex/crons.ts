@@ -35,4 +35,11 @@ crons.interval("requeue stale agent jobs", { minutes: 1 }, internal.agent.requeu
 // Expire stale tool approvals (pending > 5min) — runs every 10 minutes
 crons.interval("expire stale tool approvals", { minutes: 10 }, internal.toolApprovals.expireStale);
 
+// Cleanup expired Todoist OAuth states — runs every hour
+crons.interval(
+  "cleanup expired todoist oauth states",
+  { hours: 1 },
+  internal.todoist.cleanupExpiredOauthStates,
+);
+
 export default crons;

@@ -94,6 +94,26 @@ export default defineSchema({
     .index("by_ownerUserId", ["ownerUserId"])
     .index("by_ownerUserId_enabled", ["ownerUserId", "enabled"]),
 
+  todoistConnections: defineTable({
+    userId: v.id("users"),
+    accessToken: v.string(),
+    tokenType: v.optional(v.string()),
+    scope: v.optional(v.string()),
+    accountEmail: v.optional(v.string()),
+    accountName: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_userId", ["userId"]),
+
+  todoistOauthStates: defineTable({
+    userId: v.id("users"),
+    state: v.string(),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_state", ["state"])
+    .index("by_userId", ["userId"]),
+
   whatsappSession: defineTable({
     key: v.string(),
     data: v.string(),
