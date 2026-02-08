@@ -8,6 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { ConnectedAccountsSection } from "./connected-accounts-section";
 import { EmailAddressesSection } from "./email-addresses-section";
 import { ProfileInfoSection } from "./profile-info-section";
+import { TodoistIntegrationSection } from "./todoist-integration-section";
 import { useConnectedAccounts } from "./use-connected-accounts";
 import { useEmailAddresses } from "./use-email-addresses";
 
@@ -75,6 +76,26 @@ function ProfileSkeleton() {
             </div>
           </div>
         </div>
+
+        <Separator />
+
+        {/* Todoist Integration Section */}
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <div className="bg-muted h-4 w-40 animate-pulse rounded" />
+            <div className="bg-muted h-3 w-56 animate-pulse rounded" />
+          </div>
+          <div className="border-border flex items-center justify-between rounded-lg border p-3">
+            <div className="flex items-center gap-3">
+              <div className="bg-muted size-10 animate-pulse rounded-full" />
+              <div className="space-y-2">
+                <div className="bg-muted h-4 w-24 animate-pulse rounded" />
+                <div className="bg-muted h-3 w-44 animate-pulse rounded" />
+              </div>
+            </div>
+            <div className="bg-muted h-9 w-24 animate-pulse rounded" />
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
@@ -105,6 +126,8 @@ export function ProfileSection() {
         <EmailAddressesSection user={user} emailState={emailState} />
         <Separator />
         <ConnectedAccountsSection connectedAccountsState={connectedAccountsState} />
+        <Separator />
+        <TodoistIntegrationSection />
       </CardContent>
     </Card>
   );
