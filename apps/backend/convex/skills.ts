@@ -82,7 +82,16 @@ const recommendedSkills: Array<{
       systemPrompt:
         "Prioritize by impact and urgency, then propose a realistic weekly plan with daily checkpoints and explicit tradeoffs.",
       toolPolicy: {
-        allow: ["schedule_task", "date_calc", "get_current_time", "memory_search", "memory_store"],
+        allow: [
+          "schedule_task",
+          "date_calc",
+          "get_current_time",
+          "memory_search",
+          "memory_store",
+          "todoist_capture_task",
+          "todoist_list_tasks",
+          "todoist_reschedule_task",
+        ],
       },
     },
   },
@@ -95,7 +104,39 @@ const recommendedSkills: Array<{
       systemPrompt:
         "When commitments are mentioned, propose reminder entries with due date/time, recurrence, and escalation notes. Ask for missing dates only when necessary.",
       toolPolicy: {
-        allow: ["schedule_task", "date_calc", "get_current_time", "memory_search", "memory_store"],
+        allow: [
+          "schedule_task",
+          "date_calc",
+          "get_current_time",
+          "memory_search",
+          "memory_store",
+          "todoist_capture_task",
+          "todoist_list_tasks",
+          "todoist_reschedule_task",
+          "todoist_complete_task",
+        ],
+      },
+    },
+  },
+  {
+    name: "Todoist Execution Assistant",
+    description:
+      "Turns plans and notes into Todoist tasks, keeps due dates realistic, and tracks completion.",
+    enabled: true,
+    config: {
+      systemPrompt:
+        "When tasks are discussed, offer to create or update Todoist tasks with clear due dates and priorities. Keep work items concrete and easy to complete.",
+      toolPolicy: {
+        allow: [
+          "todoist_capture_task",
+          "todoist_list_tasks",
+          "todoist_reschedule_task",
+          "todoist_complete_task",
+          "date_calc",
+          "get_current_time",
+          "memory_search",
+          "memory_store",
+        ],
       },
     },
   },
