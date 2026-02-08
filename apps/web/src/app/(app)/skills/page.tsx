@@ -27,6 +27,8 @@ export default function SkillsPage() {
   const skills = useQuery(api.skills.list, isAdmin ? {} : "skip");
   const toggleSkill = useMutation(api.skills.toggle);
   const removeSkill = useMutation(api.skills.remove);
+  const seedRecommended = useMutation(api.skills.seedRecommended);
+  const claimLegacy = useMutation(api.skills.claimLegacy);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingSkill, setEditingSkill] = useState<SkillData | undefined>();
@@ -61,14 +63,46 @@ export default function SkillsPage() {
     setFormOpen(true);
   }
 
+  async function handleSeedRecommended() {
+    try {
+      const result = await seedRecommended({});
+      toast.success(
+        `Recommended skills ready: ${result.created} created, ${result.existing} already existed.`,
+      );
+    } catch {
+      toast.error("Failed to add recommended skills");
+    }
+  }
+
+  async function handleClaimLegacy() {
+    try {
+      const result = await claimLegacy({});
+      if (result.adopted === 0) {
+        toast.message("No legacy skills found to claim");
+      } else {
+        toast.success(`Claimed ${result.adopted} legacy skills`);
+      }
+    } catch {
+      toast.error("Failed to claim legacy skills");
+    }
+  }
+
   return (
     <PageWrapper
       title="Skills"
       actions={
-        <Button size="sm" onClick={handleAdd}>
-          <Plus className="size-4" />
-          Add skill
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={handleClaimLegacy}>
+            Claim legacy
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleSeedRecommended}>
+            Add recommended
+          </Button>
+          <Button size="sm" onClick={handleAdd}>
+            <Plus className="size-4" />
+            Add skill
+          </Button>
+        </div>
       }
     >
       <div className="flex flex-col gap-4">
@@ -76,9 +110,14 @@ export default function SkillsPage() {
           <div className="bg-muted/50 flex flex-col items-center justify-center gap-2 rounded-xl py-12">
             <Sparkles className="text-muted-foreground size-8" />
             <p className="text-muted-foreground text-base">No skills configured yet</p>
-            <Button variant="outline" size="sm" className="mt-2" onClick={handleAdd}>
-              Create your first skill
-            </Button>
+            <div className="mt-2 flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleSeedRecommended}>
+                Add recommended skills
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleAdd}>
+                Create your first skill
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="divide-border divide-y rounded-xl border">
