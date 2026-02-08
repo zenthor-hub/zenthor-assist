@@ -54,6 +54,7 @@ cd apps/agent && bun run dev:core
 - Schema in `apps/backend/convex/schema.ts`.
 - HTTP router in `apps/backend/convex/http.ts` exposes Clerk webhook at `/clerk/webhook`.
 - Cron orchestration in `apps/backend/convex/crons.ts` handles stale-job requeue, scheduled tasks, and cleanups.
+- Optional Todoist OAuth/task integration lives in `apps/backend/convex/todoist.ts`.
 - Public function auth wrappers are in `apps/backend/convex/auth/`:
   - `authQuery` / `authMutation` for authenticated users
   - `adminQuery` / `adminMutation` for admin-only operations
@@ -112,6 +113,10 @@ Common optional:
 - `CLERK_SECRET_KEY`
 - `AGENT_SECRET` (required in production for service-wrapper endpoints)
 - `ADMIN_EMAIL_ALLOWLIST` (optional comma-separated admin emails)
+- `TODOIST_CLIENT_ID` (optional, required for Todoist OAuth)
+- `TODOIST_CLIENT_SECRET` (optional, required for Todoist OAuth)
+- `TODOIST_OAUTH_REDIRECT_URI` (optional, required for Todoist OAuth)
+- `TODOIST_OAUTH_SCOPE` (optional, defaults to `data:read_write`)
 
 ## File Safety
 

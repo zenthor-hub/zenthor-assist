@@ -59,6 +59,7 @@ Do not proceed if any are true:
 - Prefer `AGENT_ROLE=all` only for quick local smoke tests.
 - If asked to scale WhatsApp for the same phone/account, the correct answer is no horizontal scaling for that account; use failover via lease, not active-active.
 - If asked to split ingress and egress into separate live services for the same account, treat this as non-default and verify lease/ownership design first.
+- Optional Todoist integration is backend-driven (OAuth + API calls in Convex); it does not change role topology but requires Todoist OAuth env vars in backend config.
 
 ## Related Docs
 

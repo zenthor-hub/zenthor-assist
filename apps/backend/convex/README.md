@@ -17,6 +17,7 @@ Core function modules:
 - `delivery.ts`: Outbound queue claim/complete/fail flow (WhatsApp egress path).
 - `toolApprovals.ts`: Approval requests and resolution state.
 - `plugins.ts`: Plugin definitions/installs/policy APIs.
+- `todoist.ts`: Todoist OAuth connection lifecycle and conversation-scoped Todoist task operations.
 
 ## Auth Wrappers
 
@@ -51,6 +52,10 @@ bun run dev
 - `CLERK_SECRET_KEY`
 - `AGENT_SECRET` (required in production for service wrappers)
 - `ADMIN_EMAIL_ALLOWLIST` (optional comma-separated admin emails)
+- `TODOIST_CLIENT_ID` (optional, required for Todoist OAuth)
+- `TODOIST_CLIENT_SECRET` (optional, required for Todoist OAuth)
+- `TODOIST_OAUTH_REDIRECT_URI` (optional, required for Todoist OAuth)
+- `TODOIST_OAUTH_SCOPE` (optional, defaults to `data:read_write`)
 
 ## Important Safety Rules
 

@@ -104,6 +104,20 @@ If only core is running (`ENABLE_WHATSAPP=false`):
 1. WhatsApp-originated work can still be processed and queued.
 2. Outbound delivery does not happen until a WhatsApp worker is running.
 
+### D1) Optional Todoist Integration Smoke Test
+
+Preconditions:
+
+1. Backend env has `TODOIST_CLIENT_ID`, `TODOIST_CLIENT_SECRET`, and `TODOIST_OAUTH_REDIRECT_URI`.
+2. Web app is running on the same origin configured in `TODOIST_OAUTH_REDIRECT_URI`.
+
+Steps:
+
+1. Open `/settings` in the web app.
+2. Connect Todoist from the Todoist Integration section.
+3. In chat, ask the assistant to create a Todoist task.
+4. Confirm task appears in Todoist and can be marked complete via chat.
+
 ## Failover & Lease Validation Scenarios
 
 These scenarios validate that lease ownership, failover, and auth persistence work correctly. Run them before any production rollout.

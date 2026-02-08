@@ -47,6 +47,10 @@ bun run dev:setup
   - `CLERK_SECRET_KEY`
   - `AGENT_SECRET` (required in production for service endpoints)
   - `ADMIN_EMAIL_ALLOWLIST` (optional comma-separated admin emails)
+  - `TODOIST_CLIENT_ID` (optional, required for Todoist OAuth integration)
+  - `TODOIST_CLIENT_SECRET` (optional, required for Todoist OAuth integration)
+  - `TODOIST_OAUTH_REDIRECT_URI` (optional, required for Todoist OAuth integration)
+  - `TODOIST_OAUTH_SCOPE` (optional, defaults to `data:read_write`)
 
 4. Auth model notes:
 

@@ -148,6 +148,7 @@ zenthor-assist/
   - `users`, `contacts`, `phoneVerifications`
   - `conversations`, `messages`, `agentQueue`
   - `agents`, `skills`, `toolApprovals`, `memories`, `scheduledTasks`
+  - `todoistConnections`, `todoistOauthStates`
   - `whatsappSession`, `whatsappAccounts`, `whatsappLeases`, `outboundMessages`, `inboundDedupe`
   - `pluginDefinitions`, `pluginInstalls`, `pluginPolicies`
 - Clerk webhook endpoint is mounted at `/clerk/webhook` via `apps/backend/convex/http.ts`.
@@ -283,6 +284,13 @@ Auth/RBAC env:
 
 - `AGENT_SECRET` (required in production for `serviceQuery`/`serviceMutation` calls)
 - `ADMIN_EMAIL_ALLOWLIST` (optional comma-separated emails used to default `users.role=admin`)
+
+Todoist integration env (optional):
+
+- `TODOIST_CLIENT_ID`
+- `TODOIST_CLIENT_SECRET`
+- `TODOIST_OAUTH_REDIRECT_URI`
+- `TODOIST_OAUTH_SCOPE` (defaults to `data:read_write`)
 
 ## TypeScript and Style Rules
 
