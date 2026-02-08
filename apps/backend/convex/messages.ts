@@ -1,4 +1,4 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 
 import { authMutation, authQuery, serviceMutation } from "./auth";
 import { getConversationIfOwnedByUser } from "./lib/auth";
@@ -34,7 +34,7 @@ export const send = authMutation({
   args: {
     conversationId: v.id("conversations"),
     content: v.string(),
-    channel: v.union(v.literal("whatsapp"), v.literal("web")),
+    channel: v.optional(v.union(v.literal("whatsapp"), v.literal("web"))),
   },
   returns: v.union(v.id("messages"), v.null()),
   handler: async (ctx, args) => {
@@ -45,12 +45,11 @@ export const send = authMutation({
       conversationId: args.conversationId,
       role: "user",
       content: args.content,
-      channel: args.channel,
+      channel: conv.channel,
       status: "sent",
     });
 
-    const conversation = await ctx.db.get(args.conversationId);
-    if (conversation && (!conversation.title || conversation.title === "New chat")) {
+    if (!conv.title || conv.title === "New chat") {
       const title = args.content.length > 50 ? `${args.content.slice(0, 50)}…` : args.content;
       await ctx.db.patch(args.conversationId, { title });
     }
@@ -69,20 +68,24 @@ export const sendService = serviceMutation({
   args: {
     conversationId: v.id("conversations"),
     content: v.string(),
-    channel: v.union(v.literal("whatsapp"), v.literal("web")),
+    channel: v.optional(v.union(v.literal("whatsapp"), v.literal("web"))),
   },
   returns: v.id("messages"),
   handler: async (ctx, args) => {
+    const conversation = await ctx.db.get(args.conversationId);
+    if (!conversation) {
+      throw new ConvexError("Conversation not found");
+    }
+
     const messageId = await ctx.db.insert("messages", {
       conversationId: args.conversationId,
       role: "user",
       content: args.content,
-      channel: args.channel,
+      channel: conversation.channel,
       status: "sent",
     });
 
-    const conversation = await ctx.db.get(args.conversationId);
-    if (conversation && (!conversation.title || conversation.title === "New chat")) {
+    if (!conversation.title || conversation.title === "New chat") {
       const title = args.content.length > 50 ? `${args.content.slice(0, 50)}…` : args.content;
       await ctx.db.patch(args.conversationId, { title });
     }
@@ -101,16 +104,21 @@ export const addAssistantMessage = serviceMutation({
   args: {
     conversationId: v.id("conversations"),
     content: v.string(),
-    channel: v.union(v.literal("whatsapp"), v.literal("web")),
+    channel: v.optional(v.union(v.literal("whatsapp"), v.literal("web"))),
     toolCalls: toolCallValidator,
   },
   returns: v.id("messages"),
   handler: async (ctx, args) => {
+    const conversation = await ctx.db.get(args.conversationId);
+    if (!conversation) {
+      throw new ConvexError("Conversation not found");
+    }
+
     return await ctx.db.insert("messages", {
       conversationId: args.conversationId,
       role: "assistant",
       content: args.content,
-      channel: args.channel,
+      channel: conversation.channel,
       toolCalls: args.toolCalls,
       status: "sent",
     });
@@ -121,15 +129,20 @@ export const addSummaryMessage = serviceMutation({
   args: {
     conversationId: v.id("conversations"),
     content: v.string(),
-    channel: v.union(v.literal("whatsapp"), v.literal("web")),
+    channel: v.optional(v.union(v.literal("whatsapp"), v.literal("web"))),
   },
   returns: v.id("messages"),
   handler: async (ctx, args) => {
+    const conversation = await ctx.db.get(args.conversationId);
+    if (!conversation) {
+      throw new ConvexError("Conversation not found");
+    }
+
     return await ctx.db.insert("messages", {
       conversationId: args.conversationId,
       role: "system",
       content: args.content,
-      channel: args.channel,
+      channel: conversation.channel,
       status: "sent",
     });
   },
@@ -138,15 +151,20 @@ export const addSummaryMessage = serviceMutation({
 export const createPlaceholder = serviceMutation({
   args: {
     conversationId: v.id("conversations"),
-    channel: v.union(v.literal("whatsapp"), v.literal("web")),
+    channel: v.optional(v.union(v.literal("whatsapp"), v.literal("web"))),
   },
   returns: v.id("messages"),
   handler: async (ctx, args) => {
+    const conversation = await ctx.db.get(args.conversationId);
+    if (!conversation) {
+      throw new ConvexError("Conversation not found");
+    }
+
     return await ctx.db.insert("messages", {
       conversationId: args.conversationId,
       role: "assistant",
       content: "",
-      channel: args.channel,
+      channel: conversation.channel,
       streaming: true,
       status: "pending",
     });
