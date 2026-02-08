@@ -1,6 +1,7 @@
 # Incident Playbooks
 
 Quick remediation steps for common runtime incidents. Each section includes:
+
 - **Symptoms**: How you detect the incident (logs, Axiom queries, Convex dashboard).
 - **Root cause**: Why this happens.
 - **Remediation**: Step-by-step fix.
@@ -8,6 +9,7 @@ Quick remediation steps for common runtime incidents. Each section includes:
 - **Rollback**: What to do if remediation fails.
 
 Related docs:
+
 - `docs/ops/runbook.md` (smoke tests and startup guide)
 - `docs/ops/runtime-topology.md` (deployment shape and role guidance)
 
@@ -130,12 +132,14 @@ Lease release is safe. If the wrong worker acquired the lease, restart the corre
 ### Remediation
 
 1. **Check worker connectivity**: Can the worker reach Convex?
+
    ```bash
    # From the worker host
    curl -s https://<deployment>.convex.cloud/version | head -1
    ```
 
 2. **Check current lease owner**:
+
    ```bash
    bunx convex run whatsappLeases.getLease '{"accountId":"default"}'
    ```
@@ -226,9 +230,11 @@ Auth reset always requires a new QR scan. There is no way to recover a corrupted
 1. **Verify dedupe is active**: Check for `whatsapp.inbound.dedupe_skipped` events in Axiom. If none exist, dedupe may not be running.
 
 2. **Check the inboundDedupe table**:
+
    ```bash
    bunx convex run inboundDedupe.checkAndRegister '{"channel":"whatsapp","channelMessageId":"test-123"}'
    ```
+
    If this returns an error, the table or function may not be deployed.
 
 3. **For already-duplicated messages**: No automated fix. The duplicate responses were already sent. Inform the user if needed.
@@ -263,6 +269,7 @@ Dedupe is append-only and safe. No rollback needed.
 1. **Check provider status pages** for the models in `AI_MODEL` and fallback.
 
 2. **Verify API key**:
+
    ```bash
    # Quick test (from a machine with the key)
    curl -H "Authorization: Bearer $AI_GATEWAY_API_KEY" https://gateway.ai.cloudflare.com/...
