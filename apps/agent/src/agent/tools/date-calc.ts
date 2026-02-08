@@ -79,27 +79,17 @@ function dateInfo(date: Date, timezone?: string): string {
   ].join("\n");
 }
 
-const addSchema = z.object({
-  operation: z.literal("add"),
-  date: z.string().describe('Date string or "now"'),
-  amount: z.number().describe("Amount to add (negative to subtract)"),
-  unit: z.enum(UNITS).describe("Time unit"),
+const inputSchema = z.object({
+  operation: z
+    .enum(["add", "diff", "info"])
+    .describe("add: add/subtract time, diff: difference between dates, info: date details"),
+  date: z.string().optional().describe('Date string or "now" (for add, info)'),
+  amount: z.number().optional().describe("Amount to add; negative to subtract (for add)"),
+  unit: z.enum(UNITS).optional().describe("Time unit (for add)"),
+  from: z.string().optional().describe('Start date string or "now" (for diff)'),
+  to: z.string().optional().describe('End date string or "now" (for diff)'),
   timezone: z.string().optional().describe("IANA timezone for display (default UTC)"),
 });
-
-const diffSchema = z.object({
-  operation: z.literal("diff"),
-  from: z.string().describe('Start date string or "now"'),
-  to: z.string().describe('End date string or "now"'),
-});
-
-const infoSchema = z.object({
-  operation: z.literal("info"),
-  date: z.string().describe('Date string or "now"'),
-  timezone: z.string().optional().describe("IANA timezone (default UTC)"),
-});
-
-const inputSchema = z.discriminatedUnion("operation", [addSchema, diffSchema, infoSchema]);
 
 export const dateCalc = tool({
   description:
@@ -109,6 +99,10 @@ export const dateCalc = tool({
     try {
       switch (input.operation) {
         case "add": {
+          if (!input.date) return "Error: 'date' is required for add operation";
+          if (input.amount === null || input.amount === undefined)
+            return "Error: 'amount' is required for add operation";
+          if (!input.unit) return "Error: 'unit' is required for add operation";
           const base = resolveDate(input.date);
           const result = addToDate(base, input.amount, input.unit);
           const tz = input.timezone ?? "UTC";
@@ -120,11 +114,14 @@ export const dateCalc = tool({
           return `${input.date} + ${input.amount} ${input.unit} = ${formatted}\nISO: ${result.toISOString()}`;
         }
         case "diff": {
+          if (!input.from) return "Error: 'from' is required for diff operation";
+          if (!input.to) return "Error: 'to' is required for diff operation";
           const from = resolveDate(input.from);
           const to = resolveDate(input.to);
           return diffDates(from, to);
         }
         case "info": {
+          if (!input.date) return "Error: 'date' is required for info operation";
           const date = resolveDate(input.date);
           return dateInfo(date, input.timezone);
         }
