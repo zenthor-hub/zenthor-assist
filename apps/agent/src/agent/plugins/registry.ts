@@ -1,6 +1,9 @@
 import type { Tool } from "ai";
 
+import { browseUrl } from "../tools/browse-url";
+import { calculate } from "../tools/calculate";
 import { currentTime } from "../tools/current-time";
+import { dateCalc } from "../tools/date-calc";
 import { memorySearch, memoryStore } from "../tools/memory";
 import { scheduleTask } from "../tools/schedule";
 import type { ActivationResult, RuntimePlugin } from "./types";
@@ -58,7 +61,65 @@ const coreSchedulePlugin: RuntimePlugin = {
   },
 };
 
-const builtinPlugins: RuntimePlugin[] = [coreTimePlugin, coreMemoryPlugin, coreSchedulePlugin];
+const coreWebBrowsePlugin: RuntimePlugin = {
+  name: "core-web-browse",
+  version: "1.0.0",
+  source: "builtin",
+  manifest: {
+    id: "core-web-browse",
+    version: "1.0.0",
+    tools: ["browse_url"],
+    riskLevel: "low",
+    source: "builtin",
+    description: "Fetch and extract readable text from web pages",
+  },
+  tools: {
+    browse_url: browseUrl,
+  },
+};
+
+const coreCalculatorPlugin: RuntimePlugin = {
+  name: "core-calculator",
+  version: "1.0.0",
+  source: "builtin",
+  manifest: {
+    id: "core-calculator",
+    version: "1.0.0",
+    tools: ["calculate"],
+    riskLevel: "low",
+    source: "builtin",
+    description: "Evaluate mathematical expressions",
+  },
+  tools: {
+    calculate,
+  },
+};
+
+const coreDateCalcPlugin: RuntimePlugin = {
+  name: "core-date-calc",
+  version: "1.0.0",
+  source: "builtin",
+  manifest: {
+    id: "core-date-calc",
+    version: "1.0.0",
+    tools: ["date_calc"],
+    riskLevel: "low",
+    source: "builtin",
+    description: "Date arithmetic, difference, and info operations",
+  },
+  tools: {
+    date_calc: dateCalc,
+  },
+};
+
+const builtinPlugins: RuntimePlugin[] = [
+  coreTimePlugin,
+  coreMemoryPlugin,
+  coreSchedulePlugin,
+  coreWebBrowsePlugin,
+  coreCalculatorPlugin,
+  coreDateCalcPlugin,
+];
 
 export class PluginRegistry {
   private active = new Map<string, RuntimePlugin>();
