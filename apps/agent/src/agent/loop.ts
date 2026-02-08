@@ -248,10 +248,26 @@ export function startAgentLoop() {
 
         // Build channel-aware tool policy
         const channelPolicy = getDefaultPolicy(channel);
-        const skillPolicies = context.skills
-          .filter((s) => s.config?.toolPolicy)
-          .map((s) => s.config!.toolPolicy!);
-        const policies = [channelPolicy, ...skillPolicies];
+
+        // Union skill allow lists (skills are additive — each declares tools it needs)
+        const skillAllow = new Set<string>();
+        const skillDeny = new Set<string>();
+        for (const skill of context.skills) {
+          const tp = skill.config?.toolPolicy;
+          if (!tp) continue;
+          if (tp.allow) for (const t of tp.allow) skillAllow.add(t);
+          if (tp.deny) for (const t of tp.deny) skillDeny.add(t);
+        }
+        const unionedSkillPolicy =
+          skillAllow.size > 0 || skillDeny.size > 0
+            ? {
+                ...(skillAllow.size > 0 ? { allow: [...skillAllow] } : {}),
+                ...(skillDeny.size > 0 ? { deny: [...skillDeny] } : {}),
+              }
+            : undefined;
+
+        const policies = [channelPolicy];
+        if (unionedSkillPolicy) policies.push(unionedSkillPolicy);
         if (pluginTools.policy) policies.push(pluginTools.policy);
         if (agentConfig?.toolPolicy) policies.push(agentConfig.toolPolicy);
         const mergedPolicy = policies.length > 1 ? mergeToolPolicies(...policies) : channelPolicy;
@@ -304,7 +320,12 @@ export function startAgentLoop() {
                 }
               },
             },
-            { toolsOverride: approvalTools, agentConfig },
+            {
+              toolsOverride: approvalTools,
+              agentConfig,
+              channel,
+              toolCount: Object.keys(filteredTools).length,
+            },
           );
 
           modelUsed = response.modelUsed;
@@ -334,6 +355,7 @@ export function startAgentLoop() {
             toolsOverride: approvalTools,
             agentConfig,
             channel,
+            toolCount: Object.keys(filteredTools).length,
           });
           modelUsed = response.modelUsed;
 
