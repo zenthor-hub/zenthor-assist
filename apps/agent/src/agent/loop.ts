@@ -295,6 +295,7 @@ export function startAgentLoop() {
           // Send final unthrottled update so the UI shows complete text before finalize
           await client
             .mutation(api.messages.updateStreamingContent, {
+              serviceKey,
               messageId: placeholderId,
               content: response.content,
             })
