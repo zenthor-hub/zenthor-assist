@@ -9,6 +9,9 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+const CLOUD_API_ACCOUNT_ID = "cloud-api";
+const OUTBOUND_LOCK_MS = 120_000;
+
 async function acquireLease(accountId: string, ownerId: string): Promise<void> {
   const client = getConvexClient();
 
@@ -56,7 +59,7 @@ async function startOutboundLoop(accountId: string, ownerId: string): Promise<vo
         processorId: ownerId,
         channel: "whatsapp",
         accountId,
-        lockMs: 30_000,
+        lockMs: OUTBOUND_LOCK_MS,
       });
       if (!job) {
         await sleep(1_000);
@@ -85,7 +88,6 @@ async function startOutboundLoop(accountId: string, ownerId: string): Promise<vo
           serviceKey: env.AGENT_SECRET,
           id: job._id,
           error: errorMessage,
-          retry: true,
         });
       }
     } catch (error) {
@@ -108,9 +110,16 @@ async function startOutboundLoop(accountId: string, ownerId: string): Promise<vo
  */
 export async function startWhatsAppCloudRuntime(): Promise<void> {
   const client = getConvexClient();
-  const accountId = env.WHATSAPP_CLOUD_ACCOUNT_ID ?? "cloud-api";
+  const configuredAccountId = env.WHATSAPP_CLOUD_ACCOUNT_ID;
+  const accountId = CLOUD_API_ACCOUNT_ID;
   const ownerId = env.WORKER_ID ?? `worker-${process.pid}`;
   const heartbeatMs = Math.max(5_000, env.WHATSAPP_HEARTBEAT_MS ?? 15_000);
+
+  if (configuredAccountId && configuredAccountId !== CLOUD_API_ACCOUNT_ID) {
+    void logger.lineWarn(
+      `[whatsapp-cloud] Ignoring WHATSAPP_CLOUD_ACCOUNT_ID='${configuredAccountId}' to match ingress account '${CLOUD_API_ACCOUNT_ID}'`,
+    );
+  }
 
   await client.mutation(api.whatsappLeases.upsertAccount, {
     serviceKey: env.AGENT_SECRET,

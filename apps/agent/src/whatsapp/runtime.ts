@@ -15,6 +15,8 @@ interface WhatsAppRuntimeOptions {
   enableEgress: boolean;
 }
 
+const OUTBOUND_LOCK_MS = 120_000;
+
 async function acquireLease(accountId: string, ownerId: string): Promise<void> {
   const client = getConvexClient();
 
@@ -60,7 +62,7 @@ async function startOutboundLoop(accountId: string, ownerId: string): Promise<vo
         processorId: ownerId,
         channel: "whatsapp",
         accountId,
-        lockMs: 30_000,
+        lockMs: OUTBOUND_LOCK_MS,
       });
       if (!job) {
         await sleep(1_000);
@@ -89,7 +91,6 @@ async function startOutboundLoop(accountId: string, ownerId: string): Promise<vo
           serviceKey: env.AGENT_SECRET,
           id: job._id,
           error: errorMessage,
-          retry: true,
         });
       }
     } catch (error) {

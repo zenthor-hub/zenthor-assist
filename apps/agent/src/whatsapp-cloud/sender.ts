@@ -38,7 +38,15 @@ export async function sendCloudApiMessage(phone: string, text: string): Promise<
     }),
   });
 
-  const data = (await response.json()) as CloudApiResponse;
+  const rawBody = await response.text();
+  let data: CloudApiResponse = {};
+  if (rawBody) {
+    try {
+      data = JSON.parse(rawBody) as CloudApiResponse;
+    } catch {
+      data = {};
+    }
+  }
 
   if (!response.ok || data.error) {
     const errorMsg = data.error?.message ?? `HTTP ${response.status}`;
