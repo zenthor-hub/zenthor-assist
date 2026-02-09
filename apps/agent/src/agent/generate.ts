@@ -1,17 +1,13 @@
-import { createGateway } from "@ai-sdk/gateway";
 import { env } from "@zenthor-assist/env/agent";
 import type { Tool } from "ai";
 import { generateText, stepCountIs, streamText } from "ai";
 
 import { logger } from "../observability/logger";
+import { getAIGateway } from "./ai-gateway";
 import { runWithFallback } from "./model-fallback";
 import { selectModel } from "./model-router";
 import { tools } from "./tools";
 import { getWebSearchTool } from "./tools/web-search";
-
-const gateway = createGateway({
-  apiKey: env.AI_GATEWAY_API_KEY,
-});
 
 const BASE_SYSTEM_PROMPT = `You are a helpful personal AI assistant for Guilherme (gbarros). You can assist with questions, tasks, and general conversation. Be concise but friendly. When you don't know something, say so. Use tools when appropriate.
 
@@ -55,7 +51,7 @@ interface GenerateResult {
 }
 
 function getModel(name: string) {
-  return gateway(name);
+  return getAIGateway()(name);
 }
 
 const WHATSAPP_FORMATTING_INSTRUCTIONS = `
@@ -108,6 +104,33 @@ function getDefaultTools(modelName: string): Record<string, Tool> {
     ...tools,
     ...getWebSearchTool(modelName),
   };
+}
+
+const SEARCH_TOOL_NAMES = ["web_search", "google_search"] as const;
+
+function resolveToolsForModel(
+  modelName: string,
+  toolsOverride?: Record<string, Tool>,
+): Record<string, Tool> {
+  if (!toolsOverride) {
+    return getDefaultTools(modelName);
+  }
+
+  const resolved: Record<string, Tool> = { ...toolsOverride };
+  let hasSearchCapability = false;
+
+  for (const searchToolName of SEARCH_TOOL_NAMES) {
+    if (searchToolName in resolved) {
+      hasSearchCapability = true;
+      delete resolved[searchToolName];
+    }
+  }
+
+  if (hasSearchCapability) {
+    Object.assign(resolved, getWebSearchTool(modelName) as Record<string, Tool>);
+  }
+
+  return resolved;
 }
 
 interface GenerateOptions {
@@ -169,7 +192,7 @@ export async function generateResponse(
         model: m,
         system: buildSystemPrompt(skills, options?.agentConfig, options?.channel),
         messages: conversationMessages,
-        tools: options?.toolsOverride ?? getDefaultTools(modelName),
+        tools: resolveToolsForModel(modelName, options?.toolsOverride),
         stopWhen: stepCountIs(10),
       });
 
@@ -229,7 +252,7 @@ export async function generateResponseStreaming(
         model: m,
         system: buildSystemPrompt(skills, options?.agentConfig, options?.channel),
         messages: conversationMessages,
-        tools: options?.toolsOverride ?? getDefaultTools(modelName),
+        tools: resolveToolsForModel(modelName, options?.toolsOverride),
         stopWhen: stepCountIs(10),
       });
 
