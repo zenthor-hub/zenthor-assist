@@ -297,6 +297,81 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_scope_agent_channel", ["workspaceScope", "agentId", "channel"]),
 
+  tasks: defineTable({
+    userId: v.id("users"),
+    conversationId: v.optional(v.id("conversations")),
+    title: v.string(),
+    description: v.optional(v.string()),
+    status: v.union(v.literal("todo"), v.literal("in_progress"), v.literal("done")),
+    // Todoist-aligned: 1=normal, 2=medium, 3=high, 4=urgent
+    priority: v.optional(v.number()),
+    // Rich due date object matching Todoist API v2
+    due: v.optional(
+      v.object({
+        date: v.string(), // "2025-02-14" (always present)
+        datetime: v.optional(v.string()), // "2025-02-14T09:00:00" (when time is set)
+        string: v.optional(v.string()), // human-readable e.g. "every monday"
+        isRecurring: v.optional(v.boolean()),
+        timezone: v.optional(v.string()),
+        lang: v.optional(v.string()),
+      }),
+    ),
+    // Denormalized epoch ms for indexing (computed from due.datetime or due.date)
+    dueAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    labels: v.optional(v.array(v.string())),
+    projectId: v.optional(v.id("taskProjects")),
+    sectionId: v.optional(v.id("taskSections")),
+    parentId: v.optional(v.id("tasks")),
+    order: v.optional(v.number()),
+    assigneeId: v.optional(v.id("users")),
+    duration: v.optional(
+      v.object({
+        amount: v.number(),
+        unit: v.union(v.literal("minute"), v.literal("day")),
+      }),
+    ),
+    remindAt: v.optional(v.number()),
+    todoistTaskId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId_status", ["userId", "status"])
+    .index("by_userId_dueAt", ["userId", "dueAt"])
+    .index("by_userId_projectId", ["userId", "projectId"])
+    .index("by_userId_sectionId", ["userId", "sectionId"])
+    .index("by_parentId", ["parentId"])
+    .index("by_assigneeId_status", ["assigneeId", "status"])
+    .index("by_todoistTaskId", ["todoistTaskId"]),
+
+  taskProjects: defineTable({
+    userId: v.id("users"),
+    name: v.string(),
+    color: v.optional(v.string()),
+    parentId: v.optional(v.id("taskProjects")),
+    order: v.optional(v.number()),
+    isFavorite: v.optional(v.boolean()),
+    viewStyle: v.optional(v.union(v.literal("list"), v.literal("board"))),
+    isInboxProject: v.optional(v.boolean()),
+    todoistProjectId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_todoistProjectId", ["todoistProjectId"]),
+
+  taskSections: defineTable({
+    userId: v.id("users"),
+    projectId: v.id("taskProjects"),
+    name: v.string(),
+    order: v.optional(v.number()),
+    todoistSectionId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_projectId", ["projectId"])
+    .index("by_todoistSectionId", ["todoistSectionId"]),
+
   inboundDedupe: defineTable({
     channel: v.union(v.literal("whatsapp"), v.literal("web")),
     channelMessageId: v.string(),
