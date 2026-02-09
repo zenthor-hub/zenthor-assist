@@ -98,16 +98,30 @@ export const incoming = httpAction(async (ctx, request) => {
         const messageId = message.id;
         const timestamp = Number(message.timestamp) * 1000;
 
-        // Only handle text messages for MVP
-        if (message.type !== "text" || !message.text?.body) continue;
+        // Handle text messages
+        if (message.type === "text" && message.text?.body) {
+          await ctx.runMutation(internal.whatsappCloud.mutations.handleIncoming, {
+            from,
+            messageId,
+            text: message.text.body,
+            timestamp,
+            messageType: message.type,
+          });
+          continue;
+        }
 
-        await ctx.runMutation(internal.whatsappCloud.mutations.handleIncoming, {
-          from,
-          messageId,
-          text: message.text.body,
-          timestamp,
-          messageType: message.type,
-        });
+        // Handle audio messages (voice notes)
+        if (message.type === "audio" && message.audio?.id) {
+          await ctx.runMutation(internal.whatsappCloud.mutations.handleIncomingMedia, {
+            from,
+            messageId,
+            timestamp,
+            messageType: "audio",
+            mediaId: message.audio.id,
+            mimetype: message.audio.mime_type ?? "audio/ogg",
+          });
+          continue;
+        }
       }
 
       // Handle status updates
@@ -156,6 +170,7 @@ interface WebhookMessage {
   timestamp: string;
   type: string;
   text?: { body: string };
+  audio?: { id: string; mime_type: string };
 }
 
 interface WebhookStatus {

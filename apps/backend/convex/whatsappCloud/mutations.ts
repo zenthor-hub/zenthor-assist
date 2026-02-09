@@ -136,6 +136,114 @@ export const handleIncoming = internalMutation({
 });
 
 /**
+ * Handle an incoming WhatsApp Cloud API media message (audio, image, etc).
+ * Stores media metadata; the agent downloads and transcribes when processing.
+ */
+export const handleIncomingMedia = internalMutation({
+  args: {
+    from: v.string(),
+    messageId: v.string(),
+    timestamp: v.number(),
+    messageType: v.string(),
+    mediaId: v.string(),
+    mimetype: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    // 1. Dedupe
+    const existing = await ctx.db
+      .query("inboundDedupe")
+      .withIndex("by_channel_messageId", (q) =>
+        q.eq("channel", "whatsapp").eq("channelMessageId", args.messageId),
+      )
+      .first();
+
+    if (existing) {
+      console.info(`[whatsapp-cloud] Skipping duplicate media message ${args.messageId}`);
+      return null;
+    }
+
+    await ctx.db.insert("inboundDedupe", {
+      channel: "whatsapp",
+      channelMessageId: args.messageId,
+      accountId: CLOUD_API_ACCOUNT_ID,
+      createdAt: Date.now(),
+    });
+
+    // 2. Contact lookup + isAllowed gate
+    const contact = await ctx.db
+      .query("contacts")
+      .withIndex("by_phone", (q) => q.eq("phone", args.from))
+      .first();
+
+    if (!contact) {
+      await ctx.db.insert("contacts", {
+        phone: args.from,
+        name: args.from,
+        isAllowed: false,
+      });
+      console.info(`[whatsapp-cloud] Created non-allowed contact for ${args.from}`);
+      return null;
+    }
+
+    if (!contact.isAllowed) {
+      console.info(`[whatsapp-cloud] Ignoring media from non-allowed contact: ${args.from}`);
+      return null;
+    }
+
+    // 3. Get or create conversation
+    const conversations = await ctx.db
+      .query("conversations")
+      .withIndex("by_contactId", (q) => q.eq("contactId", contact._id))
+      .filter((q) => q.eq(q.field("channel"), "whatsapp"))
+      .filter((q) => q.eq(q.field("status"), "active"))
+      .filter((q) => q.eq(q.field("accountId"), CLOUD_API_ACCOUNT_ID))
+      .collect();
+
+    let conversationId = conversations[0]?._id;
+
+    if (!conversationId) {
+      conversationId = await ctx.db.insert("conversations", {
+        contactId: contact._id,
+        channel: "whatsapp",
+        accountId: CLOUD_API_ACCOUNT_ID,
+        status: "active",
+      });
+    }
+
+    // 4. Insert message with media metadata and placeholder content
+    const msgId = await ctx.db.insert("messages", {
+      conversationId,
+      role: "user",
+      content: "[Audio message]",
+      channel: "whatsapp",
+      media: {
+        type: "audio",
+        sourceId: args.mediaId,
+        mimetype: args.mimetype,
+      },
+      status: "sent",
+    });
+
+    // Auto-title for audio conversations
+    const conversation = await ctx.db.get(conversationId);
+    if (conversation && (!conversation.title || conversation.title === "New chat")) {
+      await ctx.db.patch(conversationId, { title: "Voice message" });
+    }
+
+    // 5. Enqueue agent job
+    await ctx.db.insert("agentQueue", {
+      messageId: msgId,
+      conversationId,
+      status: "pending",
+    });
+
+    console.info(`[whatsapp-cloud] Queued audio message from ${args.from} for processing`);
+    return null;
+  },
+});
+
+/**
  * Handle a status update from WhatsApp Cloud API.
  * MVP: log only. Future: update outboundMessages status.
  */

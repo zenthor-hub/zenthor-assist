@@ -13,6 +13,21 @@ const toolCallValidator = v.optional(
   ),
 );
 
+const mediaValidator = v.optional(
+  v.object({
+    type: v.union(
+      v.literal("audio"),
+      v.literal("image"),
+      v.literal("video"),
+      v.literal("document"),
+    ),
+    sourceId: v.string(),
+    mimetype: v.string(),
+    url: v.optional(v.string()),
+    transcript: v.optional(v.string()),
+  }),
+);
+
 const messageDoc = v.object({
   _id: v.id("messages"),
   _creationTime: v.number(),
@@ -21,6 +36,7 @@ const messageDoc = v.object({
   content: v.string(),
   channel: v.union(v.literal("whatsapp"), v.literal("web")),
   toolCalls: toolCallValidator,
+  media: mediaValidator,
   modelUsed: v.optional(v.string()),
   streaming: v.optional(v.boolean()),
   status: v.union(
@@ -202,6 +218,34 @@ export const finalizeMessage = serviceMutation({
       streaming: false,
       status: "sent",
     });
+    return null;
+  },
+});
+
+export const updateMediaTranscript = serviceMutation({
+  args: {
+    messageId: v.id("messages"),
+    transcript: v.string(),
+    mediaUrl: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const msg = await ctx.db.get(args.messageId);
+    if (!msg?.media) return null;
+
+    await ctx.db.patch(args.messageId, {
+      content: args.transcript,
+      media: { ...msg.media, transcript: args.transcript, url: args.mediaUrl },
+    });
+
+    // Update conversation title with first ~50 chars of transcript
+    const conversation = await ctx.db.get(msg.conversationId);
+    if (conversation && (conversation.title === "Voice message" || !conversation.title)) {
+      const title =
+        args.transcript.length > 50 ? `${args.transcript.slice(0, 50)}…` : args.transcript;
+      await ctx.db.patch(msg.conversationId, { title });
+    }
+
     return null;
   },
 });

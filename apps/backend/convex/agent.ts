@@ -117,6 +117,20 @@ const messageDoc = v.object({
   content: v.string(),
   channel: v.union(v.literal("whatsapp"), v.literal("web")),
   toolCalls: v.optional(v.any()),
+  media: v.optional(
+    v.object({
+      type: v.union(
+        v.literal("audio"),
+        v.literal("image"),
+        v.literal("video"),
+        v.literal("document"),
+      ),
+      sourceId: v.string(),
+      mimetype: v.string(),
+      url: v.optional(v.string()),
+      transcript: v.optional(v.string()),
+    }),
+  ),
   modelUsed: v.optional(v.string()),
   streaming: v.optional(v.boolean()),
   status: v.union(
