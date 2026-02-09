@@ -78,8 +78,8 @@ function ConnectedAccountRow({
   return (
     <div className="border-border flex items-center justify-between rounded-lg border p-3">
       <div className="flex items-center gap-3">
-        <div className="bg-muted flex size-10 items-center justify-center rounded-full">
-          {getProviderIcon(provider.icon, "size-5")}
+        <div className="bg-muted flex size-8 items-center justify-center rounded-full">
+          {getProviderIcon(provider.icon, "size-4")}
         </div>
         <div>
           <div className="flex items-center gap-2">
@@ -200,7 +200,7 @@ export function ConnectedAccountsSection({
       <div className="space-y-4">
         <div>
           <h3 className="text-sm font-medium">Connected Accounts</h3>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-muted-foreground text-xs">
             Connect external accounts for easier sign-in
           </p>
         </div>

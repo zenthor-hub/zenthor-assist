@@ -199,12 +199,12 @@ export function ProfileInfoSection({ user }: { user: ClerkUser }) {
 
   return (
     <>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <div className="flex items-center justify-between rounded-lg border p-4">
+        <div className="flex items-center gap-3">
           <div className="group relative">
-            <Avatar className="dark:border-border size-16 border-2 border-neutral-200">
+            <Avatar className="dark:border-border size-12 border-2 border-neutral-200">
               <AvatarImage src={user.imageUrl} alt={displayName} />
-              <AvatarFallback className="text-lg">
+              <AvatarFallback className="text-sm">
                 {getInitials(user.firstName, user.lastName)}
               </AvatarFallback>
             </Avatar>
@@ -232,7 +232,7 @@ export function ProfileInfoSection({ user }: { user: ClerkUser }) {
             />
           </div>
           <div>
-            <p className="text-foreground font-medium">{displayName}</p>
+            <p className="text-foreground text-sm font-medium">{displayName}</p>
           </div>
         </div>
         <Button variant="outline" size="sm" onClick={profileEdit.handleOpenEditDialog}>

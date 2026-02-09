@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
 const COUNTRY_CODES = [
   { value: "55", label: "BR +55" },
   { value: "1", label: "US +1" },
@@ -111,21 +112,25 @@ export function PhoneVerification() {
   // State 3: Phone already linked
   if (phone) {
     return (
-      <div className="rounded-xl border p-6">
+      <div className="rounded-lg border p-4">
         <div className="flex items-center gap-3">
-          <div className="flex size-10 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
-            <CheckCircle className="size-5 text-emerald-600 dark:text-emerald-400" />
+          <div className="flex size-8 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+            <CheckCircle className="size-4 text-emerald-600 dark:text-emerald-400" />
           </div>
           <div className="flex-1">
-            <h3 className="text-base font-medium">WhatsApp linked</h3>
-            <p className="text-muted-foreground text-base">+{phone}</p>
+            <h3 className="text-sm font-medium">WhatsApp linked</h3>
+            <p className="text-muted-foreground text-xs">+{phone}</p>
           </div>
           <Button variant="outline" size="sm" onClick={handleUnlink} disabled={loading}>
-            {loading ? <Loader2 className="size-4 animate-spin" /> : <Unlink className="size-4" />}
+            {loading ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <Unlink className="size-3.5" />
+            )}
             Unlink
           </Button>
         </div>
-        <p className="text-muted-foreground mt-3 text-base">
+        <p className="text-muted-foreground mt-3 text-xs">
           Your WhatsApp conversations appear in the sidebar.
         </p>
       </div>
@@ -135,14 +140,14 @@ export function PhoneVerification() {
   // State 2: Code sent, waiting for verification
   if (isPending) {
     return (
-      <div className="rounded-xl border p-6">
+      <div className="rounded-lg border p-4">
         <div className="mb-4 flex items-center gap-3">
-          <div className="bg-muted flex size-10 items-center justify-center rounded-full">
-            <Phone className="text-muted-foreground size-5" />
+          <div className="bg-muted flex size-8 items-center justify-center rounded-full">
+            <Phone className="text-muted-foreground size-4" />
           </div>
           <div>
-            <h3 className="text-base font-medium">Verify your phone</h3>
-            <p className="text-muted-foreground text-base">
+            <h3 className="text-sm font-medium">Verify your phone</h3>
+            <p className="text-muted-foreground text-xs">
               Code sent to +{pendingVerification.phone}
             </p>
           </div>
@@ -150,7 +155,9 @@ export function PhoneVerification() {
 
         <div className="flex flex-col gap-3">
           <div>
-            <Label htmlFor="code">Verification code</Label>
+            <Label htmlFor="code" className="text-xs">
+              Verification code
+            </Label>
             <Input
               id="code"
               placeholder="123456"
@@ -162,7 +169,7 @@ export function PhoneVerification() {
           </div>
           <div className="flex items-center gap-2">
             <Button onClick={handleVerify} disabled={loading || code.length !== 6} size="sm">
-              {loading && <Loader2 className="size-4 animate-spin" />}
+              {loading && <Loader2 className="size-3.5 animate-spin" />}
               Verify
             </Button>
             <Button variant="ghost" size="sm" onClick={handleSendCode} disabled={loading}>
@@ -176,14 +183,14 @@ export function PhoneVerification() {
 
   // State 1: No phone linked — enter phone
   return (
-    <div className="rounded-xl border p-6">
+    <div className="rounded-lg border p-4">
       <div className="mb-4 flex items-center gap-3">
-        <div className="bg-muted flex size-10 items-center justify-center rounded-full">
-          <Phone className="text-muted-foreground size-5" />
+        <div className="bg-muted flex size-8 items-center justify-center rounded-full">
+          <Phone className="text-muted-foreground size-4" />
         </div>
         <div>
-          <h3 className="text-base font-medium">Link WhatsApp</h3>
-          <p className="text-muted-foreground text-base">
+          <h3 className="text-sm font-medium">Link WhatsApp</h3>
+          <p className="text-muted-foreground text-xs">
             Verify your phone to see WhatsApp conversations here.
           </p>
         </div>
@@ -191,7 +198,7 @@ export function PhoneVerification() {
 
       <div className="flex flex-col gap-3">
         <div>
-          <Label>Phone number</Label>
+          <Label className="text-xs">Phone number</Label>
           <div className="mt-1.5 flex gap-2">
             <Select value={countryCode} onValueChange={setCountryCode}>
               <SelectTrigger className="w-28">
@@ -219,7 +226,7 @@ export function PhoneVerification() {
           size="sm"
           className="w-fit"
         >
-          {loading && <Loader2 className="size-4 animate-spin" />}
+          {loading && <Loader2 className="size-3.5 animate-spin" />}
           Send code
         </Button>
       </div>
