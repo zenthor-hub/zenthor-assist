@@ -41,12 +41,7 @@ export function NavUser() {
                 <AvatarImage src={user.imageUrl} alt={user.fullName ?? ""} />
                 <AvatarFallback className="rounded-full text-xs">{initials}</AvatarFallback>
               </Avatar>
-              <div className="grid flex-1 text-left leading-tight">
-                <span className="truncate text-sm font-medium">{user.fullName}</span>
-                <span className="text-muted-foreground truncate text-xs">
-                  {user.primaryEmailAddress?.emailAddress}
-                </span>
-              </div>
+              <span className="truncate text-sm font-medium">{user.fullName}</span>
               <ChevronsUpDown className="ml-auto size-4" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
