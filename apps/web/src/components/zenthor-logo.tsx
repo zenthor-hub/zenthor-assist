@@ -1,99 +1,34 @@
-import type { SVGProps } from "react";
+import Image from "next/image";
 
-export function ZenthorMark({ className, ...props }: SVGProps<SVGSVGElement>) {
+interface ZenthorLogoProps {
+  className?: string;
+  size?: number;
+}
+
+export function ZenthorMark({ className, size = 28 }: ZenthorLogoProps) {
   return (
-    <svg
-      viewBox="0 0 40 40"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      {...props}
-    >
-      <path
-        d="M8 8h24L8 32h24"
-        stroke="currentColor"
-        strokeWidth="4"
-        strokeLinecap="square"
-        strokeLinejoin="miter"
-      />
-      <path
-        d="M8 8h24L8 32h24"
-        stroke="currentColor"
-        strokeWidth="4"
-        strokeLinecap="square"
-        strokeLinejoin="miter"
-        opacity="0.3"
-        transform="translate(2, 2)"
-      />
-    </svg>
+    <Image src="/zenthor-logo.svg" alt="Zenthor" width={size} height={size} className={className} />
   );
 }
 
-export function ZenthorHeroMark({ className, ...props }: SVGProps<SVGSVGElement>) {
+export function ZenthorHeroMark({ className, size = 128 }: ZenthorLogoProps) {
   return (
-    <svg
-      viewBox="0 0 120 120"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
+    <Image
+      src="/zenthor-logo.svg"
+      alt="Zenthor"
+      width={size}
+      height={size}
       className={className}
-      {...props}
-    >
-      <path
-        d="M24 24h72L24 96h72"
-        stroke="currentColor"
-        strokeWidth="6"
-        strokeLinecap="square"
-        strokeLinejoin="miter"
-      />
-      <path
-        d="M24 24h72L24 96h72"
-        stroke="currentColor"
-        strokeWidth="6"
-        strokeLinecap="square"
-        strokeLinejoin="miter"
-        opacity="0.15"
-        transform="translate(6, 6)"
-      />
-    </svg>
+      priority
+    />
   );
 }
 
-export function ZenthorLogo({ className, ...props }: SVGProps<SVGSVGElement>) {
+export function ZenthorLogo({ className }: { className?: string }) {
   return (
-    <svg
-      viewBox="0 0 180 40"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-      {...props}
-    >
-      <path
-        d="M8 8h24L8 32h24"
-        stroke="currentColor"
-        strokeWidth="4"
-        strokeLinecap="square"
-        strokeLinejoin="miter"
-      />
-      <path
-        d="M8 8h24L8 32h24"
-        stroke="currentColor"
-        strokeWidth="4"
-        strokeLinecap="square"
-        strokeLinejoin="miter"
-        opacity="0.3"
-        transform="translate(2, 2)"
-      />
-      <text
-        x="48"
-        y="28"
-        fill="currentColor"
-        fontFamily="var(--font-space-grotesk), sans-serif"
-        fontSize="20"
-        fontWeight="600"
-        letterSpacing="-0.02em"
-      >
-        zenthor
-      </text>
-    </svg>
+    <div className={`flex items-center gap-2.5 ${className ?? ""}`}>
+      <Image src="/zenthor-logo.svg" alt="Zenthor" width={40} height={40} />
+      <span className="text-foreground text-xl font-semibold tracking-tight">zenthor</span>
+    </div>
   );
 }
