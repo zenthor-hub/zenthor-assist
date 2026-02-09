@@ -21,6 +21,7 @@ const messageDoc = v.object({
   content: v.string(),
   channel: v.union(v.literal("whatsapp"), v.literal("web")),
   toolCalls: toolCallValidator,
+  modelUsed: v.optional(v.string()),
   streaming: v.optional(v.boolean()),
   status: v.union(
     v.literal("pending"),
@@ -106,6 +107,7 @@ export const addAssistantMessage = serviceMutation({
     content: v.string(),
     channel: v.optional(v.union(v.literal("whatsapp"), v.literal("web"))),
     toolCalls: toolCallValidator,
+    modelUsed: v.optional(v.string()),
   },
   returns: v.id("messages"),
   handler: async (ctx, args) => {
@@ -120,6 +122,7 @@ export const addAssistantMessage = serviceMutation({
       content: args.content,
       channel: conversation.channel,
       toolCalls: args.toolCalls,
+      modelUsed: args.modelUsed,
       status: "sent",
     });
   },
@@ -188,12 +191,14 @@ export const finalizeMessage = serviceMutation({
     messageId: v.id("messages"),
     content: v.string(),
     toolCalls: toolCallValidator,
+    modelUsed: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     await ctx.db.patch(args.messageId, {
       content: args.content,
       toolCalls: args.toolCalls,
+      modelUsed: args.modelUsed,
       streaming: false,
       status: "sent",
     });

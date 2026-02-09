@@ -117,6 +117,7 @@ const messageDoc = v.object({
   content: v.string(),
   channel: v.union(v.literal("whatsapp"), v.literal("web")),
   toolCalls: v.optional(v.any()),
+  modelUsed: v.optional(v.string()),
   streaming: v.optional(v.boolean()),
   status: v.union(
     v.literal("pending"),
@@ -336,6 +337,15 @@ export const isProcessing = authQuery({
   },
 });
 
+const preferencesDoc = v.object({
+  _id: v.id("userPreferences"),
+  _creationTime: v.number(),
+  userId: v.id("users"),
+  showModelInfo: v.optional(v.boolean()),
+  showToolDetails: v.optional(v.boolean()),
+  updatedAt: v.number(),
+});
+
 export const getConversationContext = serviceQuery({
   args: { conversationId: v.id("conversations") },
   returns: v.union(
@@ -346,6 +356,7 @@ export const getConversationContext = serviceQuery({
       messages: v.array(messageDoc),
       skills: v.array(skillDoc),
       agent: v.union(agentDoc, v.null()),
+      preferences: v.union(preferencesDoc, v.null()),
     }),
     v.null(),
   ),
@@ -383,6 +394,13 @@ export const getConversationContext = serviceQuery({
 
     const agent = conversation.agentId ? await ctx.db.get(conversation.agentId) : null;
 
-    return { conversation, user, contact, messages, skills, agent };
+    const preferences = ownerUserId
+      ? await ctx.db
+          .query("userPreferences")
+          .withIndex("by_userId", (q) => q.eq("userId", ownerUserId))
+          .unique()
+      : null;
+
+    return { conversation, user, contact, messages, skills, agent, preferences };
   },
 });

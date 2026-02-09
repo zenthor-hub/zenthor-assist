@@ -64,6 +64,7 @@ export default defineSchema({
         }),
       ),
     ),
+    modelUsed: v.optional(v.string()),
     streaming: v.optional(v.boolean()),
     status: v.union(
       v.literal("pending"),
@@ -72,6 +73,13 @@ export default defineSchema({
       v.literal("failed"),
     ),
   }).index("by_conversationId", ["conversationId"]),
+
+  userPreferences: defineTable({
+    userId: v.id("users"),
+    showModelInfo: v.optional(v.boolean()),
+    showToolDetails: v.optional(v.boolean()),
+    updatedAt: v.number(),
+  }).index("by_userId", ["userId"]),
 
   skills: defineTable({
     ownerUserId: v.optional(v.id("users")),
