@@ -109,7 +109,7 @@ async function startOutboundLoop(accountId: string, ownerId: string): Promise<vo
 export async function startWhatsAppRuntime(options: WhatsAppRuntimeOptions): Promise<void> {
   const client = getConvexClient();
   const accountId = env.WHATSAPP_ACCOUNT_ID ?? "default";
-  const ownerId = env.WORKER_ID ?? `worker-${process.pid}`;
+  const ownerId = env.WORKER_ID ?? `worker-${crypto.randomUUID().slice(0, 8)}`;
   const heartbeatMs = Math.max(5_000, env.WHATSAPP_HEARTBEAT_MS ?? 15_000);
 
   await client.mutation(api.whatsappLeases.upsertAccount, {

@@ -112,7 +112,7 @@ export async function startWhatsAppCloudRuntime(): Promise<void> {
   const client = getConvexClient();
   const configuredAccountId = env.WHATSAPP_CLOUD_ACCOUNT_ID;
   const accountId = CLOUD_API_ACCOUNT_ID;
-  const ownerId = env.WORKER_ID ?? `worker-${process.pid}`;
+  const ownerId = env.WORKER_ID ?? `worker-${crypto.randomUUID().slice(0, 8)}`;
   const heartbeatMs = Math.max(5_000, env.WHATSAPP_HEARTBEAT_MS ?? 15_000);
 
   if (configuredAccountId && configuredAccountId !== CLOUD_API_ACCOUNT_ID) {
