@@ -1,5 +1,6 @@
 "use client";
 
+import { useUser } from "@clerk/nextjs";
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import { useQuery } from "convex/react";
 import { MessageCircle, MessageSquare, Plus } from "lucide-react";
@@ -21,7 +22,15 @@ function formatRelativeTime(timestamp: number) {
   return new Date(timestamp).toLocaleDateString();
 }
 
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
 export default function HomePage() {
+  const { user } = useUser();
   const conversations = useQuery(api.conversations.listRecentWithLastMessage, {});
 
   if (conversations === undefined) {
@@ -32,6 +41,7 @@ export default function HomePage() {
     );
   }
 
+  const firstName = user?.firstName ?? "there";
   const totalConversations = conversations.length;
   const totalWithMessages = conversations.filter((c) => c.lastMessage !== null).length;
 
@@ -40,7 +50,7 @@ export default function HomePage() {
       title="Home"
       actions={
         <Button asChild size="sm">
-          <Link href="/chat">
+          <Link href="/chat/overview">
             <Plus className="size-4" />
             New chat
           </Link>
@@ -48,29 +58,43 @@ export default function HomePage() {
       }
     >
       <div className="flex flex-col gap-6">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="bg-muted/50 rounded-xl p-4">
-            <p className="text-muted-foreground text-base">Conversations</p>
-            <p className="text-2xl font-semibold">{totalConversations}</p>
+        {/* Welcome */}
+        <p className="text-foreground text-sm font-medium">
+          {getGreeting()}, {firstName}
+        </p>
+
+        {/* Stats */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-lg border p-4">
+            <p className="text-muted-foreground text-xs">Conversations</p>
+            <p className="text-xl font-semibold">{totalConversations}</p>
           </div>
-          <div className="bg-muted/50 rounded-xl p-4">
-            <p className="text-muted-foreground text-base">With messages</p>
-            <p className="text-2xl font-semibold">{totalWithMessages}</p>
+          <div className="rounded-lg border p-4">
+            <p className="text-muted-foreground text-xs">With messages</p>
+            <p className="text-xl font-semibold">{totalWithMessages}</p>
           </div>
         </div>
 
+        {/* Recent conversations */}
         <div>
-          <h2 className="text-muted-foreground mb-3 text-base font-medium">Recent conversations</h2>
+          <h2 className="text-muted-foreground mb-3 text-xs font-medium tracking-wider uppercase">
+            Recent conversations
+          </h2>
           {conversations.length === 0 ? (
-            <div className="bg-muted/50 flex flex-col items-center justify-center gap-2 rounded-xl py-12">
-              <MessageSquare className="text-muted-foreground size-8" />
-              <p className="text-muted-foreground text-base">No conversations yet</p>
-              <Button asChild variant="outline" size="sm" className="mt-2">
-                <Link href="/chat">Start a conversation</Link>
+            <div className="flex flex-col items-center justify-center gap-3 rounded-lg border py-12">
+              <MessageSquare className="text-muted-foreground/50 size-8" />
+              <div className="text-center">
+                <p className="text-foreground text-sm font-medium">No conversations yet</p>
+                <p className="text-muted-foreground mt-1 text-sm">
+                  Start your first chat to see it here.
+                </p>
+              </div>
+              <Button asChild variant="outline" size="sm" className="mt-1">
+                <Link href="/chat/overview">Start a conversation</Link>
               </Button>
             </div>
           ) : (
-            <div className="divide-border divide-y rounded-xl border">
+            <div className="divide-border divide-y rounded-lg border">
               {conversations.map((conv) => (
                 <Link
                   key={conv._id}
@@ -84,7 +108,7 @@ export default function HomePage() {
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="truncate text-base font-medium">{conv.title || "Chat"}</p>
+                      <p className="truncate text-xs font-medium">{conv.title || "Chat"}</p>
                       {conv.channel === "whatsapp" && (
                         <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
                           WhatsApp
@@ -92,14 +116,14 @@ export default function HomePage() {
                       )}
                     </div>
                     {conv.lastMessage && (
-                      <p className="text-muted-foreground truncate text-base">
+                      <p className="text-muted-foreground truncate text-xs">
                         {conv.lastMessage.role === "assistant" ? "Assistant: " : ""}
                         {conv.lastMessage.content}
                       </p>
                     )}
                   </div>
                   {conv.lastMessage && (
-                    <span className="text-muted-foreground shrink-0 text-base">
+                    <span className="text-muted-foreground shrink-0 text-xs">
                       {formatRelativeTime(conv.lastMessage.createdAt)}
                     </span>
                   )}

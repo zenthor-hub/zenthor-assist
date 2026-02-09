@@ -38,13 +38,13 @@ export default function ChatConversationPage({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <header className="bg-background/90 border-border shrink-0 border-b px-4 py-4 backdrop-blur-sm lg:px-6">
+      <header className="border-border shrink-0 border-b px-4 py-3 lg:px-6">
         <div className="flex items-center gap-2 px-4">
           <SidebarTrigger />
           {conversation.channel === "whatsapp" && (
             <MessageCircle className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
           )}
-          <h1 className="text-foreground truncate text-lg font-semibold tracking-tight">
+          <h1 className="text-foreground truncate text-sm font-semibold tracking-tight">
             {conversation.title || "Chat"}
           </h1>
           {conversation.channel === "whatsapp" && (

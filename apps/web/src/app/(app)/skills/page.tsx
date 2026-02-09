@@ -107,9 +107,9 @@ export default function SkillsPage() {
     >
       <div className="flex flex-col gap-4">
         {adminSkills.length === 0 ? (
-          <div className="bg-muted/50 flex flex-col items-center justify-center gap-2 rounded-xl py-12">
+          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border py-12">
             <Sparkles className="text-muted-foreground size-8" />
-            <p className="text-muted-foreground text-base">No skills configured yet</p>
+            <p className="text-muted-foreground text-sm">No skills configured yet</p>
             <div className="mt-2 flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={handleSeedRecommended}>
                 Add recommended skills
@@ -120,12 +120,12 @@ export default function SkillsPage() {
             </div>
           </div>
         ) : (
-          <div className="divide-border divide-y rounded-xl border">
+          <div className="divide-border divide-y rounded-lg border">
             {adminSkills.map((skill) => (
               <div key={skill._id} className="flex items-start gap-4 px-4 py-3">
                 <div className="min-w-0 flex-1">
-                  <p className="text-base font-medium">{skill.name}</p>
-                  <p className="text-muted-foreground text-base">{skill.description}</p>
+                  <p className="text-sm font-medium">{skill.name}</p>
+                  <p className="text-muted-foreground text-xs">{skill.description}</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <Switch
