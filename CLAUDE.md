@@ -49,6 +49,73 @@ cd apps/agent && bun run dev:core
 - Providers stack in `apps/web/src/components/providers.tsx`: Theme + Clerk + Convex + Tooltip + Sonner.
 - Chat UI in `apps/web/src/components/chat/` uses AI Elements from `apps/web/src/components/ai-elements/`.
 
+### Web UI style guide
+
+The authenticated app follows a Vercel-inspired minimal aesthetic. All new pages and components **must** follow these patterns.
+
+#### Page layout
+
+- Every page uses `<PageWrapper title="…" maxWidth="…">` for consistent header (with `SidebarTrigger`), max-width constraint, and scroll behavior.
+- Dashboard/overview pages use default `maxWidth="2xl"` (`1360px`). Settings/form pages use `maxWidth="md"` (`max-w-5xl`).
+- Page header title: `text-sm font-semibold tracking-tight`.
+- Header actions slot via `actions` prop (e.g. "New chat" button).
+
+#### Typography scale
+
+- **Section headings** (inline): `text-sm font-medium`.
+- **Section headers** (standalone, uppercase): `text-muted-foreground text-xs font-medium tracking-wider uppercase`.
+- **Body / descriptions**: `text-muted-foreground text-xs`.
+- **Labels**: `text-xs` (via `<Label className="text-xs">`).
+- **List item titles**: `text-xs font-medium`.
+- **Stat values**: `text-xl font-semibold`.
+- Never use `text-base` in the app shell — the largest inline text is `text-sm`.
+
+#### Containers and cards
+
+- Use `rounded-lg border p-4` for card-like sections. **Do not** use the shadcn `<Card>` component.
+- List containers: `divide-border divide-y rounded-lg border` with items `px-4 py-3`.
+- Stat cards: `rounded-lg border p-4` inside a `grid gap-3 sm:grid-cols-N`.
+- Section spacing: `gap-6` between sibling sections, `gap-8` between top-level page sections.
+- Inner component spacing: `gap-3` within a section.
+
+#### Icons
+
+- **Icon containers** (decorative circles): `bg-muted flex size-8 items-center justify-center rounded-full` with `size-4` icons.
+- **Inline action icons** (buttons, indicators): `size-3.5`.
+- **Sidebar nav icons**: `size-4`.
+- **Stat/badge icons**: `size-3`.
+- WhatsApp accent: `text-emerald-600 dark:text-emerald-400`.
+
+#### Buttons
+
+- Default action buttons: `size="sm"`.
+- Secondary/danger: `variant="outline" size="sm"`.
+- Loading state: `<Loader2 className="size-3.5 animate-spin" />` inside the button.
+
+#### Empty states
+
+- Centered layout: `flex flex-col items-center justify-center gap-3 rounded-lg border py-12` (or `py-16`).
+- Muted icon `size-8`, title `text-sm font-medium`, description `text-muted-foreground text-xs`.
+
+#### Skeletons
+
+- `bg-muted animate-pulse rounded` (or `rounded-full` for avatars).
+- Match the exact dimensions of the content they replace (e.g. `h-4 w-28` for a name, `size-12` for an avatar).
+
+#### Sidebar
+
+- Three-mode state: `"nav" | "chats" | "settings"` with slide animations (`animate-slide-in-right`, `animate-slide-in-left`).
+- Nav items with sub-panels show `<ArrowRight className="text-muted-foreground size-3.5" />` on the right.
+- Sub-panel back button (Vercel-style): `<ArrowLeft />` left + centered `<span className="flex-1 text-center font-medium">` + invisible spacer `<span className="size-4 shrink-0" />`.
+- User menu trigger: avatar + name only (no email). Email shown inside dropdown.
+
+#### Color conventions
+
+- `text-foreground` for primary text, `text-muted-foreground` for secondary.
+- `border` (default) for all borders — no explicit `border-border` unless overriding.
+- Hover: `hover:bg-muted/50` for list items, `hover:bg-sidebar-accent` for sidebar items.
+- Status: emerald for WhatsApp/success, red-500 for Todoist brand icon.
+
 ### Backend notes
 
 - **Convex URL domains**: `.convex.cloud` is for the client/functions API (queries, mutations). `.convex.site` is for HTTP actions (httpRouter endpoints like webhooks). Never use `.convex.cloud` for webhook callback URLs.
