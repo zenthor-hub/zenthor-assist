@@ -32,6 +32,7 @@
     "@ai-sdk/xai": "^3.0.48",
     "@axiomhq/pino": "^1.4.0",
     "@sentry/bun": "^10.38.0",
+    "@vercel/blob": "^2.2.0",
     "@zenthor-assist/backend": "workspace:*",
     "@zenthor-assist/observability": "workspace:*",
     "ai": "catalog:",

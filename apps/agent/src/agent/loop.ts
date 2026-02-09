@@ -9,6 +9,7 @@ import { evaluateContext } from "./context-guard";
 import { classifyError, isRetryable } from "./errors";
 import type { AgentConfig } from "./generate";
 import { generateResponse, generateResponseStreaming } from "./generate";
+import { downloadWhatsAppMedia, transcribeAudio, uploadMediaToBlob } from "./media";
 import { friendlyModelName } from "./model-names";
 import {
   discoverAndActivate,
@@ -153,11 +154,52 @@ export function startAgentLoop() {
             }
           : undefined;
 
+        // Process any pending audio messages (download → upload → transcribe)
+        for (const msg of context.messages) {
+          if (msg.media?.type === "audio" && !msg.media.transcript) {
+            try {
+              const { buffer } = await downloadWhatsAppMedia(msg.media.sourceId);
+
+              const [blobUrl, transcript] = await Promise.all([
+                uploadMediaToBlob({
+                  buffer,
+                  conversationId: job.conversationId,
+                  messageId: msg._id,
+                  mimetype: msg.media.mimetype,
+                }),
+                transcribeAudio({
+                  buffer,
+                  mimetype: msg.media.mimetype,
+                  fileName: `${msg._id}.ogg`,
+                }),
+              ]);
+
+              await client.mutation(api.messages.updateMediaTranscript, {
+                serviceKey,
+                messageId: msg._id,
+                transcript,
+                mediaUrl: blobUrl,
+              });
+
+              // Update local copy for this run
+              msg.content = transcript;
+              msg.media.transcript = transcript;
+              msg.media.url = blobUrl;
+            } catch (error) {
+              void logger.warn("agent.media.processing_failed", {
+                messageId: msg._id,
+                error: error instanceof Error ? error.message : String(error),
+              });
+              // Fallback: keep "[Audio message]" as content
+            }
+          }
+        }
+
         let conversationMessages = context.messages
           .filter((m) => m.role === "user" || m.role === "assistant" || m.role === "system")
           .map((m) => ({
             role: m.role as "user" | "assistant" | "system",
-            content: m.content,
+            content: m.media?.transcript ?? m.content,
           }));
 
         // Compact messages if needed
