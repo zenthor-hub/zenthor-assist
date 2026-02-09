@@ -91,6 +91,20 @@ export function startAgentLoop() {
         if (!claimed) continue;
 
         let leaseLost = false;
+        const checkLease = (phase: string): boolean => {
+          if (!leaseLost) return false;
+          void logger.lineWarn(`[agent] Lease lost for job ${job._id} (${phase})`, {
+            jobId: job._id,
+            conversationId: job.conversationId,
+            phase,
+          });
+          void logger.warn("agent.job.lease_lost", {
+            jobId: job._id,
+            conversationId: job.conversationId,
+            phase,
+          });
+          return true;
+        };
         heartbeatInterval = setInterval(() => {
           client
             .mutation(api.agent.heartbeatJob, {
@@ -196,16 +210,7 @@ export function startAgentLoop() {
         }
 
         // Check lease before generation (expensive operation)
-        if (leaseLost) {
-          void logger.lineWarn(`[agent] Lease lost before generation for job ${job._id}`, {
-            jobId: job._id,
-            conversationId: job.conversationId,
-          });
-          void logger.warn("agent.job.lease_lost", {
-            jobId: job._id,
-            conversationId: job.conversationId,
-            phase: "pre_generate",
-          });
+        if (checkLease("pre_generate")) {
           continue;
         }
 
@@ -287,6 +292,10 @@ export function startAgentLoop() {
         let modelUsed: string | undefined;
 
         if (isWeb) {
+          if (checkLease("pre_placeholder")) {
+            continue;
+          }
+
           const placeholderId = await client.mutation(api.messages.createPlaceholder, {
             serviceKey,
             conversationId: job.conversationId,
@@ -302,6 +311,8 @@ export function startAgentLoop() {
             context.skills,
             {
               onChunk: (accumulatedText) => {
+                if (leaseLost) return;
+
                 const now = Date.now();
                 if (now - lastPatchTime >= THROTTLE_MS) {
                   lastPatchTime = now;
@@ -330,6 +341,10 @@ export function startAgentLoop() {
 
           modelUsed = response.modelUsed;
 
+          if (checkLease("post_generate")) {
+            continue;
+          }
+
           // Send final unthrottled update so the UI shows complete text before finalize
           await client
             .mutation(api.messages.updateStreamingContent, {
@@ -343,6 +358,10 @@ export function startAgentLoop() {
                 error: err instanceof Error ? err.message : String(err),
               });
             });
+
+          if (checkLease("pre_finalize")) {
+            continue;
+          }
 
           await client.mutation(api.messages.finalizeMessage, {
             serviceKey,
@@ -358,6 +377,10 @@ export function startAgentLoop() {
             toolCount: Object.keys(filteredTools).length,
           });
           modelUsed = response.modelUsed;
+
+          if (checkLease("post_generate")) {
+            continue;
+          }
 
           const content =
             channel === "whatsapp" ? sanitizeForWhatsApp(response.content) : response.content;
@@ -387,16 +410,7 @@ export function startAgentLoop() {
         }
 
         // Check lease before completing (avoid overwriting a requeued job)
-        if (leaseLost) {
-          void logger.lineWarn(`[agent] Lease lost before completion for job ${job._id}`, {
-            jobId: job._id,
-            conversationId: job.conversationId,
-          });
-          void logger.warn("agent.job.lease_lost", {
-            jobId: job._id,
-            conversationId: job.conversationId,
-            phase: "pre_complete",
-          });
+        if (checkLease("pre_complete")) {
           continue;
         }
 
