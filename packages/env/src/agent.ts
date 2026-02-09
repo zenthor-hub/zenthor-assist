@@ -9,6 +9,9 @@ const envSchema = z.object({
   AI_CONTEXT_WINDOW: z.coerce.number().optional(),
   AI_EMBEDDING_MODEL: z.string().default("openai/text-embedding-3-small"),
   AGENT_SECRET: z.string().min(1).optional(),
+  ZENTHOR_FINANCE_API_URL: z.url().optional(),
+  ZENTHOR_FINANCE_SERVICE_KEY: z.string().min(1).optional(),
+  ZENTHOR_FINANCE_ORG_ID: z.string().min(1).optional(),
   AGENT_ROLE: z
     .enum(["all", "core", "whatsapp", "whatsapp-ingress", "whatsapp-egress", "whatsapp-cloud"])
     .optional(),
