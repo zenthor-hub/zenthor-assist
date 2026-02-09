@@ -17,6 +17,7 @@ function resolveServiceName(role: string): string {
   if (role === "whatsapp" || role === "whatsapp-ingress" || role === "whatsapp-egress") {
     return "agent-whatsapp";
   }
+  if (role === "whatsapp-cloud") return "agent-whatsapp-cloud";
   return "agent";
 }
 
@@ -25,12 +26,18 @@ function resolveWorkerRole(role: string): string {
   if (role === "whatsapp" || role === "whatsapp-ingress" || role === "whatsapp-egress") {
     return "whatsapp";
   }
+  if (role === "whatsapp-cloud") return "whatsapp-cloud";
   return "all";
 }
 
 function resolveChannel(role: string): string | undefined {
   if (role === "core") return "web";
-  if (role === "whatsapp" || role === "whatsapp-ingress" || role === "whatsapp-egress") {
+  if (
+    role === "whatsapp" ||
+    role === "whatsapp-ingress" ||
+    role === "whatsapp-egress" ||
+    role === "whatsapp-cloud"
+  ) {
     return "whatsapp";
   }
   return undefined;

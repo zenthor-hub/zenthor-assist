@@ -4,6 +4,20 @@ import { initSentry } from "./observability/sentry";
 import { startWhatsAppCloudRuntime } from "./whatsapp-cloud/runtime";
 import { startWhatsAppRuntime } from "./whatsapp/runtime";
 
+function getRequiredEnvForRole(role: string, enableWhatsApp: boolean): string[] {
+  const required = ["CONVEX_URL"];
+
+  if (role === "core" || role === "all") {
+    required.push("AI_GATEWAY_API_KEY");
+  }
+
+  if (enableWhatsApp && role === "whatsapp-cloud") {
+    required.push("WHATSAPP_CLOUD_ACCESS_TOKEN", "WHATSAPP_CLOUD_PHONE_NUMBER_ID");
+  }
+
+  return required;
+}
+
 async function main() {
   initSentry();
   await logger.lineInfo("[main] Starting zenthor-assist agent...");
@@ -12,7 +26,9 @@ async function main() {
     enableWhatsApp: process.env["ENABLE_WHATSAPP"] !== "false",
   });
 
-  const requiredEnv = ["CONVEX_URL", "AI_GATEWAY_API_KEY"];
+  const role = (process.env["AGENT_ROLE"] ?? "all").toLowerCase();
+  const enableWhatsApp = process.env["ENABLE_WHATSAPP"] !== "false";
+  const requiredEnv = getRequiredEnvForRole(role, enableWhatsApp);
   for (const key of requiredEnv) {
     if (!process.env[key]) {
       await logger.lineError(`[main] Missing required env var: ${key}`, { key });
@@ -20,9 +36,6 @@ async function main() {
       process.exit(1);
     }
   }
-
-  const role = (process.env["AGENT_ROLE"] ?? "all").toLowerCase();
-  const enableWhatsApp = process.env["ENABLE_WHATSAPP"] !== "false";
 
   if (role === "core" || role === "all") {
     startAgentLoop();

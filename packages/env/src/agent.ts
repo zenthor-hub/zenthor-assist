@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const envSchema = z.object({
   CONVEX_URL: z.url(),
-  AI_GATEWAY_API_KEY: z.string().min(1),
+  AI_GATEWAY_API_KEY: z.string().min(1).optional(),
   AI_LITE_MODEL: z.string().default("xai/grok-4.1-fast-reasoning"),
   AI_MODEL: z.string().default("anthropic/claude-sonnet-4-5-20250929"),
   AI_FALLBACK_MODEL: z.string().optional(),
