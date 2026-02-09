@@ -336,6 +336,7 @@ export function startAgentLoop() {
               agentConfig,
               channel,
               toolCount: Object.keys(filteredTools).length,
+              messageCount: compactedMessages.length,
             },
           );
 
@@ -375,6 +376,7 @@ export function startAgentLoop() {
             agentConfig,
             channel,
             toolCount: Object.keys(filteredTools).length,
+            messageCount: compactedMessages.length,
           });
           modelUsed = response.modelUsed;
 

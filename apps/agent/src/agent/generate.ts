@@ -139,6 +139,7 @@ interface GenerateOptions {
   agentConfig?: AgentConfig;
   channel?: "web" | "whatsapp";
   toolCount?: number;
+  messageCount?: number;
 }
 
 function resolveModels(options?: GenerateOptions): {
@@ -164,6 +165,7 @@ function resolveModels(options?: GenerateOptions): {
   const route = selectModel({
     channel: options?.channel ?? "web",
     toolCount: options?.toolCount ?? 0,
+    messageCount: options?.messageCount ?? 0,
   });
   return { primaryModel: route.primary, fallbackModels: route.fallbacks };
 }
