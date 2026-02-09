@@ -97,8 +97,9 @@ export const claimNextOutbound = serviceMutation({
 
     for (const job of processing) {
       if (job.lockedUntil !== undefined && job.lockedUntil <= now) {
+        const exhausted = (job.attemptCount ?? 0) >= 5;
         await ctx.db.patch(job._id, {
-          status: "pending",
+          status: exhausted ? "failed" : "pending",
           processorId: undefined,
           lockedUntil: undefined,
           updatedAt: now,
