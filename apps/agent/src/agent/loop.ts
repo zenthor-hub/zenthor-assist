@@ -154,52 +154,57 @@ export function startAgentLoop() {
             }
           : undefined;
 
-        // Process any pending audio messages (download → upload → transcribe)
-        for (const msg of context.messages) {
-          if (msg.media?.type === "audio" && !msg.media.transcript) {
-            try {
-              const { buffer } = await downloadWhatsAppMedia(msg.media.sourceId);
+        // Process audio for the triggering message only (Meta media URLs expire quickly)
+        const audioTranscripts = new Map<string, string>();
+        const triggerMsg = context.messages.find(
+          (m) => m._id === job.messageId && m.media?.type === "audio" && !m.media.transcript,
+        );
+        if (triggerMsg?.media) {
+          try {
+            const { buffer } = await downloadWhatsAppMedia(triggerMsg.media.sourceId);
 
-              const [blobUrl, transcript] = await Promise.all([
-                uploadMediaToBlob({
-                  buffer,
-                  conversationId: job.conversationId,
-                  messageId: msg._id,
-                  mimetype: msg.media.mimetype,
-                }),
-                transcribeAudio({
-                  buffer,
-                  mimetype: msg.media.mimetype,
-                  fileName: `${msg._id}.ogg`,
-                }),
-              ]);
+            const [blobUrl, transcript] = await Promise.all([
+              uploadMediaToBlob({
+                buffer,
+                conversationId: job.conversationId,
+                messageId: triggerMsg._id,
+                mimetype: triggerMsg.media.mimetype,
+              }),
+              transcribeAudio({
+                buffer,
+                mimetype: triggerMsg.media.mimetype,
+                fileName: `${triggerMsg._id}.ogg`,
+              }),
+            ]);
 
-              await client.mutation(api.messages.updateMediaTranscript, {
-                serviceKey,
-                messageId: msg._id,
-                transcript,
-                mediaUrl: blobUrl,
-              });
+            await client.mutation(api.messages.updateMediaTranscript, {
+              serviceKey,
+              messageId: triggerMsg._id,
+              transcript,
+              mediaUrl: blobUrl,
+            });
 
-              // Update local copy for this run
-              msg.content = transcript;
-              msg.media.transcript = transcript;
-              msg.media.url = blobUrl;
-            } catch (error) {
-              void logger.warn("agent.media.processing_failed", {
-                messageId: msg._id,
-                error: error instanceof Error ? error.message : String(error),
-              });
-              // Fallback: keep "[Audio message]" as content
-            }
+            audioTranscripts.set(triggerMsg._id, transcript);
+          } catch (error) {
+            void logger.warn("agent.media.processing_failed", {
+              messageId: triggerMsg._id,
+              error: error instanceof Error ? error.message : String(error),
+            });
           }
         }
 
         let conversationMessages = context.messages
-          .filter((m) => m.role === "user" || m.role === "assistant" || m.role === "system")
+          .filter((m) => {
+            if (m.role !== "user" && m.role !== "assistant" && m.role !== "system") return false;
+            // Drop untranscribed audio — adds no useful context for the LLM
+            if (m.media?.type === "audio" && !m.media.transcript && !audioTranscripts.has(m._id)) {
+              return false;
+            }
+            return true;
+          })
           .map((m) => ({
             role: m.role as "user" | "assistant" | "system",
-            content: m.media?.transcript ?? m.content,
+            content: audioTranscripts.get(m._id) ?? m.media?.transcript ?? m.content,
           }));
 
         // Compact messages if needed
@@ -432,7 +437,11 @@ export function startAgentLoop() {
               parts.push(`Model: ${friendlyModelName(modelUsed)}`);
             if (context.preferences.showToolDetails && response.toolCalls?.length)
               parts.push(`Tools: ${response.toolCalls.map((tc) => tc.name).join(", ")}`);
-            if (parts.length > 0) content += `\n\n_${parts.join(" | ")}_`;
+            if (parts.length > 0) {
+              // Strip any model/tool info the LLM may have echoed from conversation history
+              content = content.replace(/\n+_?Model:.*$/s, "").trimEnd();
+              content += `\n\n_${parts.join(" | ")}_`;
+            }
           }
 
           const assistantMessageId = await client.mutation(api.messages.addAssistantMessage, {
