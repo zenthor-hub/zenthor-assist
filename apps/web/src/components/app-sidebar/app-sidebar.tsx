@@ -144,14 +144,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === "/tasks"} tooltip="Tasks">
-                  <Link href={"/tasks" as "/"}>
-                    <CheckSquare className="size-4" />
-                    <span>Tasks</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={pathname.startsWith("/chat")}
                   tooltip="Chats"
@@ -160,6 +152,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   <MessageSquare className="size-4" />
                   <span className="flex-1">Chats</span>
                   <ArrowRight className="text-muted-foreground size-3.5" />
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === "/tasks"} tooltip="Tasks">
+                  <Link href={"/tasks" as "/"}>
+                    <CheckSquare className="size-4" />
+                    <span>Tasks</span>
+                  </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
