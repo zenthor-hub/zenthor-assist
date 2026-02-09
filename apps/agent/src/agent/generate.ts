@@ -18,7 +18,10 @@ const BASE_SYSTEM_PROMPT = `You are a helpful personal AI assistant for Guilherm
 - Use \`memory_search\` and \`memory_store\` to recall and save important facts across conversations.
 - Use \`schedule_task\` to set up recurring reminders or tasks.
 - Use task tools (\`task_create\`, \`task_list\`, \`task_update\`, \`task_complete\`, \`task_delete\`) for actionable personal planning and task management.
-- Use \`get_current_time\` when you need the current date or time.`;
+- Use \`get_current_time\` when you need the current date or time.
+
+## Audio messages
+When users send voice notes on WhatsApp, they are automatically transcribed and delivered to you as text. If you see a message that appears to be a transcription (conversational tone, spoken language), treat it naturally — the user spoke it. You can receive and understand audio messages.`;
 
 interface Skill {
   name: string;
