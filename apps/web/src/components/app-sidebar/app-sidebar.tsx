@@ -6,19 +6,19 @@ import {
   Archive,
   ArrowLeft,
   House,
+  LayoutGrid,
   MessageCircle,
   MessageSquare,
-  Plus,
   Settings,
   Sparkles,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type * as React from "react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
 import {
   Sidebar,
   SidebarContent,
@@ -32,7 +32,6 @@ import {
   SidebarMenuItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import { ZenthorMark } from "@/components/zenthor-logo";
 
 import { NavUser } from "./nav-user";
 import { ThemeSwitcher } from "./theme-switcher";
@@ -47,23 +46,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
   const router = useRouter();
   const [mode, setMode] = useState<SidebarMode>(() => getSidebarModeFromPath(pathname));
+  const transitionDir = useRef<"forward" | "back" | null>(null);
+
+  function goToChats() {
+    transitionDir.current = "forward";
+    setMode("chats");
+    router.push("/chat/overview");
+  }
+
+  function goToNav() {
+    transitionDir.current = "back";
+    setMode("nav");
+  }
 
   const conversations = useQuery(api.conversations.listRecentWithLastMessage, {});
-  const createConversation = useMutation(api.conversations.create);
   const archiveConversation = useMutation(api.conversations.archive);
 
   useEffect(() => {
     setMode(getSidebarModeFromPath(pathname));
   }, [pathname]);
-
-  async function handleNewChat() {
-    try {
-      const id = await createConversation({});
-      router.push(`/chat/${id}`);
-    } catch {
-      toast.error("Failed to create conversation");
-    }
-  }
 
   async function handleArchive(e: React.MouseEvent, conversationId: string) {
     e.preventDefault();
@@ -74,7 +75,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       });
       toast.success("Conversation archived");
       if (pathname.includes(conversationId)) {
-        router.push("/chat");
+        router.push("/chat/overview");
       }
     } catch {
       toast.error("Failed to archive conversation");
@@ -83,31 +84,48 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   return (
     <Sidebar collapsible="icon" {...props}>
-      <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild tooltip="Zenthor Assist">
-              <Link href={"/chat" as "/"}>
-                <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center">
-                  <ZenthorMark size={16} />
-                </div>
-                <div className="grid flex-1 text-left text-base leading-tight">
-                  <span className="truncate font-semibold">Zenthor</span>
-                  <span className="truncate text-base">Assist</span>
-                </div>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+      {/* ── Header: logo text ── */}
+      <SidebarHeader className="px-3 pt-4 pb-6">
+        <Link
+          href={"/chat/overview" as "/"}
+          className="flex items-center group-data-[collapsible=icon]:justify-center"
+        >
+          <Image
+            src="/zenthor-logo-text.svg"
+            alt="Zenthor"
+            width={110}
+            height={24}
+            className="group-data-[collapsible=icon]:hidden dark:hidden"
+          />
+          <Image
+            src="/zenthor-logo-text-dark.svg"
+            alt="Zenthor"
+            width={110}
+            height={24}
+            className="hidden dark:block dark:group-data-[collapsible=icon]:hidden"
+          />
+          <Image
+            src="/zenthor-logo.svg"
+            alt="Zenthor"
+            width={24}
+            height={24}
+            className="hidden group-data-[collapsible=icon]:block"
+          />
+        </Link>
       </SidebarHeader>
+
+      {/* ── Content ── */}
       <SidebarContent>
         {mode === "nav" ? (
-          <SidebarGroup>
-            <SidebarMenu className="gap-2">
+          <SidebarGroup
+            key="nav"
+            className={transitionDir.current === "back" ? "animate-slide-in-left" : undefined}
+          >
+            <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === "/home"} tooltip="Home">
                   <Link href={"/home" as "/"}>
-                    <House />
+                    <House className="size-4" />
                     <span>Home</span>
                   </Link>
                 </SidebarMenuButton>
@@ -116,16 +134,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <SidebarMenuButton
                   isActive={pathname.startsWith("/chat")}
                   tooltip="Chats"
-                  onClick={() => setMode("chats")}
+                  onClick={goToChats}
                 >
-                  <MessageSquare />
+                  <MessageSquare className="size-4" />
                   <span>Chats</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === "/skills"} tooltip="Skills">
                   <Link href={"/skills" as "/"}>
-                    <Sparkles />
+                    <Sparkles className="size-4" />
                     <span>Skills</span>
                   </Link>
                 </SidebarMenuButton>
@@ -133,7 +151,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === "/settings"} tooltip="Settings">
                   <Link href={"/settings" as "/"}>
-                    <Settings />
+                    <Settings className="size-4" />
                     <span>Settings</span>
                   </Link>
                 </SidebarMenuButton>
@@ -141,18 +159,38 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarMenu>
           </SidebarGroup>
         ) : (
-          <SidebarGroup>
-            <div className="flex items-center gap-1 px-2 py-1">
-              <Button variant="ghost" size="icon-sm" onClick={() => setMode("nav")}>
-                <ArrowLeft className="size-4" />
-              </Button>
-              <span className="flex-1 text-base font-semibold">Chats</span>
-              <Button variant="ghost" size="icon-sm" onClick={handleNewChat}>
-                <Plus className="size-4" />
-              </Button>
-            </div>
-            <SidebarGroupContent>
-              <SidebarMenu className="gap-2">
+          <SidebarGroup key="chats" className="animate-slide-in-right">
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <button
+                  type="button"
+                  onClick={goToNav}
+                  className="hover:bg-sidebar-accent text-sidebar-foreground flex w-full items-center rounded-md px-2 py-1.5 text-sm transition-colors"
+                >
+                  <ArrowLeft className="size-4 shrink-0" />
+                  <span className="flex-1 text-center font-medium">Chats</span>
+                  <span className="size-4 shrink-0" />
+                </button>
+              </SidebarMenuItem>
+            </SidebarMenu>
+            <SidebarGroupContent className="mt-2">
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === "/chat/overview"}
+                    tooltip="Overview"
+                  >
+                    <Link href={"/chat/overview" as "/"}>
+                      <LayoutGrid className="size-4" />
+                      <span>Overview</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+            <SidebarGroupContent className="mt-2">
+              <SidebarMenu>
                 {conversations?.map((conv) => {
                   const isActive = pathname === `/chat/${conv._id}`;
                   const isWhatsAppConversation = conv.channel === "whatsapp";
@@ -188,7 +226,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   );
                 })}
                 {conversations?.length === 0 && (
-                  <div className="text-muted-foreground px-4 py-6 text-center text-base">
+                  <div className="text-muted-foreground px-3 py-8 text-center text-xs">
                     No conversations yet
                   </div>
                 )}
@@ -197,7 +235,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           </SidebarGroup>
         )}
       </SidebarContent>
-      <SidebarFooter>
+
+      {/* ── Footer ── */}
+      <SidebarFooter className="gap-1 px-3 pb-3">
         <ThemeSwitcher />
         <NavUser />
       </SidebarFooter>

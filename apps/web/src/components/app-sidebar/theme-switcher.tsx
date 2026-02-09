@@ -27,7 +27,7 @@ export function ThemeSwitcher() {
     <div
       role="group"
       aria-label="Theme switcher"
-      className="border-sidebar-border bg-sidebar-accent/30 flex items-center justify-between rounded-md border p-1 group-data-[collapsible=icon]:hidden"
+      className="border-sidebar-border bg-sidebar-accent/30 flex items-center justify-between rounded-md border p-0.5 group-data-[collapsible=icon]:hidden"
     >
       {themeOptions.map(({ icon: Icon, label, value }) => {
         const isActive = (theme ?? "system") === value;
@@ -42,12 +42,12 @@ export function ThemeSwitcher() {
                 aria-label={label}
                 onClick={() => setTheme(value)}
                 className={cn(
-                  "h-7 flex-1 rounded-sm",
+                  "h-6 flex-1 rounded-sm",
                   isActive &&
                     "bg-sidebar-accent text-sidebar-accent-foreground hover:bg-sidebar-accent",
                 )}
               >
-                <Icon className="size-4" />
+                <Icon className="size-3.5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top">{label}</TooltipContent>

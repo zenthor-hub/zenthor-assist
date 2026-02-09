@@ -23,12 +23,3 @@ export function ZenthorHeroMark({ className, size = 128 }: ZenthorLogoProps) {
     />
   );
 }
-
-export function ZenthorLogo({ className }: { className?: string }) {
-  return (
-    <div className={`flex items-center gap-2.5 ${className ?? ""}`}>
-      <Image src="/zenthor-logo.svg" alt="Zenthor" width={40} height={40} />
-      <span className="text-foreground text-xl font-semibold tracking-tight">zenthor</span>
-    </div>
-  );
-}

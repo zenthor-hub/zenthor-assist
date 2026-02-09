@@ -37,13 +37,15 @@ export function NavUser() {
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <Avatar className="h-8 w-8 rounded-lg">
+              <Avatar className="size-7 rounded-full">
                 <AvatarImage src={user.imageUrl} alt={user.fullName ?? ""} />
-                <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
+                <AvatarFallback className="rounded-full text-xs">{initials}</AvatarFallback>
               </Avatar>
-              <div className="grid flex-1 text-left text-base leading-tight">
-                <span className="truncate font-medium">{user.fullName}</span>
-                <span className="truncate text-base">{user.primaryEmailAddress?.emailAddress}</span>
+              <div className="grid flex-1 text-left leading-tight">
+                <span className="truncate text-sm font-medium">{user.fullName}</span>
+                <span className="text-muted-foreground truncate text-xs">
+                  {user.primaryEmailAddress?.emailAddress}
+                </span>
               </div>
               <ChevronsUpDown className="ml-auto size-4" />
             </SidebarMenuButton>
@@ -55,14 +57,14 @@ export function NavUser() {
             sideOffset={4}
           >
             <DropdownMenuLabel className="p-0 font-normal">
-              <div className="flex items-center gap-2 px-1 py-1.5 text-left text-base">
-                <Avatar className="h-8 w-8 rounded-lg">
+              <div className="flex items-center gap-2 px-1 py-1.5 text-left">
+                <Avatar className="size-8 rounded-full">
                   <AvatarImage src={user.imageUrl} alt={user.fullName ?? ""} />
-                  <AvatarFallback className="rounded-lg">{initials}</AvatarFallback>
+                  <AvatarFallback className="rounded-full text-xs">{initials}</AvatarFallback>
                 </Avatar>
-                <div className="grid flex-1 text-left text-base leading-tight">
-                  <span className="truncate font-medium">{user.fullName}</span>
-                  <span className="truncate text-base">
+                <div className="grid flex-1 text-left leading-tight">
+                  <span className="truncate text-sm font-medium">{user.fullName}</span>
+                  <span className="text-muted-foreground truncate text-xs">
                     {user.primaryEmailAddress?.emailAddress}
                   </span>
                 </div>
