@@ -17,7 +17,7 @@ const BASE_SYSTEM_PROMPT = `You are a helpful personal AI assistant for Guilherm
 - Use \`browse_url\` to read web pages, articles, or documentation when the user shares a URL or you need to look up page content.
 - Use \`memory_search\` and \`memory_store\` to recall and save important facts across conversations.
 - Use \`schedule_task\` to set up recurring reminders or tasks.
-- Use Todoist tools (\`todoist_capture_task\`, \`todoist_list_tasks\`, \`todoist_complete_task\`, \`todoist_reschedule_task\`) for actionable personal planning when the user has connected Todoist.
+- Use task tools (\`task_create\`, \`task_list\`, \`task_update\`, \`task_complete\`, \`task_delete\`) for actionable personal planning and task management.
 - Use \`get_current_time\` when you need the current date or time.`;
 
 interface Skill {

@@ -6,12 +6,7 @@ import { currentTime } from "../tools/current-time";
 import { dateCalc } from "../tools/date-calc";
 import { memorySearch, memoryStore } from "../tools/memory";
 import { scheduleTask } from "../tools/schedule";
-import {
-  todoistCaptureTask,
-  todoistCompleteTask,
-  todoistListTasks,
-  todoistRescheduleTask,
-} from "../tools/todoist";
+import { taskComplete, taskCreate, taskDelete, taskList, taskUpdate } from "../tools/tasks";
 import type { ActivationResult, RuntimePlugin } from "./types";
 import { validateManifest } from "./validators";
 
@@ -67,28 +62,24 @@ const coreSchedulePlugin: RuntimePlugin = {
   },
 };
 
-const coreTodoistPlugin: RuntimePlugin = {
-  name: "core-todoist",
+const coreTasksPlugin: RuntimePlugin = {
+  name: "core-tasks",
   version: "1.0.0",
   source: "builtin",
   manifest: {
-    id: "core-todoist",
+    id: "core-tasks",
     version: "1.0.0",
-    tools: [
-      "todoist_capture_task",
-      "todoist_list_tasks",
-      "todoist_complete_task",
-      "todoist_reschedule_task",
-    ],
-    riskLevel: "medium",
+    tools: ["task_create", "task_list", "task_update", "task_complete", "task_delete"],
+    riskLevel: "low",
     source: "builtin",
-    description: "Todoist task capture, planning, completion, and rescheduling",
+    description: "Built-in task management",
   },
   tools: {
-    todoist_capture_task: todoistCaptureTask,
-    todoist_list_tasks: todoistListTasks,
-    todoist_complete_task: todoistCompleteTask,
-    todoist_reschedule_task: todoistRescheduleTask,
+    task_create: taskCreate,
+    task_list: taskList,
+    task_update: taskUpdate,
+    task_complete: taskComplete,
+    task_delete: taskDelete,
   },
 };
 
@@ -147,7 +138,7 @@ const builtinPlugins: RuntimePlugin[] = [
   coreTimePlugin,
   coreMemoryPlugin,
   coreSchedulePlugin,
-  coreTodoistPlugin,
+  coreTasksPlugin,
   coreWebBrowsePlugin,
   coreCalculatorPlugin,
   coreDateCalcPlugin,

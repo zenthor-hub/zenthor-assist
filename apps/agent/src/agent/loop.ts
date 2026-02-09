@@ -20,7 +20,7 @@ import { wrapToolsWithApproval } from "./tool-approval";
 import { filterTools, getDefaultPolicy, mergeToolPolicies } from "./tool-policy";
 import { createMemoryTools } from "./tools/memory";
 import { createScheduleTask } from "./tools/schedule";
-import { createTodoistTools } from "./tools/todoist";
+import { createTaskTools } from "./tools/tasks";
 
 /** Convert any remaining markdown syntax to WhatsApp-compatible formatting */
 function sanitizeForWhatsApp(text: string): string {
@@ -237,20 +237,15 @@ export function startAgentLoop() {
           pluginTools.tools.memory_store = scopedMemory.memory_store;
         }
 
-        // Bind Todoist tools to this conversation's owner scope
-        const scopedTodoist = createTodoistTools(job.conversationId);
-        if (pluginTools.tools.todoist_capture_task) {
-          pluginTools.tools.todoist_capture_task = scopedTodoist.todoist_capture_task;
+        // Bind task tools to this conversation's owner scope
+        const scopedTasks = createTaskTools(job.conversationId);
+        if (pluginTools.tools.task_create) pluginTools.tools.task_create = scopedTasks.task_create;
+        if (pluginTools.tools.task_list) pluginTools.tools.task_list = scopedTasks.task_list;
+        if (pluginTools.tools.task_update) pluginTools.tools.task_update = scopedTasks.task_update;
+        if (pluginTools.tools.task_complete) {
+          pluginTools.tools.task_complete = scopedTasks.task_complete;
         }
-        if (pluginTools.tools.todoist_list_tasks) {
-          pluginTools.tools.todoist_list_tasks = scopedTodoist.todoist_list_tasks;
-        }
-        if (pluginTools.tools.todoist_complete_task) {
-          pluginTools.tools.todoist_complete_task = scopedTodoist.todoist_complete_task;
-        }
-        if (pluginTools.tools.todoist_reschedule_task) {
-          pluginTools.tools.todoist_reschedule_task = scopedTodoist.todoist_reschedule_task;
-        }
+        if (pluginTools.tools.task_delete) pluginTools.tools.task_delete = scopedTasks.task_delete;
 
         // Build channel-aware tool policy
         const channelPolicy = getDefaultPolicy(channel);
