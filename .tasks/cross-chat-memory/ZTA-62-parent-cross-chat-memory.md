@@ -26,30 +26,36 @@ Currently, each conversation is a fully isolated silo. The memory system (Phase 
 ## Implementation Plan
 
 ### 1. Schema migration — Add `userId` to memories
+
 - Add `userId: v.optional(v.id("users"))` to the `memories` table
 - Add `"userId"` to the vector index `filterFields`: `["source", "conversationId", "userId"]`
 - Add a regular index `by_userId` for non-vector queries
 
 ### 2. Backend — User-scoped search/store actions
+
 - Update `memories.store` and `insertMemory` to accept and persist `userId`
 - Update `memories.search` to support filtering by `userId` (in addition to existing `conversationId` filter)
 - Add `listByUser` service query
 
 ### 3. Backfill — Populate `userId` on existing memories
+
 - One-time migration: resolve each memory's `conversationId → conversation.userId` and set `userId`
 - Memories without a `conversationId` remain with `userId: undefined`
 
 ### 4. Agent tools — User-scoped memory tools
+
 - Update `createMemoryTools` to accept `userId` alongside `conversationId`
 - `memory_store`: save with both `conversationId` (origin) and `userId` (ownership)
 - `memory_search`: search by `userId` (cross-chat) instead of `conversationId`
 - Update tool descriptions to reflect cross-chat capability
 
 ### 5. Agent loop — Wire userId into memory tools
+
 - In `loop.ts`, resolve `userId` from conversation context (already available as `ownerUserId` pattern in `getConversationContext`)
 - Pass `userId` to `createMemoryTools()` instead of just `conversationId`
 
 ### 6. Fix system prompt
+
 - Update `generate.ts:18` to accurately describe the cross-chat memory capability
 
 ## Technical Notes
@@ -61,13 +67,13 @@ Currently, each conversation is a fully isolated silo. The memory system (Phase 
 
 ## Child Tickets
 
-| Order | Ticket | Title | Blocked by |
-|---|---|---|---|
-| 1 | ZTA-63 | Add `userId` field to memories table schema | — |
-| 2 | ZTA-64 | Update memories backend actions to support userId | ZTA-63 |
-| 3 | ZTA-65 | Backfill `userId` on existing memory records | ZTA-63, ZTA-64 |
-| 4 | ZTA-66 | Update agent memory tools to search by userId | ZTA-64 |
-| 5 | ZTA-67 | Wire userId into memory tools in agent loop | ZTA-66 |
-| 6 | ZTA-68 | Fix system prompt memory tool description | ZTA-67 |
+| Order | Ticket | Title                                             | Blocked by     |
+| ----- | ------ | ------------------------------------------------- | -------------- |
+| 1     | ZTA-63 | Add `userId` field to memories table schema       | —              |
+| 2     | ZTA-64 | Update memories backend actions to support userId | ZTA-63         |
+| 3     | ZTA-65 | Backfill `userId` on existing memory records      | ZTA-63, ZTA-64 |
+| 4     | ZTA-66 | Update agent memory tools to search by userId     | ZTA-64         |
+| 5     | ZTA-67 | Wire userId into memory tools in agent loop       | ZTA-66         |
+| 6     | ZTA-68 | Fix system prompt memory tool description         | ZTA-67         |
 
 Note: ZTA-65 (backfill) and ZTA-66 (agent tools) can run in parallel.

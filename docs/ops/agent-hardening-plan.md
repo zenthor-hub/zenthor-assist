@@ -31,6 +31,7 @@ Fixes identified during code review of the core agent and WhatsApp Cloud runtime
 - **File:** `apps/agent/src/whatsapp-cloud/runtime.ts:124`
 - **Current behavior:** `setInterval(...)` return value is discarded. The interval can't be cleared on SIGINT/SIGTERM shutdown, meaning heartbeat mutations may fire after lease release.
 - **Fix:** Store the interval handle and clear it in the `release()` function:
+
   ```typescript
   const heartbeatInterval = setInterval(() => { ... }, heartbeatMs);
 
@@ -54,6 +55,7 @@ Fixes identified during code review of the core agent and WhatsApp Cloud runtime
 - **File:** `apps/backend/convex/delivery.ts:124-138`
 - **Current behavior:** `claimNextOutbound` queries all pending messages, picks the first, and patches it. No optimistic locking — if two workers run this concurrently, both can claim the same message.
 - **Fix:** Add an optimistic lock check before patching:
+
   ```typescript
   const next = pending.filter(...).sort(...)[0];
   if (!next) return null;
@@ -68,6 +70,7 @@ Fixes identified during code review of the core agent and WhatsApp Cloud runtime
     lockedUntil: Date.now() + args.lockMs,
   });
   ```
+
   Note: Convex mutations are serialized per-document, so the re-read + patch within the same mutation is safe. The race is between two separate mutation calls — the second one will see `status: "processing"` and return null.
 
 ---
@@ -144,6 +147,7 @@ Fixes identified during code review of the core agent and WhatsApp Cloud runtime
 - **File:** `apps/agent/src/whatsapp-cloud/runtime.ts:52-101`
 - **Current behavior:** `while (true)` loop with `sleep(1_000)` only when queue is empty, `sleep(2_000)` on any error.
 - **Fix:** Add per-send delay and exponential backoff on errors:
+
   ```typescript
   const MIN_SEND_INTERVAL_MS = 100; // ~10 msg/sec
   const MAX_BACKOFF_MS = 60_000;
@@ -170,6 +174,7 @@ Fixes identified during code review of the core agent and WhatsApp Cloud runtime
     }
   }
   ```
+
   Also apply the same pattern to `apps/agent/src/whatsapp/runtime.ts` if applicable.
 
 ---
@@ -228,6 +233,7 @@ Fixes identified during code review of the core agent and WhatsApp Cloud runtime
 
 - **File:** `apps/agent/src/agent/loop.ts:78-91`
 - **Fix:** Add an in-flight set:
+
   ```typescript
   const inFlight = new Set<string>();
 
@@ -254,6 +260,7 @@ Fixes identified during code review of the core agent and WhatsApp Cloud runtime
 
 - **File:** `apps/agent/src/agent/compact.ts:54, 169`
 - **Fix:** Replace `!` assertions with defensive checks:
+
   ```typescript
   // Line 54
   const msg = messages[i];
@@ -331,13 +338,13 @@ Fixes identified during code review of the core agent and WhatsApp Cloud runtime
 
 ## Execution Order
 
-| Phase | Fixes | Effort | Files touched |
-|-------|-------|--------|---------------|
-| 1 | #1a, #1b, #1c | Small | `loop.ts`, `whatsapp-cloud/runtime.ts`, `whatsapp/runtime.ts` |
-| 2 | #2, #3 | Small | `delivery.ts`, `whatsappCloud/webhook.ts` |
-| 3 | #4, #5 | Small | `whatsappCloud/webhook.ts`, `whatsapp-cloud/runtime.ts`, `whatsapp/runtime.ts` |
-| 4 | #6, #7 | Medium | `whatsapp-cloud/runtime.ts`, `whatsapp/runtime.ts`, `loop.ts` |
-| 5 | #8, #9, #10, #11, #12 | Medium | `whatsappCloud/mutations.ts`, `loop.ts`, `compact.ts`, `tool-approval.ts` |
-| 6 | #13, #14, #15, #16 | Small | `errors.ts`, `crons.ts`, `whatsappCloud/mutations.ts`, `schema.ts` |
+| Phase | Fixes                 | Effort | Files touched                                                                  |
+| ----- | --------------------- | ------ | ------------------------------------------------------------------------------ |
+| 1     | #1a, #1b, #1c         | Small  | `loop.ts`, `whatsapp-cloud/runtime.ts`, `whatsapp/runtime.ts`                  |
+| 2     | #2, #3                | Small  | `delivery.ts`, `whatsappCloud/webhook.ts`                                      |
+| 3     | #4, #5                | Small  | `whatsappCloud/webhook.ts`, `whatsapp-cloud/runtime.ts`, `whatsapp/runtime.ts` |
+| 4     | #6, #7                | Medium | `whatsapp-cloud/runtime.ts`, `whatsapp/runtime.ts`, `loop.ts`                  |
+| 5     | #8, #9, #10, #11, #12 | Medium | `whatsappCloud/mutations.ts`, `loop.ts`, `compact.ts`, `tool-approval.ts`      |
+| 6     | #13, #14, #15, #16    | Small  | `errors.ts`, `crons.ts`, `whatsappCloud/mutations.ts`, `schema.ts`             |
 
 Each phase is independently shippable. Phases 1-3 are the highest priority and can be done in a single session. Phases 4-5 require more testing. Phase 6 is optional cleanup.

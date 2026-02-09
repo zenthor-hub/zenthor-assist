@@ -1,10 +1,13 @@
 # WhatsApp Cloud Runtime: Change Summary and AI Test Playbook
 
 ## Purpose
+
 Provide an AI-agent-friendly summary of the recent `whatsapp-cloud` hardening updates and a deterministic validation flow.
 
 ## Scope
+
 This document focuses on:
+
 - `apps/agent/src/whatsapp-cloud/*`
 - Cross-cutting changes that directly affect `whatsapp-cloud` startup and behavior
 
@@ -13,28 +16,33 @@ This document focuses on:
 ## Change Summary
 
 ### 1) Outbound lock window increased
+
 - File: `apps/agent/src/whatsapp-cloud/runtime.ts`
 - Change: outbound claim lock increased from `30_000` to `120_000` (`OUTBOUND_LOCK_MS`).
 - Why: reduce duplicate sends caused by lock expiration during slow provider responses.
 
 ### 2) Infinite retry behavior removed in runtime
+
 - File: `apps/agent/src/whatsapp-cloud/runtime.ts`
 - Change: removed forced `retry: true` in `delivery.failOutbound`.
 - Effective behavior now: backend default retry policy applies (`attemptCount < 5`), then final `failed`.
 - Why: prevent unbounded retry loops.
 
 ### 3) Cloud account ID contract aligned with ingress
+
 - File: `apps/agent/src/whatsapp-cloud/runtime.ts`
 - Change: runtime now uses `accountId = "cloud-api"` (same as webhook ingestion path).
 - Additional behavior: logs warning if `WHATSAPP_CLOUD_ACCOUNT_ID` is set to a different value.
 - Why: avoid ingress/egress account partition mismatch.
 
 ### 4) Sender parsing hardened for non-JSON error responses
+
 - File: `apps/agent/src/whatsapp-cloud/sender.ts`
 - Change: switched from direct `response.json()` to safe `response.text()` + guarded JSON parse.
 - Why: avoid crashes on non-JSON provider responses.
 
 ### 5) Role-aware required env validation
+
 - File: `apps/agent/src/index.ts`
 - Related file: `packages/env/src/agent.ts`
 - Change:
@@ -47,6 +55,7 @@ This document focuses on:
 - Why: allow cloud egress worker to run without AI generation credentials.
 
 ### 6) Sentry tagging parity for cloud role
+
 - File: `apps/agent/src/observability/sentry.ts`
 - Change: explicit handling for role `whatsapp-cloud` in service/worker/channel tags.
 - Why: improve observability filtering and incident triage.
@@ -56,12 +65,14 @@ This document focuses on:
 ## Runtime Contract (Post-change)
 
 ### Startup
+
 - Command: `cd apps/agent && bun run start:whatsapp-cloud`
 - Expected startup characteristics:
   - lease acquisition attempts on `whatsappLeases` for account `cloud-api`
   - outbound loop starts after lease acquisition
 
 ### Outbound processing
+
 - Channel: `whatsapp`
 - Account: `cloud-api`
 - Lock duration: `120_000ms`
@@ -74,11 +85,13 @@ This document focuses on:
 ## Required Environment for Cloud Runtime
 
 ### Mandatory
+
 - `CONVEX_URL`
 - `WHATSAPP_CLOUD_ACCESS_TOKEN`
 - `WHATSAPP_CLOUD_PHONE_NUMBER_ID`
 
 ### Strongly recommended
+
 - `AGENT_SECRET` (required in production where backend enforces service key)
 - `WHATSAPP_CLOUD_APP_SECRET` (for webhook signature verification)
 - `WHATSAPP_CLOUD_VERIFY_TOKEN` (for webhook verification handshake)
@@ -91,12 +104,14 @@ This document focuses on:
 ## AI Execution Plan (Deterministic)
 
 ## Test 0: Preflight
+
 - Verify process starts without `AI_GATEWAY_API_KEY` when `AGENT_ROLE=whatsapp-cloud`.
 - Pass criteria:
   - runtime does not fail on missing AI key
   - runtime reaches lease acquisition/outbound loop logs
 
 ## Test 1: Lease/loop health
+
 - Start runtime and observe logs.
 - Pass criteria:
   - contains "Lease acquired for account 'cloud-api'"
@@ -104,6 +119,7 @@ This document focuses on:
   - no repeated lease heartbeat loss
 
 ## Test 2: Egress happy path (single send)
+
 - Prepare outbound message via Convex Function Runner:
   1. create/get allowed contact
   2. get/create conversation (`channel=whatsapp`, `accountId=cloud-api`)
@@ -115,12 +131,14 @@ This document focuses on:
   - runtime logs include send success/wamid
 
 ## Test 3: Bounded failure behavior
+
 - Enqueue outbound with invalid recipient or invalid token.
 - Pass criteria:
   - `attemptCount` increments
   - status eventually becomes `failed` (not infinite pending/processing loop)
 
 ## Test 4: Webhook verification (GET)
+
 - Route: `GET /whatsapp-cloud/webhook`
 - Query params:
   - `hub.mode=subscribe`
@@ -131,6 +149,7 @@ This document focuses on:
   - response body equals challenge
 
 ## Test 5: Inbound webhook (POST, signed)
+
 - Route: `POST /whatsapp-cloud/webhook`
 - Must include header `X-Hub-Signature-256`.
 - Payload must include `field: "messages"` and a `text` message.
@@ -140,6 +159,7 @@ This document focuses on:
   - enqueues agent job (`agentQueue.status=pending`)
 
 ## Test 6: End-to-end with core
+
 - Run `core` and `whatsapp-cloud` together.
 - Send real inbound WhatsApp text.
 - Pass criteria:
@@ -156,7 +176,9 @@ Use Convex dashboard Function Runner for the following service mutations.
 If backend enforces service key, include `"serviceKey": "<AGENT_SECRET>"`.
 
 ## Template: create contact
+
 Function: `contacts:create`
+
 ```json
 {
   "serviceKey": "<AGENT_SECRET>",
@@ -167,7 +189,9 @@ Function: `contacts:create`
 ```
 
 ## Template: get/create conversation
+
 Function: `conversations:getOrCreate`
+
 ```json
 {
   "serviceKey": "<AGENT_SECRET>",
@@ -178,7 +202,9 @@ Function: `conversations:getOrCreate`
 ```
 
 ## Template: add assistant message
+
 Function: `messages:addAssistantMessage`
+
 ```json
 {
   "serviceKey": "<AGENT_SECRET>",
@@ -189,7 +215,9 @@ Function: `messages:addAssistantMessage`
 ```
 
 ## Template: enqueue outbound
+
 Function: `delivery:enqueueOutbound`
+
 ```json
 {
   "serviceKey": "<AGENT_SECRET>",
@@ -210,11 +238,13 @@ Function: `delivery:enqueueOutbound`
 ## Expected Log Signals
 
 ### Healthy
+
 - `[whatsapp-cloud] Lease acquired for account 'cloud-api'...`
 - `[whatsapp-cloud] Starting outbound delivery loop...`
 - `[whatsapp-cloud] Sent message to ... (wamid: ...)`
 
 ### Actionable errors
+
 - `Missing required env var: WHATSAPP_CLOUD_ACCESS_TOKEN` or `...PHONE_NUMBER_ID`
 - `Send failed to ...`
 - `Lease heartbeat lost for account 'cloud-api'...`
@@ -222,6 +252,6 @@ Function: `delivery:enqueueOutbound`
 ---
 
 ## Known Limitation
+
 - Inbound account ID is currently hardcoded to `cloud-api` in backend webhook mutation path (`apps/backend/convex/whatsappCloud/mutations.ts`).  
   Runtime was intentionally aligned to that constant to keep ingress/egress consistent.
-

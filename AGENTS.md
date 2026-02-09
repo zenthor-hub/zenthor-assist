@@ -181,11 +181,11 @@ zenthor-assist/
 
 The agent uses dynamic multi-model routing (`model-router.ts`) to select the cheapest capable model per channel, with N-tier fallback cascade on errors (`model-fallback.ts`):
 
-| Tier     | Channel   | Default model                          | Env var            |
-| -------- | --------- | -------------------------------------- | ------------------ |
-| Lite     | WhatsApp  | `xai/grok-4.1-fast-reasoning`          | `AI_LITE_MODEL`    |
-| Standard | Web       | `anthropic/claude-sonnet-4-5-20250929` | `AI_MODEL`         |
-| Power    | (fallback)| `anthropic/claude-opus-4-6`            | `AI_FALLBACK_MODEL`|
+| Tier     | Channel    | Default model                          | Env var             |
+| -------- | ---------- | -------------------------------------- | ------------------- |
+| Lite     | WhatsApp   | `xai/grok-4.1-fast-reasoning`          | `AI_LITE_MODEL`     |
+| Standard | Web        | `anthropic/claude-sonnet-4-5-20250929` | `AI_MODEL`          |
+| Power    | (fallback) | `anthropic/claude-opus-4-6`            | `AI_FALLBACK_MODEL` |
 
 - Routing is heuristic (channel + toolCount) — no LLM classifier is needed.
 - Per-agent config (`agents.model` / `agents.fallbackModel`) overrides the router when set.

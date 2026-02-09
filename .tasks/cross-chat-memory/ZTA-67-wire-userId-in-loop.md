@@ -15,21 +15,28 @@ Pass `userId` from the conversation context into the memory tools in `loop.ts`, 
 ### File: `apps/agent/src/agent/loop.ts`
 
 #### Resolve userId from context
+
 After getting `context` (line ~138), resolve the owner userId:
+
 ```ts
 const ownerUserId = context.user?._id ?? undefined;
 ```
 
 Note: For WhatsApp (contact-based) conversations, we need the contact's linked `userId`. The `getConversationContext` query already resolves `ownerUserId` internally for skills, but doesn't expose it directly. Two options:
+
 1. **Option A (preferred):** Expose `ownerUserId` in the `getConversationContext` return value
 2. **Option B:** Resolve it in loop.ts: `context.conversation.userId ?? context.contact?.userId` — but `contact` doesn't currently expose `userId` in the return type
 
 #### Update memory tool binding (line ~232)
+
 Change from:
+
 ```ts
 const scopedMemory = createMemoryTools(job.conversationId);
 ```
+
 To:
+
 ```ts
 const scopedMemory = createMemoryTools({
   conversationId: job.conversationId,
@@ -38,11 +45,15 @@ const scopedMemory = createMemoryTools({
 ```
 
 #### Update comment (line ~231)
+
 Change from:
+
 ```
 // Bind memory tools to this conversation to prevent cross-conversation data leaks
 ```
+
 To:
+
 ```
 // Bind memory tools to this user for cross-chat recall (scoped by userId for isolation)
 ```
@@ -54,6 +65,7 @@ In `getConversationContext`, add `ownerUserId` to the return object — it's alr
 ## Current Code (for reference)
 
 ### `loop.ts` — context fetch and memory binding (lines 138-237)
+
 ```ts
 const context = await client.query(api.agent.getConversationContext, {
   serviceKey,
@@ -72,6 +84,7 @@ if (pluginTools.tools.memory_store) {
 ```
 
 ### `agent.ts` — getConversationContext (lines 363-404)
+
 ```ts
 const user = conversation.userId ? await ctx.db.get(conversation.userId) : null;
 const contact = conversation.contactId ? await ctx.db.get(conversation.contactId) : null;

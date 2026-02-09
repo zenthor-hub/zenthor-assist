@@ -15,22 +15,26 @@ Update the Convex memory actions (`store`, `search`, `insertMemory`) and add a `
 **File:** `apps/backend/convex/memories.ts`
 
 ### `insertMemory` mutation
+
 - Add `userId: v.optional(v.id("users"))` to args
 - Persist `userId` into the inserted doc
 
 ### `store` action
+
 - Add `userId: v.optional(v.id("users"))` to args
 - Pass `userId` through to `insertMemory`
 
 ### `search` action
+
 - Add `userId: v.optional(v.id("users"))` to args
 - When `userId` is provided (and `conversationId` is not), filter vector search by `userId`:
   ```ts
-  filter: (q) => q.eq("userId", args.userId)
+  filter: (q) => q.eq("userId", args.userId);
   ```
 - When both are provided, prefer `userId` (cross-chat is the default, conversation-scoped is opt-in)
 
 ### New: `listByUser` service query
+
 - Args: `userId: v.id("users")`
 - Query memories using `by_userId` index
 - Return same shape as `listByConversation`
@@ -38,6 +42,7 @@ Update the Convex memory actions (`store`, `search`, `insertMemory`) and add a `
 ## Current Code (for reference)
 
 ### `insertMemory` (lines 28-45)
+
 ```ts
 export const insertMemory = internalMutation({
   args: {
@@ -60,6 +65,7 @@ export const insertMemory = internalMutation({
 ```
 
 ### `store` action (lines 56-71)
+
 ```ts
 export const store = action({
   args: {
@@ -80,6 +86,7 @@ export const store = action({
 ```
 
 ### `search` action (lines 73-102)
+
 ```ts
 export const search = action({
   args: {
@@ -87,7 +94,10 @@ export const search = action({
     limit: v.optional(v.number()),
     conversationId: v.optional(v.id("conversations")),
   },
-  handler: async (ctx, args): Promise<Array<{ id: string; content: string; source: string; score: number }>> => {
+  handler: async (
+    ctx,
+    args,
+  ): Promise<Array<{ id: string; content: string; source: string; score: number }>> => {
     const results = await ctx.vectorSearch("memories", "by_embedding", {
       vector: args.embedding,
       limit: args.limit ?? 5,

@@ -31,6 +31,7 @@ Add user ownership to the `memories` table so memories can be queried per-user a
 ## Current Code (for reference)
 
 ### `schema.ts` — memories table (lines 188-200)
+
 ```ts
 memories: defineTable({
   conversationId: v.optional(v.id("conversations")),
@@ -48,6 +49,7 @@ memories: defineTable({
 ```
 
 ### `memories.ts` — memoryDoc validator (lines 7-15)
+
 ```ts
 const memoryDoc = v.object({
   _id: v.id("memories"),

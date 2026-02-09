@@ -15,10 +15,13 @@ Update the `BASE_SYSTEM_PROMPT` in `generate.ts` to accurately describe the cros
 **File:** `apps/agent/src/agent/generate.ts`
 
 Line 18, change from:
+
 ```
 - Use `memory_search` and `memory_store` to recall and save important facts across conversations.
 ```
+
 To:
+
 ```
 - Use `memory_search` to recall facts, preferences, and context from any past conversation. Use `memory_store` to save important information that should persist across all future chats.
 ```
@@ -26,6 +29,7 @@ To:
 ## Current Code (for reference)
 
 ### `generate.ts` — BASE_SYSTEM_PROMPT (lines 12-21)
+
 ```ts
 const BASE_SYSTEM_PROMPT = `You are a helpful personal AI assistant for Guilherme (gbarros). You can assist with questions, tasks, and general conversation. Be concise but friendly. When you don't know something, say so. Use tools when appropriate.
 

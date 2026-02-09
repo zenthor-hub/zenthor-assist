@@ -15,33 +15,41 @@ Update the agent-side memory tools to use `userId` for search (cross-chat recall
 **File:** `apps/agent/src/agent/tools/memory.ts`
 
 ### `createMemoryTools` signature
+
 Change from:
+
 ```ts
-export function createMemoryTools(conversationId: Id<"conversations">)
+export function createMemoryTools(conversationId: Id<"conversations">);
 ```
+
 To:
+
 ```ts
 export function createMemoryTools(opts: {
   conversationId: Id<"conversations">;
   userId?: Id<"users">;
-})
+});
 ```
 
 ### `memory_search` tool
+
 - When `userId` is provided: search by `userId` (cross-chat — user's full memory)
 - When `userId` is not provided: fall back to `conversationId` (existing behavior)
 - Update description to: "Search your long-term memory for relevant information from any past conversation"
 
 ### `memory_store` tool
+
 - Always pass both `conversationId` (origin tracking) and `userId` (ownership) to the backend
 - Update description to: "Store an important fact or preference in long-term memory — accessible in all future conversations"
 
 ### Static tool instances
+
 - Update descriptions on the static `memorySearch` and `memoryStore` exports to match
 
 ## Current Code (for reference)
 
 ### `createMemoryTools` (lines 28-63)
+
 ```ts
 export function createMemoryTools(conversationId: Id<"conversations">) {
   const search = tool({

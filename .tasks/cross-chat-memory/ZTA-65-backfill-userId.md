@@ -20,22 +20,25 @@ export const backfillUserId = internalAction({
     // 1. Query all memories where userId is undefined
     // 2. For each, resolve conversationId -> conversation.userId
     // 3. Batch-patch the userId field
-  }
-})
+  },
+});
 ```
 
 ### Resolution logic
+
 - If memory has `conversationId`: look up conversation -> use `conversation.userId` or fallback to `contact.userId` via the contact record
 - If memory has no `conversationId`: leave `userId` as `undefined`
 
 ## Context: How userId is resolved elsewhere
 
 In `apps/backend/convex/agent.ts` (line 369), the pattern is:
+
 ```ts
 const ownerUserId = conversation.userId ?? contact?.userId;
 ```
 
 The backfill should follow the same resolution:
+
 1. Get the conversation from `conversationId`
 2. If `conversation.userId` exists, use it
 3. If not, check `conversation.contactId` -> look up contact -> use `contact.userId`
