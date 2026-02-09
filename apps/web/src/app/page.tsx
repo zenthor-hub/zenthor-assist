@@ -2,11 +2,12 @@
 
 import { SignedIn, SignedOut } from "@clerk/nextjs";
 import { ArrowRight, House, MessageSquare, Sparkles, Zap } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 
 import { ModeToggle } from "@/components/mode-toggle";
 import { Button } from "@/components/ui/button";
-import { ZenthorHeroMark, ZenthorMark } from "@/components/zenthor-logo";
+import { ZenthorHeroMark } from "@/components/zenthor-logo";
 
 export default function Home() {
   return (
@@ -38,9 +39,23 @@ export default function Home() {
         className="animate-fade-up relative z-10 flex items-center justify-between px-6 py-5 md:px-10"
         data-testid="landing-nav"
       >
-        <div className="flex items-center gap-2.5">
-          <ZenthorMark className="text-primary size-7" />
-          <span className="text-foreground text-[15px] font-semibold tracking-tight">zenthor</span>
+        <div>
+          <Image
+            src="/zenthor-logo-text.svg"
+            alt="Zenthor"
+            width={150}
+            height={34}
+            priority
+            className="dark:hidden"
+          />
+          <Image
+            src="/zenthor-logo-text-dark.svg"
+            alt="Zenthor"
+            width={150}
+            height={34}
+            priority
+            className="hidden dark:block"
+          />
         </div>
         <ModeToggle />
       </nav>
@@ -50,7 +65,7 @@ export default function Home() {
         <div className="flex w-full max-w-3xl flex-col items-center">
           {/* Large geometric mark */}
           <div className="animate-fade-up mb-10" style={{ animationDelay: "0.15s" }}>
-            <ZenthorHeroMark className="text-primary size-24 md:size-32" aria-hidden="true" />
+            <ZenthorHeroMark size={128} />
           </div>
 
           {/* Headline */}
