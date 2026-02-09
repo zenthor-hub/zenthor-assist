@@ -177,6 +177,21 @@ zenthor-assist/
 - Tools are resolved through plugin activation/policy + built-ins, then wrapped with approval flow for risky tool usage.
 - Built-in tool registration starts in `apps/agent/src/agent/tools/index.ts`; provider-specific web search tooling is injected via `tools/web-search.ts`.
 
+#### Model Routing
+
+The agent uses dynamic multi-model routing (`model-router.ts`) to select the cheapest capable model per channel, with N-tier fallback cascade on errors (`model-fallback.ts`):
+
+| Tier     | Channel   | Default model                          | Env var            |
+| -------- | --------- | -------------------------------------- | ------------------ |
+| Lite     | WhatsApp  | `xai/grok-4.1-fast-reasoning`          | `AI_LITE_MODEL`    |
+| Standard | Web       | `anthropic/claude-sonnet-4-5-20250929` | `AI_MODEL`         |
+| Power    | (fallback)| `anthropic/claude-opus-4-6`            | `AI_FALLBACK_MODEL`|
+
+- Routing is heuristic (channel + toolCount) — no LLM classifier is needed.
+- Per-agent config (`agents.model` / `agents.fallbackModel`) overrides the router when set.
+- `resolveModels()` in `generate.ts` checks: agent config > explicit override > router.
+- If the primary model fails after retries, the fallback cascade tries each fallback in order (Lite -> Standard -> Power for WhatsApp, Standard -> Power for Web).
+
 ## Chat UI (AI Elements)
 
 The web chat interface (`apps/web/src/components/chat/`) uses **AI Elements**, a shadcn/ui-based library installed as source files under `apps/web/src/components/ai-elements/`. These are owned source files (not in node_modules) and can be modified.
@@ -245,8 +260,9 @@ Required:
 
 Key optional:
 
-- `AI_MODEL` (default `anthropic/claude-sonnet-4-20250514`)
-- `AI_FALLBACK_MODEL`
+- `AI_LITE_MODEL` (default `xai/grok-4.1-fast-reasoning`, used for WhatsApp/lite tier)
+- `AI_MODEL` (default `anthropic/claude-sonnet-4-5-20250929`, used for Web/standard tier)
+- `AI_FALLBACK_MODEL` (power tier fallback, used when primary model errors)
 - `AI_CONTEXT_WINDOW`
 - `AI_EMBEDDING_MODEL` (default `openai/text-embedding-3-small`)
 - `AGENT_SECRET`

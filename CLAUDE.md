@@ -77,6 +77,13 @@ cd apps/agent && bun run dev:core
   - resolves plugin/builtin tools and policies,
   - handles approval-wrapped tools,
   - streams web responses and queues WhatsApp outbound messages.
+- **Model routing** (`model-router.ts`): selects model tier by channel — Lite (`AI_LITE_MODEL`) for WhatsApp, Standard (`AI_MODEL`) for Web, Power (`AI_FALLBACK_MODEL`) as fallback cascade. See `AGENTS.md` "Model Routing" for full details.
+
+### Railway deployment notes
+
+- Agent services are deployed on Railway, triggered by GitHub pushes.
+- **Env var changes require a redeploy.** Updating a Railway env var (via dashboard or MCP) saves the value but the running container keeps old values in memory until restarted. Always push a commit or manually redeploy after env-only changes.
+- When using Railway MCP to set env vars, use `skipDeploys=true` — the next `git push` handles redeployment.
 
 ## Environment Variables
 
@@ -101,7 +108,7 @@ Required:
 
 Common optional:
 
-- `AI_MODEL`, `AI_FALLBACK_MODEL`, `AI_CONTEXT_WINDOW`, `AI_EMBEDDING_MODEL`
+- `AI_LITE_MODEL`, `AI_MODEL`, `AI_FALLBACK_MODEL`, `AI_CONTEXT_WINDOW`, `AI_EMBEDDING_MODEL`
 - `AGENT_ROLE`, `ENABLE_WHATSAPP`, `WORKER_ID`
 - `AGENT_JOB_LOCK_MS`, `AGENT_JOB_HEARTBEAT_MS`
 - `WHATSAPP_ACCOUNT_ID`, `WHATSAPP_PHONE`, `WHATSAPP_LEASE_TTL_MS`, `WHATSAPP_AUTH_MODE`, `WHATSAPP_HEARTBEAT_MS`
