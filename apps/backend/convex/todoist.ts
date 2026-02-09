@@ -1,28 +1,12 @@
 import { ConvexError, v } from "convex/values";
 
-import type { Id } from "./_generated/dataModel";
-import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
-import { authMutation, authQuery, serviceMutation, serviceQuery } from "./auth";
+import { authMutation, authQuery } from "./auth";
 
 const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
 const DEFAULT_TODOIST_API_BASE_URL = "https://api.todoist.com/api/v1";
 const DEFAULT_TODOIST_OAUTH_AUTHORIZE_URL = "https://todoist.com/oauth/authorize";
 const DEFAULT_TODOIST_OAUTH_TOKEN_URL = "https://todoist.com/oauth/access_token";
-
-const todoistTaskSummaryValidator = v.object({
-  id: v.string(),
-  content: v.string(),
-  description: v.optional(v.string()),
-  url: v.optional(v.string()),
-  priority: v.optional(v.number()),
-  projectId: v.optional(v.string()),
-  sectionId: v.optional(v.string()),
-  labels: v.optional(v.array(v.string())),
-  dueDate: v.optional(v.string()),
-  dueDateTime: v.optional(v.string()),
-  dueString: v.optional(v.string()),
-});
 
 const todoistConnectionStatusValidator = v.object({
   connected: v.boolean(),
@@ -31,22 +15,6 @@ const todoistConnectionStatusValidator = v.object({
   scope: v.optional(v.string()),
   updatedAt: v.optional(v.number()),
 });
-
-interface TodoistTask {
-  id: string;
-  content: string;
-  description?: string;
-  url?: string;
-  priority?: number;
-  project_id?: string;
-  section_id?: string;
-  labels?: string[];
-  due?: {
-    date?: string;
-    datetime?: string;
-    string?: string;
-  };
-}
 
 interface TodoistTokenResponse {
   access_token?: string;
@@ -59,8 +27,6 @@ interface TodoistUserResponse {
   full_name?: string;
   name?: string;
 }
-
-type DbCtx = Pick<QueryCtx | MutationCtx, "db">;
 
 function getTodoistApiBaseUrl(): string {
   return process.env.TODOIST_API_BASE_URL ?? DEFAULT_TODOIST_API_BASE_URL;
@@ -97,22 +63,6 @@ function getOAuthConfig(): {
 function parseErrorBody(body: string): string {
   if (!body) return "No response body";
   return body.length > 300 ? `${body.slice(0, 300)}...` : body;
-}
-
-function mapTodoistTask(task: TodoistTask) {
-  return {
-    id: task.id,
-    content: task.content,
-    description: task.description,
-    url: task.url,
-    priority: task.priority,
-    projectId: task.project_id,
-    sectionId: task.section_id,
-    labels: task.labels,
-    dueDate: task.due?.date,
-    dueDateTime: task.due?.datetime,
-    dueString: task.due?.string,
-  };
 }
 
 async function requestTodoist<T>(
@@ -175,19 +125,6 @@ async function exchangeOAuthCode(code: string): Promise<TodoistTokenResponse> {
   }
 
   return (await response.json()) as TodoistTokenResponse;
-}
-
-async function getConversationOwnerUserId(
-  ctx: DbCtx,
-  conversationId: Id<"conversations">,
-): Promise<Id<"users"> | null> {
-  const conversation = await ctx.db.get(conversationId);
-  if (!conversation) return null;
-  if (conversation.userId) return conversation.userId;
-  if (!conversation.contactId) return null;
-
-  const contact = await ctx.db.get(conversation.contactId);
-  return contact?.userId ?? null;
 }
 
 export const getConnectionStatus = authQuery({
@@ -351,152 +288,6 @@ export const disconnect = authMutation({
 
     await ctx.db.delete(connection._id);
     return true;
-  },
-});
-
-export const createTaskForConversation = serviceMutation({
-  args: {
-    conversationId: v.id("conversations"),
-    content: v.string(),
-    description: v.optional(v.string()),
-    projectId: v.optional(v.string()),
-    sectionId: v.optional(v.string()),
-    labels: v.optional(v.array(v.string())),
-    priority: v.optional(v.number()),
-    dueString: v.optional(v.string()),
-    dueDateTime: v.optional(v.string()),
-  },
-  returns: v.union(todoistTaskSummaryValidator, v.null()),
-  handler: async (ctx, args) => {
-    const ownerUserId = await getConversationOwnerUserId(ctx, args.conversationId);
-    if (!ownerUserId) return null;
-
-    const connection = await ctx.db
-      .query("todoistConnections")
-      .withIndex("by_userId", (q) => q.eq("userId", ownerUserId))
-      .first();
-    if (!connection) return null;
-
-    const payload: Record<string, unknown> = {
-      content: args.content,
-      ...(args.description ? { description: args.description } : {}),
-      ...(args.projectId ? { project_id: args.projectId } : {}),
-      ...(args.sectionId ? { section_id: args.sectionId } : {}),
-      ...(args.labels ? { labels: args.labels } : {}),
-      ...(args.priority ? { priority: args.priority } : {}),
-      ...(args.dueString ? { due_string: args.dueString, due_lang: "en" } : {}),
-      ...(args.dueDateTime ? { due_datetime: args.dueDateTime } : {}),
-    };
-
-    const task = await requestTodoist<TodoistTask>(connection.accessToken, "/tasks", {
-      method: "POST",
-      headers: {
-        "X-Request-Id": crypto.randomUUID(),
-      },
-      body: JSON.stringify(payload),
-    });
-
-    return mapTodoistTask(task);
-  },
-});
-
-export const listTasksForConversation = serviceQuery({
-  args: {
-    conversationId: v.id("conversations"),
-    filter: v.optional(v.string()),
-    limit: v.optional(v.number()),
-  },
-  returns: v.union(v.array(todoistTaskSummaryValidator), v.null()),
-  handler: async (ctx, args) => {
-    const ownerUserId = await getConversationOwnerUserId(ctx, args.conversationId);
-    if (!ownerUserId) return null;
-
-    const connection = await ctx.db
-      .query("todoistConnections")
-      .withIndex("by_userId", (q) => q.eq("userId", ownerUserId))
-      .first();
-    if (!connection) return null;
-
-    const query = new URLSearchParams();
-    if (args.filter) query.set("filter", args.filter);
-
-    const path = query.toString() ? `/tasks?${query.toString()}` : "/tasks";
-    const tasks = await requestTodoist<TodoistTask[]>(connection.accessToken, path, {
-      method: "GET",
-    });
-
-    const limit = args.limit && args.limit > 0 ? args.limit : 20;
-    return tasks.slice(0, limit).map(mapTodoistTask);
-  },
-});
-
-export const completeTaskForConversation = serviceMutation({
-  args: {
-    conversationId: v.id("conversations"),
-    taskId: v.string(),
-  },
-  returns: v.boolean(),
-  handler: async (ctx, args) => {
-    const ownerUserId = await getConversationOwnerUserId(ctx, args.conversationId);
-    if (!ownerUserId) return false;
-
-    const connection = await ctx.db
-      .query("todoistConnections")
-      .withIndex("by_userId", (q) => q.eq("userId", ownerUserId))
-      .first();
-    if (!connection) return false;
-
-    await requestTodoist<null>(connection.accessToken, `/tasks/${args.taskId}/close`, {
-      method: "POST",
-      headers: {
-        "X-Request-Id": crypto.randomUUID(),
-      },
-    });
-
-    return true;
-  },
-});
-
-export const rescheduleTaskForConversation = serviceMutation({
-  args: {
-    conversationId: v.id("conversations"),
-    taskId: v.string(),
-    dueString: v.optional(v.string()),
-    dueDateTime: v.optional(v.string()),
-  },
-  returns: v.union(todoistTaskSummaryValidator, v.null()),
-  handler: async (ctx, args) => {
-    if (!args.dueString && !args.dueDateTime) {
-      throw new ConvexError("Either dueString or dueDateTime is required.");
-    }
-
-    const ownerUserId = await getConversationOwnerUserId(ctx, args.conversationId);
-    if (!ownerUserId) return null;
-
-    const connection = await ctx.db
-      .query("todoistConnections")
-      .withIndex("by_userId", (q) => q.eq("userId", ownerUserId))
-      .first();
-    if (!connection) return null;
-
-    const payload: Record<string, unknown> = {
-      ...(args.dueString ? { due_string: args.dueString, due_lang: "en" } : {}),
-      ...(args.dueDateTime ? { due_datetime: args.dueDateTime } : {}),
-    };
-
-    const task = await requestTodoist<TodoistTask>(
-      connection.accessToken,
-      `/tasks/${args.taskId}`,
-      {
-        method: "POST",
-        headers: {
-          "X-Request-Id": crypto.randomUUID(),
-        },
-        body: JSON.stringify(payload),
-      },
-    );
-
-    return mapTodoistTask(task);
   },
 });
 
