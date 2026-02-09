@@ -94,18 +94,11 @@ export function TodoistIntegrationSection() {
   const isConnected = Boolean(status?.connected);
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h3 className="text-sm font-medium">Todoist Integration</h3>
-        <p className="text-muted-foreground text-sm">
-          Connect Todoist so the assistant can capture, plan, and complete tasks.
-        </p>
-      </div>
-
+    <div>
       <div className="border-border flex items-center justify-between rounded-lg border p-3">
         <div className="flex items-center gap-3">
-          <div className="bg-muted flex size-10 items-center justify-center rounded-full">
-            <CheckCircle2 className="size-5 text-red-500" />
+          <div className="bg-muted flex size-8 items-center justify-center rounded-full">
+            <CheckCircle2 className="size-4 text-red-500" />
           </div>
           <div>
             <div className="flex items-center gap-2">
