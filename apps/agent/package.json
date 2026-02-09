@@ -29,6 +29,7 @@
     "@ai-sdk/gateway": "^3.0.29",
     "@ai-sdk/google": "^3.0.22",
     "@ai-sdk/openai": "^3.0.26",
+    "@ai-sdk/xai": "^3.0.48",
     "@axiomhq/pino": "^1.4.0",
     "@sentry/bun": "^10.38.0",
     "@zenthor-assist/backend": "workspace:*",

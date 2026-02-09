@@ -1,13 +1,12 @@
 import { anthropic } from "@ai-sdk/anthropic";
 import { google } from "@ai-sdk/google";
 import { openai } from "@ai-sdk/openai";
+import { xai } from "@ai-sdk/xai";
 
 /**
  * Returns the provider-native web search tool for the given model.
  * Each provider handles search server-side so the model gets results
  * and synthesizes them in a single round-trip.
- *
- * Note: xAI/Grok web search is not supported through the AI Gateway.
  */
 export function getWebSearchTool(model: string): Record<string, unknown> {
   const provider = model.split("/")[0];
@@ -19,6 +18,8 @@ export function getWebSearchTool(model: string): Record<string, unknown> {
       return { google_search: google.tools.googleSearch({}) };
     case "openai":
       return { web_search: openai.tools.webSearch() };
+    case "xai":
+      return { web_search: xai.tools.webSearch() };
     default:
       return {};
   }

@@ -5,12 +5,16 @@ import { useMutation, useQuery } from "convex/react";
 import {
   Archive,
   ArrowLeft,
+  ArrowRight,
+  Blocks,
   House,
   LayoutGrid,
   MessageCircle,
   MessageSquare,
   Settings,
   Sparkles,
+  SlidersHorizontal,
+  UserCircle,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -36,10 +40,12 @@ import {
 import { NavUser } from "./nav-user";
 import { ThemeSwitcher } from "./theme-switcher";
 
-type SidebarMode = "nav" | "chats";
+type SidebarMode = "nav" | "chats" | "settings";
 
 function getSidebarModeFromPath(pathname: string): SidebarMode {
-  return pathname.startsWith("/chat") ? "chats" : "nav";
+  if (pathname.startsWith("/chat")) return "chats";
+  if (pathname.startsWith("/settings")) return "settings";
+  return "nav";
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -52,6 +58,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     transitionDir.current = "forward";
     setMode("chats");
     router.push("/chat/overview");
+  }
+
+  function goToSettings() {
+    transitionDir.current = "forward";
+    setMode("settings");
+    router.push("/settings/general");
   }
 
   function goToNav() {
@@ -137,7 +149,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   onClick={goToChats}
                 >
                   <MessageSquare className="size-4" />
-                  <span>Chats</span>
+                  <span className="flex-1">Chats</span>
+                  <ArrowRight className="text-muted-foreground size-3.5" />
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
@@ -149,16 +162,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === "/settings"} tooltip="Settings">
-                  <Link href={"/settings" as "/"}>
-                    <Settings className="size-4" />
-                    <span>Settings</span>
-                  </Link>
+                <SidebarMenuButton
+                  isActive={pathname.startsWith("/settings")}
+                  tooltip="Settings"
+                  onClick={goToSettings}
+                >
+                  <Settings className="size-4" />
+                  <span className="flex-1">Settings</span>
+                  <ArrowRight className="text-muted-foreground size-3.5" />
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroup>
-        ) : (
+        ) : mode === "chats" ? (
           <SidebarGroup key="chats" className="animate-slide-in-right">
             <SidebarMenu>
               <SidebarMenuItem>
@@ -230,6 +246,62 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     No conversations yet
                   </div>
                 )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ) : (
+          <SidebarGroup key="settings" className="animate-slide-in-right">
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <button
+                  type="button"
+                  onClick={goToNav}
+                  className="hover:bg-sidebar-accent text-sidebar-foreground flex w-full items-center rounded-md px-2 py-1.5 text-sm transition-colors"
+                >
+                  <ArrowLeft className="size-4 shrink-0" />
+                  <span className="flex-1 text-center font-medium">Settings</span>
+                  <span className="size-4 shrink-0" />
+                </button>
+              </SidebarMenuItem>
+            </SidebarMenu>
+            <SidebarGroupContent className="mt-2">
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === "/settings/general"}
+                    tooltip="General"
+                  >
+                    <Link href={"/settings/general" as "/"}>
+                      <SlidersHorizontal className="size-4" />
+                      <span>General</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === "/settings/profile"}
+                    tooltip="Profile"
+                  >
+                    <Link href={"/settings/profile" as "/"}>
+                      <UserCircle className="size-4" />
+                      <span>Profile</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === "/settings/integrations"}
+                    tooltip="Integrations"
+                  >
+                    <Link href={"/settings/integrations" as "/"}>
+                      <Blocks className="size-4" />
+                      <span>Integrations</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
