@@ -19,8 +19,10 @@ function ThemedClerkProvider({ children }: { children: React.ReactNode }) {
   return (
     <ClerkProvider
       signInUrl="/sign-in"
-      afterSignInUrl="/home"
-      afterSignUpUrl="/home"
+      signInForceRedirectUrl="/home"
+      signInFallbackRedirectUrl="/home"
+      signUpForceRedirectUrl="/chat"
+      signUpFallbackRedirectUrl="/chat"
       appearance={{
         baseTheme: resolvedTheme === "dark" ? dark : undefined,
         variables: {
