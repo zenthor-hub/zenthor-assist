@@ -108,6 +108,7 @@ export const requestVerification = authMutation({
     // Enqueue outbound delivery
     await ctx.db.insert("outboundMessages", {
       channel: "whatsapp",
+      accountId: "cloud-api",
       conversationId: conversation._id,
       messageId,
       to: args.phone,
