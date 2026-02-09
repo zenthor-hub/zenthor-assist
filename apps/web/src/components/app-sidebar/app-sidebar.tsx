@@ -89,7 +89,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenuButton size="lg" asChild tooltip="Zenthor Assist">
               <Link href={"/chat" as "/"}>
                 <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center">
-                  <ZenthorMark className="size-4" />
+                  <ZenthorMark size={16} />
                 </div>
                 <div className="grid flex-1 text-left text-base leading-tight">
                   <span className="truncate font-semibold">Zenthor</span>

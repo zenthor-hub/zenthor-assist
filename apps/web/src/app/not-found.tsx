@@ -32,7 +32,7 @@ export default function NotFound() {
 
       <nav className="animate-fade-up relative z-10 flex items-center justify-between px-6 py-5 md:px-10">
         <div className="flex items-center gap-2.5">
-          <ZenthorMark className="text-primary size-7" />
+          <ZenthorMark size={28} />
           <span className="text-foreground font-sans text-[15px] font-semibold tracking-tight">
             zenthor
           </span>
@@ -42,7 +42,7 @@ export default function NotFound() {
       <main className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-16 text-center md:px-10">
         <div className="flex w-full max-w-2xl flex-col items-center">
           <div className="animate-fade-up mb-8" style={{ animationDelay: "0.1s" }}>
-            <ZenthorHeroMark className="text-primary size-20 md:size-28" aria-hidden="true" />
+            <ZenthorHeroMark size={112} />
           </div>
 
           <p
