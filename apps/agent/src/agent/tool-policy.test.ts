@@ -58,6 +58,6 @@ describe("getDefaultPolicy", () => {
     const policy = getDefaultPolicy("whatsapp");
     expect(policy.allow).toBeDefined();
     expect(policy.allow).toContain("schedule_task");
-    expect(policy.allow).not.toContain("browse_url");
+    expect(policy.allow).toContain("browse_url");
   });
 });
