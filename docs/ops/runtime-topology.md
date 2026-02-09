@@ -53,6 +53,13 @@ Do not proceed if any are true:
 2. Lease heartbeat frequently drops under normal network conditions.
 3. `AGENT_ROLE=all` is being used as the production shape.
 
+## Railway Deployment
+
+- Agent services (`agent-core`, `agent-whatsapp-cloud`) are deployed on Railway.
+- Deployments are triggered automatically by GitHub pushes — do not deploy directly via Railway MCP unless explicitly asked.
+- **Env var changes on Railway require a redeploy to take effect.** Railway stores the new value immediately, but the running container keeps the old values in memory until it restarts. If you update an env var without a code push, the service must be manually redeployed from the Railway dashboard or via a commit push to pick up the change.
+- When using Railway MCP to set env vars, always use `skipDeploys=true` (deployments are GitHub-linked). The next `git push` will trigger a redeploy that picks up the new vars.
+
 ## Notes for AI Agents and Contributors
 
 - Default recommendation is always split runtime (`core` + `whatsapp`), same repo.
