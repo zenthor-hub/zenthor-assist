@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Blocks,
+  CheckSquare,
   House,
   LayoutGrid,
   MessageCircle,
@@ -139,6 +140,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   <Link href={"/home" as "/"}>
                     <House className="size-4" />
                     <span>Home</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={pathname === "/tasks"} tooltip="Tasks">
+                  <Link href={"/tasks" as "/"}>
+                    <CheckSquare className="size-4" />
+                    <span>Tasks</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
