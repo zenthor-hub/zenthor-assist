@@ -29,6 +29,7 @@ import {
 } from "@/components/ai-elements/tool";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { friendlyModelName } from "@/lib/model-names";
 import { logWebClientEvent } from "@/lib/observability/client";
 import { cn } from "@/lib/utils";
 
@@ -140,8 +141,14 @@ function ApprovalCard({
 }
 
 export function ChatArea({ conversationId }: ChatAreaProps) {
-  const { messages, isProcessing, hasStreamingMessage, pendingApprovals, sendMessage } =
-    useConvexMessages(conversationId);
+  const {
+    messages,
+    isProcessing,
+    hasStreamingMessage,
+    pendingApprovals,
+    preferences,
+    sendMessage,
+  } = useConvexMessages(conversationId);
 
   const handleSend = useCallback(
     async (message: { text: string }) => {
@@ -213,6 +220,11 @@ export function ChatArea({ conversationId }: ChatAreaProps) {
                         </>
                       )}
                     </MessageContent>
+                    {preferences?.showModelInfo && msg.modelUsed && msg.role === "assistant" && (
+                      <span className="text-muted-foreground mt-1 block text-[10px]">
+                        {friendlyModelName(msg.modelUsed)}
+                      </span>
+                    )}
                   </Message>
                 </div>
               );

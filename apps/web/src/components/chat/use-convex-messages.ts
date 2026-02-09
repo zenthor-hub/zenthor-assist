@@ -18,6 +18,7 @@ interface ChatMessage {
   content: string;
   _creationTime: number;
   toolCalls?: { name: string; input: unknown; output?: unknown }[];
+  modelUsed?: string;
   streaming?: boolean;
   position: MessagePosition;
 }
@@ -36,6 +37,7 @@ function computePositions(
     content: string;
     _creationTime: number;
     toolCalls?: { name: string; input: unknown; output?: unknown }[];
+    modelUsed?: string;
     streaming?: boolean;
   }[],
 ): ChatMessage[] {
@@ -80,6 +82,7 @@ export function useConvexMessages(conversationId: Id<"conversations">) {
   });
   const isProcessing = useQuery(api.agent.isProcessing, { conversationId });
   const rawApprovals = useQuery(api.toolApprovals.getPendingByConversation, { conversationId });
+  const rawPreferences = useQuery(api.userPreferences.get);
   const sendMutation = useMutation(api.messages.send);
 
   const messages = useMemo(() => {
@@ -91,10 +94,22 @@ export function useConvexMessages(conversationId: Id<"conversations">) {
         content: string;
         _creationTime: number;
         toolCalls?: { name: string; input: unknown; output?: unknown }[];
+        modelUsed?: string;
         streaming?: boolean;
       }[],
     );
   }, [rawMessages]);
+
+  const preferences = useMemo(
+    () =>
+      rawPreferences
+        ? {
+            showModelInfo: rawPreferences.showModelInfo ?? false,
+            showToolDetails: rawPreferences.showToolDetails ?? false,
+          }
+        : null,
+    [rawPreferences],
+  );
 
   const hasStreamingMessage = useMemo(
     () => rawMessages?.some((msg) => msg.streaming) ?? false,
@@ -146,6 +161,7 @@ export function useConvexMessages(conversationId: Id<"conversations">) {
     isProcessing: isProcessing ?? false,
     hasStreamingMessage,
     pendingApprovals,
+    preferences,
     sendMessage,
   };
 }

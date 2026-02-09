@@ -1,16 +1,18 @@
 "use client";
 
-import { Construction } from "lucide-react";
-
 import { PageWrapper } from "@/components/page-wrapper";
+import { ChatDisplayPreferences } from "@/components/settings/chat-display-preferences";
 
 export default function SettingsGeneralPage() {
   return (
     <PageWrapper title="General" maxWidth="md">
-      <div className="flex flex-col items-center justify-center gap-3 rounded-lg border py-16">
-        <Construction className="text-muted-foreground size-8" />
-        <p className="text-foreground text-sm font-medium">Under construction</p>
-        <p className="text-muted-foreground text-xs">General settings will be available soon.</p>
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-3">
+          <h2 className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
+            Chat Display
+          </h2>
+          <ChatDisplayPreferences />
+        </div>
       </div>
     </PageWrapper>
   );
