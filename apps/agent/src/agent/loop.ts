@@ -9,6 +9,7 @@ import { evaluateContext } from "./context-guard";
 import { classifyError, isRetryable } from "./errors";
 import type { AgentConfig } from "./generate";
 import { generateResponse, generateResponseStreaming } from "./generate";
+import { friendlyModelName } from "./model-names";
 import {
   discoverAndActivate,
   resolvePluginTools,
@@ -369,6 +370,7 @@ export function startAgentLoop() {
             messageId: placeholderId,
             content: response.content,
             toolCalls: response.toolCalls,
+            modelUsed,
           });
         } else {
           const response = await generateResponse(compactedMessages, context.skills, {
@@ -384,8 +386,17 @@ export function startAgentLoop() {
             continue;
           }
 
-          const content =
+          let content =
             channel === "whatsapp" ? sanitizeForWhatsApp(response.content) : response.content;
+
+          if (channel === "whatsapp" && context.preferences) {
+            const parts: string[] = [];
+            if (context.preferences.showModelInfo && modelUsed)
+              parts.push(`Model: ${friendlyModelName(modelUsed)}`);
+            if (context.preferences.showToolDetails && response.toolCalls?.length)
+              parts.push(`Tools: ${response.toolCalls.map((tc) => tc.name).join(", ")}`);
+            if (parts.length > 0) content += `\n\n_${parts.join(" | ")}_`;
+          }
 
           const assistantMessageId = await client.mutation(api.messages.addAssistantMessage, {
             serviceKey,
@@ -393,6 +404,7 @@ export function startAgentLoop() {
             content,
             channel: context.conversation.channel,
             toolCalls: response.toolCalls,
+            modelUsed,
           });
 
           if (channel === "whatsapp" && context.contact?.phone && assistantMessageId) {
