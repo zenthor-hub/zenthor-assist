@@ -3,7 +3,7 @@ import type { Tool } from "ai";
 import { generateText, stepCountIs, streamText } from "ai";
 
 import { logger } from "../observability/logger";
-import { getAIGateway } from "./ai-gateway";
+import { getAIProvider } from "./ai-gateway";
 import { runWithFallback } from "./model-fallback";
 import { selectModel } from "./model-router";
 import { tools } from "./tools";
@@ -58,8 +58,9 @@ interface GenerateResult {
   modelUsed: string;
 }
 
-function getModel(name: string) {
-  return getAIGateway()(name);
+async function getModel(name: string) {
+  const provider = await getAIProvider();
+  return provider.model(name);
 }
 
 const WHATSAPP_FORMATTING_INSTRUCTIONS = `
@@ -197,7 +198,7 @@ export async function generateResponse(
     primaryModel,
     fallbackModels,
     run: async (modelName) => {
-      const m = getModel(modelName);
+      const m = await getModel(modelName);
       const result = await generateText({
         model: m,
         system: buildSystemPrompt(skills, options?.agentConfig, options?.channel),
@@ -257,7 +258,7 @@ export async function generateResponseStreaming(
     primaryModel,
     fallbackModels,
     run: async (modelName) => {
-      const m = getModel(modelName);
+      const m = await getModel(modelName);
       const streamResult = streamText({
         model: m,
         system: buildSystemPrompt(skills, options?.agentConfig, options?.channel),

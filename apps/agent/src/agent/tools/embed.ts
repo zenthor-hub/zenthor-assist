@@ -1,10 +1,11 @@
 import { env } from "@zenthor-assist/env/agent";
 import { embed } from "ai";
 
-import { getAIGateway } from "../ai-gateway";
+import { getAIProvider } from "../ai-gateway";
 
 export async function generateEmbedding(text: string): Promise<number[]> {
-  const model = getAIGateway().embeddingModel(env.AI_EMBEDDING_MODEL);
+  const provider = await getAIProvider();
+  const model = provider.embeddingModel(env.AI_EMBEDDING_MODEL);
   const { embedding } = await embed({ model, value: text });
   return embedding;
 }

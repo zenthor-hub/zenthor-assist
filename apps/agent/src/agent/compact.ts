@@ -5,7 +5,7 @@ import { generateText } from "ai";
 
 import { getConvexClient } from "../convex/client";
 import { logger } from "../observability/logger";
-import { getAIGateway } from "./ai-gateway";
+import { getAIProvider } from "./ai-gateway";
 import {
   DEFAULT_CONTEXT_WINDOW,
   estimateMessagesTokens,
@@ -60,7 +60,8 @@ function findRecentSplitByBudget(messages: Message[], recentBudget: number): num
 
 async function summarizeChunk(chunk: Message[]): Promise<string> {
   const content = chunk.map((m) => `${m.role}: ${m.content}`).join("\n\n");
-  const model = getAIGateway()(env.AI_MODEL);
+  const provider = await getAIProvider();
+  const model = provider.model(env.AI_MODEL);
 
   const result = await generateText({
     model,
@@ -81,7 +82,8 @@ async function summarizeWithFallback(chunks: Message[][]): Promise<string> {
     }
 
     // Merge multiple summaries into one
-    const model = getAIGateway()(env.AI_MODEL);
+    const provider = await getAIProvider();
+    const model = provider.model(env.AI_MODEL);
     const merged = await generateText({
       model,
       system: SUMMARIZER_SYSTEM,
