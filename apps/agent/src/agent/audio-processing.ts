@@ -2,7 +2,7 @@ import { logger } from "../observability/logger";
 import { downloadWhatsAppMedia, transcribeAudio, uploadMediaToBlob } from "./media";
 
 /** Result of processing a single audio trigger message. */
-export interface AudioProcessingResult {
+interface AudioProcessingResult {
   /** Map of messageId → transcript text for successfully transcribed messages. */
   transcripts: Map<string, string>;
   /** Set of messageIds where transcription failed (trigger audio that should get fallback text). */
@@ -85,10 +85,10 @@ export async function processAudioTrigger(
   return { transcripts, failed, blobUrl };
 }
 
-export const AUDIO_FALLBACK_CONTENT = "[Voice message could not be transcribed]";
+const AUDIO_FALLBACK_CONTENT = "[Voice message could not be transcribed]";
 
 /** Message shape expected by the audio message builder. */
-export interface RawConversationMessage {
+interface RawConversationMessage {
   _id: string;
   role: string;
   content: string;

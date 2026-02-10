@@ -19,18 +19,23 @@ vi.mock("../observability/logger", () => ({
   },
 }));
 
-import {
-  AUDIO_FALLBACK_CONTENT,
-  buildConversationMessages,
-  processAudioTrigger,
-} from "./audio-processing";
-import type {
-  AudioProcessingResult,
-  AudioTriggerMessage,
-  RawConversationMessage,
-} from "./audio-processing";
+import { buildConversationMessages, processAudioTrigger } from "./audio-processing";
 
-const TRIGGER: AudioTriggerMessage = {
+const AUDIO_FALLBACK_CONTENT = "[Voice message could not be transcribed]";
+
+interface RawConversationMessage {
+  _id: string;
+  role: string;
+  content: string;
+  media?: {
+    type: string;
+    sourceId: string;
+    mimetype: string;
+    transcript?: string;
+  };
+}
+
+const TRIGGER = {
   _id: "msg_trigger",
   media: {
     type: "audio",
@@ -112,9 +117,9 @@ describe("processAudioTrigger", () => {
 // ─── buildConversationMessages ───
 
 describe("buildConversationMessages", () => {
-  const emptyResult: AudioProcessingResult = {
-    transcripts: new Map(),
-    failed: new Set(),
+  const emptyResult = {
+    transcripts: new Map<string, string>(),
+    failed: new Set<string>(),
   };
 
   it("passes through text messages unchanged", () => {
