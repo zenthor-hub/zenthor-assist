@@ -4,8 +4,9 @@ import { httpAction } from "../_generated/server";
 /**
  * Verify HMAC-SHA256 signature from Meta webhook payloads.
  * Uses the app secret as the HMAC key.
+ * Exported for testing.
  */
-async function verifySignature(
+export async function verifySignature(
   body: string,
   signature: string,
   appSecret: string,
@@ -47,7 +48,7 @@ export const verify = httpAction(async (_ctx, request) => {
     return new Response(challenge ?? "", { status: 200 });
   }
 
-  console.warn("[whatsapp-cloud] Webhook verification failed", { mode, token });
+  console.warn("[whatsapp-cloud] Webhook verification failed", { mode });
   return new Response("Forbidden", { status: 403 });
 });
 
@@ -85,12 +86,39 @@ export const incoming = httpAction(async (ctx, request) => {
     return new Response("OK", { status: 200 });
   }
 
+  // Validate payload object type
+  if (payload.object !== "whatsapp_business_account") {
+    console.warn("[whatsapp-cloud] Ignoring webhook with unexpected object type", {
+      object: payload.object,
+    });
+    return new Response("OK", { status: 200 });
+  }
+
+  // Optional phone_number_id scope: reject traffic for other numbers
+  const expectedPhoneNumberId = process.env.WHATSAPP_CLOUD_PHONE_NUMBER_ID;
+
+  // Collect mutation promises so we can fire them concurrently per change
+  const mutations: Promise<unknown>[] = [];
+
   // Process each entry/change
   for (const entry of payload.entry ?? []) {
     for (const change of entry.changes ?? []) {
       if (change.field !== "messages") continue;
       const value = change.value;
       if (!value) continue;
+
+      // Scope by phone_number_id when configured
+      if (
+        expectedPhoneNumberId &&
+        value.metadata?.phone_number_id &&
+        value.metadata.phone_number_id !== expectedPhoneNumberId
+      ) {
+        console.info("[whatsapp-cloud] Ignoring webhook for different phone_number_id", {
+          received: value.metadata.phone_number_id,
+          expected: expectedPhoneNumberId,
+        });
+        continue;
+      }
 
       // Handle incoming messages
       for (const message of value.messages ?? []) {
@@ -100,41 +128,56 @@ export const incoming = httpAction(async (ctx, request) => {
 
         // Handle text messages
         if (message.type === "text" && message.text?.body) {
-          await ctx.runMutation(internal.whatsappCloud.mutations.handleIncoming, {
-            from,
-            messageId,
-            text: message.text.body,
-            timestamp,
-            messageType: message.type,
-          });
+          mutations.push(
+            ctx.runMutation(internal.whatsappCloud.mutations.handleIncoming, {
+              from,
+              messageId,
+              text: message.text.body,
+              timestamp,
+              messageType: message.type,
+            }),
+          );
           continue;
         }
 
         // Handle audio messages (voice notes)
         if (message.type === "audio" && message.audio?.id) {
-          await ctx.runMutation(internal.whatsappCloud.mutations.handleIncomingMedia, {
-            from,
-            messageId,
-            timestamp,
-            messageType: "audio",
-            mediaId: message.audio.id,
-            mimetype: message.audio.mime_type ?? "audio/ogg",
-          });
+          mutations.push(
+            ctx.runMutation(internal.whatsappCloud.mutations.handleIncomingMedia, {
+              from,
+              messageId,
+              timestamp,
+              messageType: "audio",
+              mediaId: message.audio.id,
+              mimetype: message.audio.mime_type ?? "audio/ogg",
+            }),
+          );
           continue;
         }
       }
 
       // Handle status updates
       for (const status of value.statuses ?? []) {
-        await ctx.runMutation(internal.whatsappCloud.mutations.handleStatus, {
-          messageId: status.id,
-          status: status.status,
-          recipientId: status.recipient_id,
-          timestamp: Number(status.timestamp) * 1000,
-          errors: status.errors?.map((e: WebhookStatusError) => e.title) ?? [],
-        });
+        mutations.push(
+          ctx.runMutation(internal.whatsappCloud.mutations.handleStatus, {
+            messageId: status.id,
+            status: status.status,
+            recipientId: status.recipient_id,
+            timestamp: Number(status.timestamp) * 1000,
+            errors: status.errors?.map((e: WebhookStatusError) => e.title) ?? [],
+          }),
+        );
       }
     }
+  }
+
+  // Fire all mutations concurrently for faster 200 ACK
+  if (mutations.length > 0) {
+    await Promise.all(mutations).catch((error) => {
+      console.error("[whatsapp-cloud] Mutation batch error", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
 
   return new Response("OK", { status: 200 });

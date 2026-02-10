@@ -128,6 +128,10 @@ export const claimNextOutbound = serviceMutation({
 
     if (!next) return null;
 
+    // Guard: only claim if still pending (avoids race with concurrent workers)
+    const fresh = await ctx.db.get(next._id);
+    if (!fresh || fresh.status !== "pending") return null;
+
     await ctx.db.patch(next._id, {
       status: "processing",
       processorId: args.processorId,
@@ -135,8 +139,11 @@ export const claimNextOutbound = serviceMutation({
       updatedAt: now,
     });
 
+    // Verify ownership after patch (Convex mutations are serialized per-document,
+    // but re-reading confirms the caller owns the claim)
     const claimed = await ctx.db.get(next._id);
-    return claimed ?? null;
+    if (!claimed || claimed.processorId !== args.processorId) return null;
+    return claimed;
   },
 });
 

@@ -110,7 +110,11 @@ sequenceDiagram
     Meta->>CH: POST /whatsapp-cloud/webhook (signed payload)
     activate CH
     CH->>CH: Verify X-Hub-Signature-256 (HMAC-SHA256)
-    CH->>C: internalMutation handleIncoming
+    alt Text message
+        CH->>C: internalMutation handleIncoming
+    else Audio/voice note
+        CH->>C: internalMutation handleIncomingMedia
+    end
     activate C
     C->>C: Check inboundDedupe (skip if duplicate)
     C->>C: Lookup/create contact by phone
@@ -121,7 +125,7 @@ sequenceDiagram
         C-->>CH: 200 OK (no enqueue)
     else Normal message
         C->>C: Lookup/create conversation (channel=whatsapp)
-        C->>C: INSERT messages (role=user)
+        C->>C: INSERT messages (role=user, media metadata for audio)
         C->>C: INSERT agentQueue (status=pending)
     end
     deactivate C
@@ -140,6 +144,18 @@ sequenceDiagram
     end
 
     A->>C: query agent.getConversationContext(conversationId)
+
+    opt Trigger message is audio (voice note)
+        A->>Meta: GET media metadata (Graph API)
+        Meta-->>A: {url, mime_type}
+        A->>Meta: GET binary download
+        Meta-->>A: audio buffer
+        par Transcribe + Upload
+            A->>A: transcribeAudio (Groq Whisper)
+            A->>A: uploadMediaToBlob (Vercel Blob)
+        end
+        A->>C: mutation messages.updateMediaTranscript
+    end
     C-->>A: {messages, skills, agent config, contact}
 
     Note over A: Compact, resolve tools & policies (same pipeline)

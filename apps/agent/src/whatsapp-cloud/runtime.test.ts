@@ -53,7 +53,7 @@ vi.mock("@zenthor-assist/backend/convex/_generated/api", () => ({
   },
 }));
 
-import { startWhatsAppCloudRuntime } from "./runtime";
+import { _resetLeaseState, startWhatsAppCloudRuntime } from "./runtime";
 import { sendCloudApiMessage } from "./sender";
 
 const mockedSend = vi.mocked(sendCloudApiMessage);
@@ -89,6 +89,7 @@ function setupDefaultMock() {
 beforeEach(() => {
   mockMutation.mockReset();
   mockedSend.mockReset();
+  _resetLeaseState();
   setupDefaultMock();
 });
 
@@ -301,6 +302,55 @@ describe("startWhatsAppCloudRuntime", () => {
     );
 
     (envMod.env as Record<string, unknown>).WHATSAPP_CLOUD_ACCOUNT_ID = undefined;
+    void p;
+  });
+
+  it("pauses outbound loop when heartbeat returns false (lease lost)", async () => {
+    let _heartbeatCount = 0;
+    let claimCount = 0;
+    mockMutation.mockImplementation(async (fn: string) => {
+      if (fn === "whatsappLeases:upsertAccount") return undefined;
+      if (fn === "whatsappLeases:acquireLease") {
+        return { acquired: true, expiresAt: Date.now() + 45_000 };
+      }
+      if (fn === "whatsappLeases:heartbeatLease") {
+        _heartbeatCount++;
+        return false; // simulate lease lost
+      }
+      if (fn === "delivery:claimNextOutbound") {
+        claimCount++;
+        if (claimCount === 1) {
+          return {
+            _id: "job-paused",
+            to: "+5511999999999",
+            payload: { content: "Should not send" },
+          };
+        }
+        return hang();
+      }
+      return undefined;
+    });
+
+    // Use fake timers to control heartbeat interval
+    vi.useFakeTimers();
+
+    const p = startWhatsAppCloudRuntime();
+    // Let the startup (upsert + acquire + first outbound claim) complete
+    await vi.advanceTimersByTimeAsync(50);
+
+    // First claim may have gone through before heartbeat fires — that's fine
+    const sendsBefore = mockedSend.mock.calls.length;
+
+    // Fire heartbeat interval — returns false → sets leaseLost
+    await vi.advanceTimersByTimeAsync(15_000);
+
+    // Advance more time — outbound loop should NOT send new messages
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    // After lease is lost, no NEW sends should have happened
+    expect(mockedSend.mock.calls.length).toBe(sendsBefore);
+
+    vi.useRealTimers();
     void p;
   });
 });

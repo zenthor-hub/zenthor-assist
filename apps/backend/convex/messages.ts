@@ -226,7 +226,7 @@ export const updateMediaTranscript = serviceMutation({
   args: {
     messageId: v.id("messages"),
     transcript: v.string(),
-    mediaUrl: v.string(),
+    mediaUrl: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -235,7 +235,11 @@ export const updateMediaTranscript = serviceMutation({
 
     await ctx.db.patch(args.messageId, {
       content: args.transcript,
-      media: { ...msg.media, transcript: args.transcript, url: args.mediaUrl },
+      media: {
+        ...msg.media,
+        transcript: args.transcript,
+        ...(args.mediaUrl ? { url: args.mediaUrl } : {}),
+      },
     });
 
     // Update conversation title with first ~50 chars of transcript

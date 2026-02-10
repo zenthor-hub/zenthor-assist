@@ -39,8 +39,12 @@ bun run dev:setup
   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 - Agent (`apps/agent/.env.local`):
   - `CONVEX_URL`
-  - `AI_GATEWAY_API_KEY`
+  - `AI_GATEWAY_API_KEY` (required for `core`/`all` roles; not needed for `whatsapp-cloud`)
   - `AGENT_SECRET` (must match backend `AGENT_SECRET` for service-authenticated calls)
+  - `AGENT_ROLE` — one of `all | core | whatsapp | whatsapp-ingress | whatsapp-egress | whatsapp-cloud`
+  - `GROQ_API_KEY` (recommended for `core`/`all` — WhatsApp voice note transcription)
+  - `BLOB_READ_WRITE_TOKEN` (recommended for `core`/`all` — audio blob storage)
+  - For `whatsapp-cloud` role: `WHATSAPP_CLOUD_ACCESS_TOKEN`, `WHATSAPP_CLOUD_PHONE_NUMBER_ID`
 - Convex Dashboard env:
   - `CLERK_JWT_ISSUER_DOMAIN`
   - `CLERK_WEBHOOK_SECRET`
@@ -51,6 +55,8 @@ bun run dev:setup
   - `TODOIST_CLIENT_SECRET` (optional, required for Todoist OAuth integration)
   - `TODOIST_OAUTH_REDIRECT_URI` (optional, required for Todoist OAuth integration)
   - `TODOIST_OAUTH_SCOPE` (optional, defaults to `data:read_write`)
+  - `WHATSAPP_CLOUD_APP_SECRET` (optional; enables webhook signature verification)
+  - `WHATSAPP_CLOUD_VERIFY_TOKEN` (optional; webhook verification handshake token)
 
 4. Auth model notes:
 

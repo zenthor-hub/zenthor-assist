@@ -3,6 +3,7 @@ import { env } from "@zenthor-assist/env/agent";
 import { logger, typedEvent } from "../observability/logger";
 
 const GRAPH_API_VERSION = "v24.0";
+const SEND_TIMEOUT_MS = 30_000;
 
 interface CloudApiResponse {
   messages?: Array<{ id: string }>;
@@ -36,6 +37,7 @@ export async function sendCloudApiMessage(phone: string, text: string): Promise<
       type: "text",
       text: { body: text },
     }),
+    signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
   });
 
   const rawBody = await response.text();

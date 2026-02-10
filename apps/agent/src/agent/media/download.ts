@@ -54,14 +54,15 @@ export async function downloadWhatsAppMedia(
   const arrayBuffer = await downloadRes.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
 
+  // Prefer metadata mime_type, fall back to response Content-Type header, then default
+  const mimetype =
+    meta.mime_type ?? downloadRes.headers.get("content-type")?.split(";")[0]?.trim() ?? "audio/ogg";
+
   void logger.info("agent.media.downloaded", {
     mediaId,
-    mimetype: meta.mime_type,
+    mimetype,
     sizeBytes: buffer.length,
   });
 
-  return {
-    buffer,
-    mimetype: meta.mime_type ?? "audio/ogg",
-  };
+  return { buffer, mimetype };
 }

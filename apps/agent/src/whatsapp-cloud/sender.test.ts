@@ -148,4 +148,18 @@ describe("sendCloudApiMessage", () => {
 
     (envMod.env as Record<string, unknown>).WHATSAPP_CLOUD_PHONE_NUMBER_ID = original;
   });
+
+  it("passes AbortSignal.timeout to fetch for request deadline", async () => {
+    fetchSpy.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ messages: [{ id: "wamid.timeout-test" }] }),
+    });
+
+    await sendCloudApiMessage("+5511999999999", "Hello");
+
+    const [, opts] = fetchSpy.mock.calls[0]!;
+    expect(opts.signal).toBeDefined();
+    expect(opts.signal).toBeInstanceOf(AbortSignal);
+  });
 });

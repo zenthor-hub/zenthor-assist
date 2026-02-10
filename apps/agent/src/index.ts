@@ -4,6 +4,19 @@ import { initSentry } from "./observability/sentry";
 import { startWhatsAppCloudRuntime } from "./whatsapp-cloud/runtime";
 import { startWhatsAppRuntime } from "./whatsapp/runtime";
 
+/** Env keys that are soft-warned (not fatal) if missing. */
+function getRecommendedEnvForRole(role: string): string[] {
+  const recommended: string[] = [];
+  // AGENT_SECRET is needed by all roles for service mutations in production
+  recommended.push("AGENT_SECRET");
+
+  // Audio processing dependencies (relevant when core handles WhatsApp audio)
+  if (role === "core" || role === "all") {
+    recommended.push("GROQ_API_KEY", "BLOB_READ_WRITE_TOKEN");
+  }
+  return recommended;
+}
+
 function getRequiredEnvForRole(role: string, enableWhatsApp: boolean): string[] {
   const required = ["CONVEX_URL"];
 
@@ -34,6 +47,18 @@ async function main() {
       await logger.lineError(`[main] Missing required env var: ${key}`, { key });
       void logger.error("agent.missing_required_env", { key });
       process.exit(1);
+    }
+  }
+
+  // Warn about recommended (non-fatal) env vars that may cause runtime degradation
+  const recommendedEnv = getRecommendedEnvForRole(role);
+  for (const key of recommendedEnv) {
+    if (!process.env[key]) {
+      await logger.lineWarn(
+        `[main] Missing recommended env var: ${key} — some features may be degraded`,
+        { key },
+      );
+      void logger.warn("agent.missing_recommended_env", { key, role });
     }
   }
 

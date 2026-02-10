@@ -110,7 +110,8 @@ zenthor-assist/
 │           ├── agent/                # Agent loop + generation + tools + plugins
 │           ├── convex/               # Convex client wiring
 │           ├── observability/        # Runtime logging/sentry
-│           └── whatsapp/             # Baileys integration + lease-aware runtime
+│           ├── whatsapp/             # Baileys integration + lease-aware runtime
+│           └── whatsapp-cloud/      # Meta Cloud API egress runtime
 ├── packages/
 │   ├── config/                       # Shared tsconfig.base.json
 │   ├── env/                          # Typed env schemas (`./web`, `./agent`)
@@ -256,7 +257,7 @@ Optional observability:
 Required:
 
 - `CONVEX_URL`
-- `AI_GATEWAY_API_KEY`
+- `AI_GATEWAY_API_KEY` (required for `core` and `all` roles; optional for `whatsapp-cloud`)
 
 Key optional:
 
@@ -265,8 +266,8 @@ Key optional:
 - `AI_FALLBACK_MODEL` (power tier fallback, used when primary model errors)
 - `AI_CONTEXT_WINDOW`
 - `AI_EMBEDDING_MODEL` (default `openai/text-embedding-3-small`)
-- `AGENT_SECRET`
-- `AGENT_ROLE` (`all | core | whatsapp | whatsapp-ingress | whatsapp-egress`)
+- `AGENT_SECRET` (recommended for all roles; required in production for service mutations)
+- `AGENT_ROLE` (`all | core | whatsapp | whatsapp-ingress | whatsapp-egress | whatsapp-cloud`)
 - `WORKER_ID`
 - `AGENT_JOB_LOCK_MS`
 - `AGENT_JOB_HEARTBEAT_MS`
@@ -276,6 +277,12 @@ Key optional:
 - `WHATSAPP_LEASE_TTL_MS`
 - `WHATSAPP_AUTH_MODE` (`local | convex`, default `local`)
 - `WHATSAPP_HEARTBEAT_MS`
+- `WHATSAPP_CLOUD_ACCESS_TOKEN` (required for `whatsapp-cloud` role)
+- `WHATSAPP_CLOUD_PHONE_NUMBER_ID` (required for `whatsapp-cloud` role)
+- `WHATSAPP_CLOUD_ACCOUNT_ID` (optional; defaults to `cloud-api`)
+- `WHATSAPP_CLOUD_PHONE` (optional; phone label for the cloud account)
+- `GROQ_API_KEY` (recommended for `core`/`all` — required for WhatsApp voice note transcription)
+- `BLOB_READ_WRITE_TOKEN` (recommended for `core`/`all` — used for audio blob storage)
 - `AXIOM_TOKEN`
 - `AXIOM_DATASET`
 - `SENTRY_DSN`

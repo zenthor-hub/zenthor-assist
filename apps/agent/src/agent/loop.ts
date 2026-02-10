@@ -4,12 +4,13 @@ import type { Tool } from "ai";
 
 import { getConvexClient } from "../convex/client";
 import { logger } from "../observability/logger";
+import type { AudioTriggerMessage } from "./audio-processing";
+import { buildConversationMessages, processAudioTrigger } from "./audio-processing";
 import { compactMessages } from "./compact";
 import { evaluateContext } from "./context-guard";
 import { classifyError, isRetryable } from "./errors";
 import type { AgentConfig } from "./generate";
 import { generateResponse, generateResponseStreaming } from "./generate";
-import { downloadWhatsAppMedia, transcribeAudio, uploadMediaToBlob } from "./media";
 import { friendlyModelName } from "./model-names";
 import {
   discoverAndActivate,
@@ -155,57 +156,29 @@ export function startAgentLoop() {
           : undefined;
 
         // Process audio for the triggering message only (Meta media URLs expire quickly)
-        const audioTranscripts = new Map<string, string>();
         const triggerMsg = context.messages.find(
-          (m) => m._id === job.messageId && m.media?.type === "audio" && !m.media.transcript,
+          (m): m is typeof m & { media: AudioTriggerMessage["media"] } =>
+            m._id === job.messageId && m.media?.type === "audio" && !m.media.transcript,
         );
-        if (triggerMsg?.media) {
-          try {
-            const { buffer } = await downloadWhatsAppMedia(triggerMsg.media.sourceId);
 
-            const [blobUrl, transcript] = await Promise.all([
-              uploadMediaToBlob({
-                buffer,
-                conversationId: job.conversationId,
-                messageId: triggerMsg._id,
-                mimetype: triggerMsg.media.mimetype,
-              }),
-              transcribeAudio({
-                buffer,
-                mimetype: triggerMsg.media.mimetype,
-                fileName: `${triggerMsg._id}.ogg`,
-              }),
-            ]);
+        const audioResult = triggerMsg?.media
+          ? await processAudioTrigger(triggerMsg, job.conversationId)
+          : { transcripts: new Map<string, string>(), failed: new Set<string>() };
 
-            await client.mutation(api.messages.updateMediaTranscript, {
-              serviceKey,
-              messageId: triggerMsg._id,
-              transcript,
-              mediaUrl: blobUrl,
-            });
-
-            audioTranscripts.set(triggerMsg._id, transcript);
-          } catch (error) {
-            void logger.warn("agent.media.processing_failed", {
-              messageId: triggerMsg._id,
-              error: error instanceof Error ? error.message : String(error),
-            });
-          }
+        // Persist transcript (and optionally blob URL) back to the message
+        const triggerTranscript = triggerMsg
+          ? audioResult.transcripts.get(triggerMsg._id)
+          : undefined;
+        if (triggerMsg && triggerTranscript) {
+          await client.mutation(api.messages.updateMediaTranscript, {
+            serviceKey,
+            messageId: triggerMsg._id,
+            transcript: triggerTranscript,
+            mediaUrl: audioResult.blobUrl,
+          });
         }
 
-        let conversationMessages = context.messages
-          .filter((m) => {
-            if (m.role !== "user" && m.role !== "assistant" && m.role !== "system") return false;
-            // Drop untranscribed audio — adds no useful context for the LLM
-            if (m.media?.type === "audio" && !m.media.transcript && !audioTranscripts.has(m._id)) {
-              return false;
-            }
-            return true;
-          })
-          .map((m) => ({
-            role: m.role as "user" | "assistant" | "system",
-            content: audioTranscripts.get(m._id) ?? m.media?.transcript ?? m.content,
-          }));
+        let conversationMessages = buildConversationMessages(context.messages, audioResult);
 
         // Compact messages if needed
         const { messages: compactedMessages, summary } = await compactMessages(

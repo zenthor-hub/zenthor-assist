@@ -148,7 +148,7 @@ This document focuses on:
   - status `200`
   - response body equals challenge
 
-## Test 5: Inbound webhook (POST, signed)
+## Test 5a: Inbound webhook — text message (POST, signed)
 
 - Route: `POST /whatsapp-cloud/webhook`
 - Must include header `X-Hub-Signature-256`.
@@ -157,6 +157,18 @@ This document focuses on:
   - creates/uses conversation with `accountId=cloud-api`
   - creates user message
   - enqueues agent job (`agentQueue.status=pending`)
+
+## Test 5b: Inbound webhook — audio/voice note (POST, signed)
+
+- Route: `POST /whatsapp-cloud/webhook`
+- Must include header `X-Hub-Signature-256`.
+- Payload must include `field: "messages"` and an `audio` message with `id` (media ID) and optional `mime_type`.
+- Pass criteria:
+  - creates/uses conversation with `accountId=cloud-api`
+  - creates user message with `mediaType: "audio"` and `mediaId` set
+  - enqueues agent job (`agentQueue.status=pending`) with `triggerMediaType: "audio"`
+  - when core processes the job, it downloads + transcribes the audio and updates the message via `updateMediaTranscript`
+  - if transcription fails, the message content falls back to `"[Voice message could not be transcribed]"` (not silently dropped)
 
 ## Test 6: End-to-end with core
 

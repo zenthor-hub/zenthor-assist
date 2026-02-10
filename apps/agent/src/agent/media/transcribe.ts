@@ -37,7 +37,13 @@ export async function transcribeAudio(opts: {
     throw new Error(`Transcription failed: ${res.status} ${text}`);
   }
 
-  const data = (await res.json()) as { text: string };
+  const data = (await res.json()) as { text?: unknown };
+
+  if (typeof data.text !== "string" || data.text.length === 0) {
+    throw new Error(
+      `Transcription returned invalid payload: expected non-empty text, got ${typeof data.text}`,
+    );
+  }
 
   void logger.info("agent.media.transcribed", {
     fileName: opts.fileName,

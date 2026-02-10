@@ -2,6 +2,7 @@ import { v } from "convex/values";
 
 import { internalMutation } from "./_generated/server";
 import { authMutation, authQuery, serviceMutation, serviceQuery } from "./auth";
+import { classifyApprovalText } from "./lib/approvalKeywords";
 import { getConversationIfOwnedByUser } from "./lib/auth";
 
 /** Must match APPROVAL_TIMEOUT_MS in apps/agent/src/agent/tool-approval.ts */
@@ -134,6 +135,35 @@ export const getByJob = serviceQuery({
       .query("toolApprovals")
       .withIndex("by_jobId", (q) => q.eq("jobId", args.jobId))
       .collect();
+  },
+});
+
+/**
+ * Attempt to resolve the first pending approval for a conversation by interpreting
+ * a user text/transcript as an approval keyword.
+ * Returns the resolved approval doc or null if no match / no pending approvals.
+ */
+export const resolveByConversationText = serviceMutation({
+  args: {
+    conversationId: v.id("conversations"),
+    text: v.string(),
+  },
+  returns: v.union(toolApprovalDoc, v.null()),
+  handler: async (ctx, args) => {
+    const status = classifyApprovalText(args.text);
+    if (!status) return null;
+
+    const pending = await ctx.db
+      .query("toolApprovals")
+      .withIndex("by_conversationId_status", (q) =>
+        q.eq("conversationId", args.conversationId).eq("status", "pending"),
+      )
+      .first();
+
+    if (!pending) return null;
+
+    await ctx.db.patch(pending._id, { status, resolvedAt: Date.now() });
+    return { ...pending, status };
   },
 });
 

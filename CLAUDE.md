@@ -139,12 +139,14 @@ The authenticated app follows a Vercel-inspired minimal aesthetic. All new pages
   - `apps/agent/src/index.core.ts`
   - `apps/agent/src/index.whatsapp-ingress.ts`
   - `apps/agent/src/index.whatsapp-egress.ts`
+- WhatsApp Cloud egress runtime in `apps/agent/src/whatsapp-cloud/` — lease-aware outbound delivery via Meta Cloud API. Run with `AGENT_ROLE=whatsapp-cloud`.
 - Main loop in `apps/agent/src/agent/loop.ts`:
   - claims queue jobs with lock + heartbeat,
   - resolves plugin/builtin tools and policies,
   - handles approval-wrapped tools,
   - streams web responses and queues WhatsApp outbound messages.
 - **Model routing** (`model-router.ts`): selects model tier by channel — Lite (`AI_LITE_MODEL`) for WhatsApp, Standard (`AI_MODEL`) for Web, Power (`AI_FALLBACK_MODEL`) as fallback cascade. See `AGENTS.md` "Model Routing" for full details.
+- **Audio processing**: WhatsApp voice notes are downloaded, transcribed (via Groq), and optionally uploaded to blob storage. Requires `GROQ_API_KEY` and `BLOB_READ_WRITE_TOKEN` for the `core`/`all` roles. Transcription failures produce a fallback `"[Voice message could not be transcribed]"` content instead of silently dropping the message.
 
 ### Railway deployment notes
 
@@ -176,9 +178,22 @@ Required:
 Common optional:
 
 - `AI_LITE_MODEL`, `AI_MODEL`, `AI_FALLBACK_MODEL`, `AI_CONTEXT_WINDOW`, `AI_EMBEDDING_MODEL`
-- `AGENT_ROLE`, `ENABLE_WHATSAPP`, `WORKER_ID`
+- `AGENT_ROLE` (`all | core | whatsapp | whatsapp-ingress | whatsapp-egress | whatsapp-cloud`), `ENABLE_WHATSAPP`, `WORKER_ID`
+- `AGENT_SECRET` (recommended for all roles; required in production)
 - `AGENT_JOB_LOCK_MS`, `AGENT_JOB_HEARTBEAT_MS`
 - `WHATSAPP_ACCOUNT_ID`, `WHATSAPP_PHONE`, `WHATSAPP_LEASE_TTL_MS`, `WHATSAPP_AUTH_MODE`, `WHATSAPP_HEARTBEAT_MS`
+- `GROQ_API_KEY` (recommended for `core`/`all` — required for WhatsApp voice note transcription)
+- `BLOB_READ_WRITE_TOKEN` (recommended for `core`/`all` — used for audio blob storage)
+
+WhatsApp Cloud API env (required for `whatsapp-cloud` role):
+
+- `WHATSAPP_CLOUD_ACCESS_TOKEN`
+- `WHATSAPP_CLOUD_PHONE_NUMBER_ID`
+- `WHATSAPP_CLOUD_ACCOUNT_ID` (optional; defaults to `cloud-api`)
+- `WHATSAPP_CLOUD_PHONE` (optional; phone label for the cloud account)
+
+Observability:
+
 - `AXIOM_TOKEN`, `AXIOM_DATASET`
 - `SENTRY_DSN`, `SENTRY_ENABLED`, `SENTRY_TRACES_SAMPLE_RATE`, `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE`
 - `OBS_ENABLED`, `OBS_SAMPLE_RATE`, `OBS_LOG_LEVEL`, `OBS_INCLUDE_CONTENT`
@@ -194,6 +209,9 @@ Common optional:
 - `TODOIST_CLIENT_SECRET` (optional, required for Todoist OAuth)
 - `TODOIST_OAUTH_REDIRECT_URI` (optional, required for Todoist OAuth)
 - `TODOIST_OAUTH_SCOPE` (optional, defaults to `data:read_write`)
+- `WHATSAPP_CLOUD_APP_SECRET` (optional; enables webhook signature verification)
+- `WHATSAPP_CLOUD_VERIFY_TOKEN` (optional; webhook verification handshake token)
+- `WHATSAPP_CLOUD_PHONE_NUMBER_ID` (optional; scopes webhook ingestion to a specific phone)
 
 ## File Safety
 

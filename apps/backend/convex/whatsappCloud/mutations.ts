@@ -1,8 +1,37 @@
 import { v } from "convex/values";
 
+import type { Id } from "../_generated/dataModel";
+import type { MutationCtx } from "../_generated/server";
 import { internalMutation } from "../_generated/server";
+import { classifyApprovalText } from "../lib/approvalKeywords";
 
 const CLOUD_API_ACCOUNT_ID = "cloud-api";
+
+/**
+ * Attempt to resolve the first pending tool approval for a conversation
+ * by interpreting user text as an approval keyword.
+ * Returns the resolved status or null if no match / no pending approvals.
+ */
+async function resolveApprovalByText(
+  ctx: MutationCtx,
+  conversationId: Id<"conversations">,
+  text: string,
+): Promise<{ _id: Id<"toolApprovals">; status: string } | null> {
+  const status = classifyApprovalText(text);
+  if (!status) return null;
+
+  const pending = await ctx.db
+    .query("toolApprovals")
+    .withIndex("by_conversationId_status", (q) =>
+      q.eq("conversationId", conversationId).eq("status", "pending"),
+    )
+    .first();
+
+  if (!pending) return null;
+
+  await ctx.db.patch(pending._id, { status, resolvedAt: Date.now() });
+  return { _id: pending._id, status };
+}
 
 /**
  * Handle an incoming WhatsApp Cloud API message.
@@ -80,31 +109,13 @@ export const handleIncoming = internalMutation({
       });
     }
 
-    // 4. Check for pending tool approvals (YES/NO flow)
-    const pendingApprovals = await ctx.db
-      .query("toolApprovals")
-      .withIndex("by_conversationId_status", (q) =>
-        q.eq("conversationId", conversationId).eq("status", "pending"),
-      )
-      .collect();
-
-    if (pendingApprovals.length > 0) {
-      const normalized = args.text.trim().toUpperCase();
-      const approveWords = new Set(["YES", "Y", "APPROVE", "SIM"]);
-      const rejectWords = new Set(["NO", "N", "REJECT", "NAO", "NÃO"]);
-
-      if (approveWords.has(normalized) || rejectWords.has(normalized)) {
-        const status = approveWords.has(normalized) ? "approved" : "rejected";
-        const approval = pendingApprovals[0]!;
-        await ctx.db.patch(approval._id, {
-          status,
-          resolvedAt: Date.now(),
-        });
-        console.info(
-          `[whatsapp-cloud] Tool approval ${status} by ${args.from} for ${approval._id}`,
-        );
-        return null;
-      }
+    // 4. Check for pending tool approvals (YES/NO flow) — shared keyword logic
+    const resolved = await resolveApprovalByText(ctx, conversationId, args.text);
+    if (resolved) {
+      console.info(
+        `[whatsapp-cloud] Tool approval ${resolved.status} by ${args.from} for ${resolved._id}`,
+      );
+      return null;
     }
 
     // 5. Insert user message
