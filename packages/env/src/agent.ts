@@ -2,12 +2,30 @@ import { z } from "zod";
 
 const envSchema = z.object({
   CONVEX_URL: z.url(),
+  AI_PROVIDER_MODE: z.enum(["gateway", "openai_subscription"]).optional().default("gateway"),
   AI_GATEWAY_API_KEY: z.string().min(1).optional(),
   AI_LITE_MODEL: z.string().default("xai/grok-4.1-fast-reasoning"),
   AI_MODEL: z.string().default("anthropic/claude-sonnet-4-5-20250929"),
   AI_FALLBACK_MODEL: z.string().optional(),
   AI_CONTEXT_WINDOW: z.coerce.number().optional(),
   AI_EMBEDDING_MODEL: z.string().default("openai/text-embedding-3-small"),
+  // OpenAI subscription mode (personal ChatGPT Plus/Pro via Codex endpoint)
+  AI_SUBSCRIPTION_BASE_URL: z
+    .string()
+    .min(1)
+    .optional()
+    .default("https://chatgpt.com/backend-api/codex"),
+  AI_SUBSCRIPTION_CLIENT_ID: z.string().min(1).optional().default("app_EMoamEEZ73f0CkXaXp7hrann"),
+  AI_SUBSCRIPTION_ACCESS_TOKEN: z.string().min(1).optional(),
+  AI_SUBSCRIPTION_REFRESH_TOKEN: z.string().min(1).optional(),
+  AI_SUBSCRIPTION_EXPIRES_AT: z.coerce.number().optional(),
+  AI_SUBSCRIPTION_ACCOUNT_ID: z.string().min(1).optional(),
+  AI_SUBSCRIPTION_AUTH_METHOD: z.enum(["browser", "device"]).optional().default("device"),
+  AI_SUBSCRIPTION_OAUTH_PORT: z.coerce.number().optional().default(1455),
+  AI_SUBSCRIPTION_AUTO_LOGIN: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => value === "true"),
   AGENT_SECRET: z.string().min(1).optional(),
   ZENTHOR_FINANCE_API_URL: z.url().optional(),
   ZENTHOR_FINANCE_SERVICE_KEY: z.string().min(1).optional(),
