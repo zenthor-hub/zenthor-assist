@@ -1,4 +1,5 @@
 import { internal } from "../_generated/api";
+import type { ActionCtx } from "../_generated/server";
 import { httpAction } from "../_generated/server";
 
 /**
@@ -56,7 +57,10 @@ export const verify = httpAction(async (_ctx, request) => {
  * POST /whatsapp-cloud/webhook — Incoming messages + status updates from Meta.
  * Must return HTTP 200 within 20 seconds to avoid retries.
  */
-export const incoming = httpAction(async (ctx, request) => {
+export async function handleIncomingWebhook(
+  ctx: Pick<ActionCtx, "runMutation">,
+  request: Request,
+): Promise<Response> {
   const appSecret = process.env.WHATSAPP_CLOUD_APP_SECRET;
   if (!appSecret) {
     console.error("[whatsapp-cloud] WHATSAPP_CLOUD_APP_SECRET not set");
@@ -173,15 +177,21 @@ export const incoming = httpAction(async (ctx, request) => {
 
   // Fire all mutations concurrently for faster 200 ACK
   if (mutations.length > 0) {
-    await Promise.all(mutations).catch((error) => {
+    try {
+      await Promise.all(mutations);
+    } catch (error) {
       console.error("[whatsapp-cloud] Mutation batch error", {
         error: error instanceof Error ? error.message : String(error),
       });
-    });
+      // Return non-2xx so Meta retries transient backend failures.
+      return new Response("Internal error", { status: 500 });
+    }
   }
 
   return new Response("OK", { status: 200 });
-});
+}
+
+export const incoming = httpAction(handleIncomingWebhook);
 
 // ── Webhook payload types ──
 

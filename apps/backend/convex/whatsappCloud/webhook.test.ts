@@ -1,13 +1,26 @@
 import { createHmac } from "node:crypto";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { verifySignature } from "./webhook";
+import { handleIncomingWebhook, verifySignature } from "./webhook";
 
 /** Helper to generate a valid HMAC-SHA256 signature for testing. */
 function sign(body: string, secret: string): string {
   const hmac = createHmac("sha256", secret).update(body).digest("hex");
   return `sha256=${hmac}`;
+}
+
+function buildIncomingRequest(payload: object, secret: string): Request {
+  const body = JSON.stringify(payload);
+  const signature = sign(body, secret);
+  return new Request("https://example.com/whatsapp-cloud/webhook", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Hub-Signature-256": signature,
+    },
+    body,
+  });
 }
 
 describe("verifySignature", () => {
@@ -48,5 +61,71 @@ describe("verifySignature", () => {
     const hmac = createHmac("sha256", SECRET).update(body).digest("hex");
 
     expect(await verifySignature(body, hmac, SECRET)).toBe(true);
+  });
+});
+
+describe("incoming", () => {
+  const APP_SECRET = "test-whatsapp-secret";
+  const basePayload = {
+    object: "whatsapp_business_account",
+    entry: [
+      {
+        changes: [
+          {
+            field: "messages",
+            value: {
+              metadata: {
+                phone_number_id: "1234567890",
+              },
+              messages: [
+                {
+                  from: "+15551234567",
+                  id: "wamid.abc123",
+                  timestamp: "1700000000",
+                  type: "text",
+                  text: { body: "hello from webhook test" },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    process.env.WHATSAPP_CLOUD_APP_SECRET = APP_SECRET;
+    delete process.env.WHATSAPP_CLOUD_PHONE_NUMBER_ID;
+  });
+
+  afterEach(() => {
+    delete process.env.WHATSAPP_CLOUD_APP_SECRET;
+    delete process.env.WHATSAPP_CLOUD_PHONE_NUMBER_ID;
+    vi.restoreAllMocks();
+  });
+
+  it("returns 200 when mutation batch succeeds", async () => {
+    const runMutation = vi.fn().mockResolvedValue(undefined);
+    const ctx = { runMutation };
+    const request = buildIncomingRequest(basePayload, APP_SECRET);
+
+    const response = await handleIncomingWebhook(ctx, request);
+
+    expect(response.status).toBe(200);
+    expect(runMutation).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns 500 when any mutation in the batch fails", async () => {
+    const runMutation = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("Convex temporarily unavailable"))
+      .mockResolvedValue(undefined);
+    const ctx = { runMutation };
+    const request = buildIncomingRequest(basePayload, APP_SECRET);
+
+    const response = await handleIncomingWebhook(ctx, request);
+
+    expect(response.status).toBe(500);
+    expect(runMutation).toHaveBeenCalledTimes(1);
   });
 });
