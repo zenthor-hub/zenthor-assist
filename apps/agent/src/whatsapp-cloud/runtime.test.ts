@@ -53,7 +53,7 @@ vi.mock("@zenthor-assist/backend/convex/_generated/api", () => ({
   },
 }));
 
-import { _resetLeaseState, startWhatsAppCloudRuntime } from "./runtime";
+import { startWhatsAppCloudRuntime } from "./runtime";
 import { sendCloudApiMessage } from "./sender";
 
 const mockedSend = vi.mocked(sendCloudApiMessage);
@@ -89,11 +89,11 @@ function setupDefaultMock() {
 beforeEach(() => {
   mockMutation.mockReset();
   mockedSend.mockReset();
-  _resetLeaseState();
   setupDefaultMock();
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -305,52 +305,165 @@ describe("startWhatsAppCloudRuntime", () => {
     void p;
   });
 
-  it("pauses outbound loop when heartbeat returns false (lease lost)", async () => {
-    let _heartbeatCount = 0;
-    let claimCount = 0;
+  it("reacquires lease and resumes outbound sends when heartbeat returns false", async () => {
+    let heartbeatCount = 0;
+    let acquireCount = 0;
+    let delivered = false;
     mockMutation.mockImplementation(async (fn: string) => {
       if (fn === "whatsappLeases:upsertAccount") return undefined;
       if (fn === "whatsappLeases:acquireLease") {
+        acquireCount++;
         return { acquired: true, expiresAt: Date.now() + 45_000 };
       }
       if (fn === "whatsappLeases:heartbeatLease") {
-        _heartbeatCount++;
-        return false; // simulate lease lost
+        heartbeatCount++;
+        return heartbeatCount === 1 ? false : true;
       }
       if (fn === "delivery:claimNextOutbound") {
-        claimCount++;
-        if (claimCount === 1) {
+        if (acquireCount < 2) return null;
+        if (!delivered) {
+          delivered = true;
           return {
-            _id: "job-paused",
+            _id: "job-recovered",
             to: "+5511999999999",
-            payload: { content: "Should not send" },
+            payload: { content: "Recovered delivery" },
           };
         }
         return hang();
       }
+      if (fn === "delivery:completeOutbound") return undefined;
       return undefined;
     });
 
-    // Use fake timers to control heartbeat interval
     vi.useFakeTimers();
 
     const p = startWhatsAppCloudRuntime();
-    // Let the startup (upsert + acquire + first outbound claim) complete
     await vi.advanceTimersByTimeAsync(50);
+    expect(acquireCount).toBe(1);
 
-    // First claim may have gone through before heartbeat fires — that's fine
-    const sendsBefore = mockedSend.mock.calls.length;
-
-    // Fire heartbeat interval — returns false → sets leaseLost
+    // Trigger heartbeat interval; first heartbeat returns false and marks lease as lost.
     await vi.advanceTimersByTimeAsync(15_000);
 
-    // Advance more time — outbound loop should NOT send new messages
-    await vi.advanceTimersByTimeAsync(10_000);
+    // Give outbound loop time to recover lease and process one job.
+    await vi.advanceTimersByTimeAsync(5_000);
 
-    // After lease is lost, no NEW sends should have happened
-    expect(mockedSend.mock.calls.length).toBe(sendsBefore);
+    expect(acquireCount).toBeGreaterThanOrEqual(2);
+    expect(mockedSend).toHaveBeenCalledWith("+5511999999999", "Recovered delivery");
 
-    vi.useRealTimers();
+    void p;
+  });
+
+  it("retries acquireLease during recovery when lease is contended by another worker", async () => {
+    let heartbeatCount = 0;
+    let acquireCount = 0;
+    let delivered = false;
+    mockMutation.mockImplementation(async (fn: string) => {
+      if (fn === "whatsappLeases:upsertAccount") return undefined;
+      if (fn === "whatsappLeases:acquireLease") {
+        acquireCount++;
+        // 1st call: startup — succeeds immediately
+        if (acquireCount === 1) {
+          return { acquired: true, expiresAt: Date.now() + 45_000 };
+        }
+        // 2nd call: recovery attempt — contended by another worker
+        if (acquireCount === 2) {
+          return { acquired: false, ownerId: "other-worker", expiresAt: Date.now() + 10_000 };
+        }
+        // 3rd+ call: recovery retry — succeeds
+        return { acquired: true, expiresAt: Date.now() + 45_000 };
+      }
+      if (fn === "whatsappLeases:heartbeatLease") {
+        heartbeatCount++;
+        // First heartbeat fails, triggering lease lost
+        return heartbeatCount === 1 ? false : true;
+      }
+      if (fn === "delivery:claimNextOutbound") {
+        // Only deliver after lease recovery succeeds (acquireCount >= 3)
+        if (acquireCount < 3) return null;
+        if (!delivered) {
+          delivered = true;
+          return {
+            _id: "job-contended-recovery",
+            to: "+5511999999999",
+            payload: { content: "Recovered after contention" },
+          };
+        }
+        return hang();
+      }
+      if (fn === "delivery:completeOutbound") return undefined;
+      return undefined;
+    });
+    mockedSend.mockResolvedValue("wamid.contended123");
+
+    vi.useFakeTimers();
+
+    const p = startWhatsAppCloudRuntime();
+    await vi.advanceTimersByTimeAsync(50);
+    expect(acquireCount).toBe(1);
+
+    // Trigger heartbeat — returns false, sets leaseLost = true
+    await vi.advanceTimersByTimeAsync(15_000);
+
+    // Outbound loop detects leaseLost, calls acquireLease → contended (acquireCount=2)
+    // acquireLease sleeps 3s, retries → succeeds (acquireCount=3)
+    // Then outbound loop resumes and claims job
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(acquireCount).toBeGreaterThanOrEqual(3);
+    expect(mockedSend).toHaveBeenCalledWith("+5511999999999", "Recovered after contention");
+
+    const completeCalls = mockMutation.mock.calls.filter(
+      (call: unknown[]) => call[0] === "delivery:completeOutbound",
+    );
+    expect(completeCalls).toHaveLength(1);
+    expect(completeCalls[0]![1]).toMatchObject({ id: "job-contended-recovery" });
+
+    void p;
+  });
+
+  it("reacquires lease and resumes outbound sends when heartbeat throws", async () => {
+    let heartbeatCount = 0;
+    let acquireCount = 0;
+    let delivered = false;
+    mockMutation.mockImplementation(async (fn: string) => {
+      if (fn === "whatsappLeases:upsertAccount") return undefined;
+      if (fn === "whatsappLeases:acquireLease") {
+        acquireCount++;
+        return { acquired: true, expiresAt: Date.now() + 45_000 };
+      }
+      if (fn === "whatsappLeases:heartbeatLease") {
+        heartbeatCount++;
+        if (heartbeatCount === 1) throw new Error("Transient heartbeat failure");
+        return true;
+      }
+      if (fn === "delivery:claimNextOutbound") {
+        if (acquireCount < 2) return null;
+        if (!delivered) {
+          delivered = true;
+          return {
+            _id: "job-recovered-error",
+            to: "+5511999999999",
+            payload: { content: "Recovered after heartbeat error" },
+          };
+        }
+        return hang();
+      }
+      if (fn === "delivery:completeOutbound") return undefined;
+      return undefined;
+    });
+
+    vi.useFakeTimers();
+
+    const p = startWhatsAppCloudRuntime();
+    await vi.advanceTimersByTimeAsync(50);
+    expect(acquireCount).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(15_000);
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(acquireCount).toBeGreaterThanOrEqual(2);
+    expect(mockedSend).toHaveBeenCalledWith("+5511999999999", "Recovered after heartbeat error");
+
     void p;
   });
 });

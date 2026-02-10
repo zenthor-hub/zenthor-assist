@@ -15,11 +15,6 @@ const OUTBOUND_LOCK_MS = 120_000;
 /** Shared lease state — outbound loop checks this before every send. */
 let leaseLost = false;
 
-/** Exported for testing only. */
-export function _resetLeaseState() {
-  leaseLost = false;
-}
-
 async function acquireLease(accountId: string, ownerId: string): Promise<void> {
   const client = getConvexClient();
 
@@ -63,8 +58,21 @@ async function startOutboundLoop(accountId: string, ownerId: string): Promise<vo
   while (true) {
     // Pause sending while lease is lost — avoid duplicate sends from contending workers
     if (leaseLost) {
-      void logger.lineWarn(`[whatsapp-cloud] Outbound loop paused — lease lost for '${accountId}'`);
-      await sleep(5_000);
+      void logger.lineWarn(
+        `[whatsapp-cloud] Outbound loop paused — lease lost for '${accountId}', attempting recovery`,
+      );
+      try {
+        await acquireLease(accountId, ownerId);
+        leaseLost = false;
+        void logger.lineInfo(
+          `[whatsapp-cloud] Lease recovered for account '${accountId}' by '${ownerId}'`,
+        );
+      } catch (error) {
+        void logger.lineError(
+          `[whatsapp-cloud] Lease recovery error: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        await sleep(2_000);
+      }
       continue;
     }
 
@@ -137,6 +145,7 @@ export async function startWhatsAppCloudRuntime(): Promise<void> {
   const accountId = CLOUD_API_ACCOUNT_ID;
   const ownerId = env.WORKER_ID ?? `worker-${crypto.randomUUID().slice(0, 8)}`;
   const heartbeatMs = Math.max(5_000, env.WHATSAPP_HEARTBEAT_MS ?? 15_000);
+  leaseLost = false;
 
   if (configuredAccountId && configuredAccountId !== CLOUD_API_ACCOUNT_ID) {
     void logger.lineWarn(
