@@ -26,7 +26,7 @@ async function main() {
       console.info("Login successful!");
       console.info(`  Account ID: ${creds.accountId ?? "(not available)"}`);
       console.info(`  Expires at: ${new Date(creds.expiresAt).toISOString()}`);
-      console.info("Credentials saved to .auth/openai-subscription.json");
+      console.info("Credentials saved to Convex + .auth/openai-subscription.json");
       break;
     }
 
@@ -40,7 +40,7 @@ async function main() {
     }
 
     case "logout": {
-      clearCredentials();
+      await clearCredentials();
       console.info("Credentials cleared.");
       break;
     }

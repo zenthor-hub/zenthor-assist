@@ -1,15 +1,27 @@
 /**
  * Token manager for OpenAI subscription mode.
  *
- * Handles token lifecycle: env-seeded tokens, local-file cache,
- * automatic refresh, and on-demand OAuth login when auto-login is enabled.
+ * Handles token lifecycle with durable Convex-backed persistence so that
+ * rotated refresh tokens survive Railway container restarts. Falls back
+ * to env vars and local file cache when Convex is unreachable.
+ *
+ * Resolution order:
+ *  1. In-memory cache (fast path)
+ *  2. Convex store (durable, survives restarts)
+ *  3. Env vars (bootstrap / initial seed)
+ *  4. Local file cache (dev convenience)
+ *  5. Refresh using best available refresh token
+ *     - On refresh failure: re-read Convex (another instance may have rotated)
+ *  6. OAuth login (if auto-login is enabled)
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import { env } from "@zenthor-assist/env/agent";
 
+import { getConvexClient } from "../../convex/client";
 import { logger } from "../../observability/logger";
 import {
   browserOAuthFlow,
@@ -31,7 +43,72 @@ export interface SubscriptionCredentials {
 }
 
 // ---------------------------------------------------------------------------
-// Local cache persistence (.auth/openai-subscription.json)
+// Constants
+// ---------------------------------------------------------------------------
+
+const PROVIDER_KEY = "openai_subscription";
+
+/** Buffer before actual expiry to trigger proactive refresh (60 seconds). */
+const EXPIRY_BUFFER_MS = 60_000;
+
+// ---------------------------------------------------------------------------
+// In-memory cache
+// ---------------------------------------------------------------------------
+
+let cachedCreds: SubscriptionCredentials | null = null;
+
+function isExpired(creds: SubscriptionCredentials): boolean {
+  return Date.now() >= creds.expiresAt - EXPIRY_BUFFER_MS;
+}
+
+// ---------------------------------------------------------------------------
+// Convex persistence (durable store)
+// ---------------------------------------------------------------------------
+
+async function loadConvexCredentials(): Promise<SubscriptionCredentials | null> {
+  try {
+    const client = getConvexClient();
+    const serviceKey = env.AGENT_SECRET;
+    const result = await client.query(api.providerCredentials.getByProvider, {
+      serviceKey,
+      provider: PROVIDER_KEY,
+    });
+    if (!result || !result.accessToken || !result.refreshToken) return null;
+    return {
+      accessToken: result.accessToken,
+      refreshToken: result.refreshToken,
+      expiresAt: result.expiresAt,
+      accountId: result.accountId ?? undefined,
+    };
+  } catch (err) {
+    void logger.lineWarn("[token-manager] Failed to read credentials from Convex", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  }
+}
+
+async function saveConvexCredentials(creds: SubscriptionCredentials): Promise<void> {
+  try {
+    const client = getConvexClient();
+    const serviceKey = env.AGENT_SECRET;
+    await client.mutation(api.providerCredentials.upsertByProvider, {
+      serviceKey,
+      provider: PROVIDER_KEY,
+      accessToken: creds.accessToken,
+      refreshToken: creds.refreshToken,
+      expiresAt: creds.expiresAt,
+      accountId: creds.accountId,
+    });
+  } catch (err) {
+    void logger.lineWarn("[token-manager] Failed to persist credentials to Convex", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Local file cache (.auth/openai-subscription.json)
 // ---------------------------------------------------------------------------
 
 const AUTH_DIR = resolve(process.cwd(), ".auth");
@@ -56,24 +133,15 @@ function saveCachedCredentials(creds: SubscriptionCredentials): void {
     }
     writeFileSync(CACHE_PATH, JSON.stringify(creds, null, 2), "utf-8");
   } catch (err) {
-    void logger.lineWarn("[token-manager] Failed to save cached credentials", {
+    void logger.lineWarn("[token-manager] Failed to save cached credentials to file", {
       error: err instanceof Error ? err.message : String(err),
     });
   }
 }
 
 // ---------------------------------------------------------------------------
-// Token resolution
+// Env vars
 // ---------------------------------------------------------------------------
-
-/** Buffer before actual expiry to trigger proactive refresh (60 seconds). */
-const EXPIRY_BUFFER_MS = 60_000;
-
-let cachedCreds: SubscriptionCredentials | null = null;
-
-function isExpired(creds: SubscriptionCredentials): boolean {
-  return Date.now() >= creds.expiresAt - EXPIRY_BUFFER_MS;
-}
 
 function credsFromEnv(): SubscriptionCredentials | null {
   const accessToken = env.AI_SUBSCRIPTION_ACCESS_TOKEN;
@@ -87,10 +155,14 @@ function credsFromEnv(): SubscriptionCredentials | null {
   };
 }
 
-function applyTokenResponse(
+// ---------------------------------------------------------------------------
+// Token application (save everywhere)
+// ---------------------------------------------------------------------------
+
+async function applyTokenResponse(
   tokens: TokenResponse,
   prevAccountId?: string,
-): SubscriptionCredentials {
+): Promise<SubscriptionCredentials> {
   const accountId = extractAccountId(tokens) ?? prevAccountId;
   const creds: SubscriptionCredentials = {
     accessToken: tokens.access_token,
@@ -100,12 +172,25 @@ function applyTokenResponse(
   };
   cachedCreds = creds;
   saveCachedCredentials(creds);
+  await saveConvexCredentials(creds);
   return creds;
 }
 
 /**
- * Perform a fresh OAuth login using the configured method (browser or device).
+ * Apply credentials from a non-token source (env, file, Convex) and
+ * persist to all stores for durability.
  */
+async function applyCredentials(creds: SubscriptionCredentials): Promise<SubscriptionCredentials> {
+  cachedCreds = creds;
+  saveCachedCredentials(creds);
+  await saveConvexCredentials(creds);
+  return creds;
+}
+
+// ---------------------------------------------------------------------------
+// OAuth login
+// ---------------------------------------------------------------------------
+
 async function performOAuthLogin(): Promise<SubscriptionCredentials> {
   const method = env.AI_SUBSCRIPTION_AUTH_METHOD;
   void logger.lineInfo(`[token-manager] Starting OAuth login (method: ${method})`);
@@ -123,10 +208,12 @@ async function performOAuthLogin(): Promise<SubscriptionCredentials> {
  *
  * Resolution order:
  *  1. In-memory cache (if not expired)
- *  2. Env vars (if set and not expired)
- *  3. Local file cache (if exists and not expired)
- *  4. Refresh using refresh token
- *  5. OAuth login (if auto-login is enabled)
+ *  2. Convex store (durable, survives container restarts)
+ *  3. Env vars (bootstrap seed from Railway env)
+ *  4. Local file cache (dev convenience)
+ *  5. Refresh using best available refresh token
+ *     - On failure: re-read Convex in case another instance already rotated
+ *  6. OAuth login (if auto-login is enabled)
  */
 export async function getValidCredentials(): Promise<SubscriptionCredentials> {
   // 1. In-memory (fast path)
@@ -134,40 +221,76 @@ export async function getValidCredentials(): Promise<SubscriptionCredentials> {
     return cachedCreds;
   }
 
-  // 2. Env vars
+  // 2. Convex store (durable)
+  const convexCreds = await loadConvexCredentials();
+  if (convexCreds && !isExpired(convexCreds)) {
+    cachedCreds = convexCreds;
+    saveCachedCredentials(convexCreds);
+    return convexCreds;
+  }
+
+  // 3. Env vars (bootstrap)
   const envCreds = credsFromEnv();
   if (envCreds && !isExpired(envCreds)) {
-    cachedCreds = envCreds;
-    saveCachedCredentials(envCreds);
-    return envCreds;
+    // Persist env-seeded tokens to Convex for durability
+    return applyCredentials(envCreds);
   }
 
-  // 3. Local file cache
+  // 4. Local file cache
   const fileCreds = loadCachedCredentials();
   if (fileCreds && !isExpired(fileCreds)) {
-    cachedCreds = fileCreds;
-    return fileCreds;
+    // Promote file creds to Convex
+    return applyCredentials(fileCreds);
   }
 
-  // 4. Refresh using any available refresh token
+  // 5. Refresh using the best available refresh token
   const refreshToken =
-    cachedCreds?.refreshToken ?? envCreds?.refreshToken ?? fileCreds?.refreshToken;
-  const prevAccountId = cachedCreds?.accountId ?? envCreds?.accountId ?? fileCreds?.accountId;
+    convexCreds?.refreshToken ??
+    cachedCreds?.refreshToken ??
+    envCreds?.refreshToken ??
+    fileCreds?.refreshToken;
+  const prevAccountId =
+    convexCreds?.accountId ?? cachedCreds?.accountId ?? envCreds?.accountId ?? fileCreds?.accountId;
 
   if (refreshToken) {
     try {
       void logger.lineInfo("[token-manager] Refreshing access token...");
       const tokens = await refreshAccessToken(refreshToken);
-      return applyTokenResponse(tokens, prevAccountId);
+      return await applyTokenResponse(tokens, prevAccountId);
     } catch (err) {
-      void logger.lineWarn("[token-manager] Token refresh failed", {
-        error: err instanceof Error ? err.message : String(err),
-      });
+      void logger.lineWarn(
+        "[token-manager] Token refresh failed, checking Convex for newer token",
+        {
+          error: err instanceof Error ? err.message : String(err),
+        },
+      );
+
+      // Race recovery: another instance may have already rotated.
+      // Re-read Convex to pick up the latest refresh token.
+      const freshConvexCreds = await loadConvexCredentials();
+      if (freshConvexCreds && freshConvexCreds.refreshToken !== refreshToken) {
+        // A different refresh token exists — try it
+        if (!isExpired(freshConvexCreds)) {
+          cachedCreds = freshConvexCreds;
+          saveCachedCredentials(freshConvexCreds);
+          return freshConvexCreds;
+        }
+        // Token is expired but has a different refresh token — try refreshing again
+        try {
+          void logger.lineInfo("[token-manager] Retrying refresh with Convex-stored token...");
+          const retryTokens = await refreshAccessToken(freshConvexCreds.refreshToken);
+          return await applyTokenResponse(retryTokens, freshConvexCreds.accountId);
+        } catch (retryErr) {
+          void logger.lineWarn("[token-manager] Retry refresh also failed", {
+            error: retryErr instanceof Error ? retryErr.message : String(retryErr),
+          });
+        }
+      }
       // Fall through to OAuth login if auto-login enabled
     }
   }
 
-  // 5. OAuth login (auto-login)
+  // 6. OAuth login (auto-login)
   if (env.AI_SUBSCRIPTION_AUTO_LOGIN) {
     return performOAuthLogin();
   }
@@ -188,16 +311,28 @@ export async function forceLogin(): Promise<SubscriptionCredentials> {
 }
 
 /**
- * Clear all cached credentials (in-memory + file).
+ * Clear all cached credentials (in-memory + file + Convex).
  */
-export function clearCredentials(): void {
+export async function clearCredentials(): Promise<void> {
   cachedCreds = null;
   try {
     if (existsSync(CACHE_PATH)) {
       writeFileSync(CACHE_PATH, "{}", "utf-8");
     }
   } catch {
-    // Ignore cleanup errors
+    // Ignore file cleanup errors
+  }
+  try {
+    const client = getConvexClient();
+    const serviceKey = env.AGENT_SECRET;
+    await client.mutation(api.providerCredentials.clearByProvider, {
+      serviceKey,
+      provider: PROVIDER_KEY,
+    });
+  } catch (err) {
+    void logger.lineWarn("[token-manager] Failed to clear Convex credentials", {
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
