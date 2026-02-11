@@ -394,4 +394,13 @@ export default defineSchema({
   })
     .index("by_channel_messageId", ["channel", "channelMessageId"])
     .index("by_createdAt", ["createdAt"]),
+
+  providerCredentials: defineTable({
+    provider: v.string(),
+    accessToken: v.string(),
+    refreshToken: v.string(),
+    expiresAt: v.number(),
+    accountId: v.optional(v.string()),
+    updatedAt: v.number(),
+  }).index("by_provider", ["provider"]),
 });
