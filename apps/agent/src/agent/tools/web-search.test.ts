@@ -67,12 +67,20 @@ describe("getWebSearchTool (subscription mode)", () => {
     vi.resetModules();
   });
 
-  it("returns empty object in subscription mode regardless of provider", async () => {
+  it("returns web_search for openai models in subscription mode", async () => {
+    vi.doMock("../ai-gateway", () => ({ getProviderMode: () => "openai_subscription" }));
+    const { getWebSearchTool } = await import("./web-search");
+
+    const tools = getWebSearchTool("openai/gpt-5.3-codex");
+    expect(tools).toHaveProperty("web_search");
+    expect(tools).not.toHaveProperty("google_search");
+  });
+
+  it("returns empty object for non-openai providers in subscription mode", async () => {
     vi.doMock("../ai-gateway", () => ({ getProviderMode: () => "openai_subscription" }));
     const { getWebSearchTool } = await import("./web-search");
 
     expect(Object.keys(getWebSearchTool("anthropic/claude-sonnet-4-5-20250929"))).toHaveLength(0);
-    expect(Object.keys(getWebSearchTool("openai/gpt-4o"))).toHaveLength(0);
     expect(Object.keys(getWebSearchTool("xai/grok-4.1-fast-reasoning"))).toHaveLength(0);
     expect(Object.keys(getWebSearchTool("google/gemini-2.5-pro"))).toHaveLength(0);
   });
