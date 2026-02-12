@@ -12,6 +12,7 @@ import {
   financeSpendingByCategory,
   financeSpendingSummary,
 } from "./finance";
+import { internetSearch } from "./internet-search";
 import { memorySearch, memoryStore } from "./memory";
 import { scheduleTask } from "./schedule";
 import { taskComplete, taskCreate, taskDelete, taskList, taskUpdate } from "./tasks";
@@ -22,6 +23,7 @@ export const tools = {
   memory_store: memoryStore,
   schedule_task: scheduleTask,
   browse_url: browseUrl,
+  internet_search: internetSearch,
   calculate,
   date_calc: dateCalc,
   task_create: taskCreate,
