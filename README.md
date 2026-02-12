@@ -79,6 +79,14 @@ cd apps/web && bun run dev
 cd apps/agent && bun run dev:core
 ```
 
+### Railway env scoping (important)
+
+- Runtime services are split by role (for example `agent-core` and `agent-whatsapp-cloud`).
+- Set env vars per **service + environment** (for example `development` vs `production`).
+- Do not assume a value configured on `agent-core` is also set on `agent-whatsapp-cloud`.
+- Keep shared secrets/telemetry vars synced across relevant services (`AGENT_SECRET`, `AXIOM_TOKEN`, `AXIOM_DATASET`, `OBS_*`, model/provider vars).
+- Local `apps/agent/.env.local` is a source of truth for development, but deployment values still need to be explicitly synced to each Railway service/environment.
+
 ## Common Commands
 
 ### Root

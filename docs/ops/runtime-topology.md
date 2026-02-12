@@ -56,6 +56,8 @@ Do not proceed if any are true:
 ## Railway Deployment
 
 - Agent services (`agent-core`, `agent-whatsapp-cloud`) are deployed on Railway.
+- Keep env vars scoped per **service + environment**. A value set on `agent-core` (development) does not automatically apply to `agent-whatsapp-cloud` (development), nor to production.
+- Sync shared runtime vars across the relevant services explicitly (`AGENT_SECRET`, `AXIOM_TOKEN`, `AXIOM_DATASET`, `OBS_*`, provider/model vars, and any channel-specific credentials).
 - Deployments are triggered automatically by GitHub pushes — do not deploy directly via Railway MCP unless explicitly asked.
 - **Env var changes on Railway require a redeploy to take effect.** Railway stores the new value immediately, but the running container keeps the old values in memory until it restarts. If you update an env var without a code push, the service must be manually redeployed from the Railway dashboard or via a commit push to pick up the change.
 - When using Railway MCP to set env vars, always use `skipDeploys=true` (deployments are GitHub-linked). The next `git push` will trigger a redeploy that picks up the new vars.

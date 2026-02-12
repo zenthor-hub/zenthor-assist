@@ -178,6 +178,15 @@ zenthor-assist/
 - Tools are resolved through plugin activation/policy + built-ins, then wrapped with approval flow for risky tool usage.
 - Built-in tool registration starts in `apps/agent/src/agent/tools/index.ts`; provider-specific web search tooling is injected via `tools/web-search.ts`.
 
+#### Railway Runtime Split (Common Topology)
+
+- Deploy agent roles as separate Railway services (same repo/image, different start commands + env):
+  - `agent-core` -> `cd apps/agent && bun run start:core`
+  - `agent-whatsapp-cloud` -> `cd apps/agent && bun run start:whatsapp-cloud`
+- Keep env vars scoped per **service + environment** (for example, `development` vs `production`). Do not assume values set on one service apply to the other.
+- Observability/secrets like `AXIOM_TOKEN`, `AXIOM_DATASET`, `OBS_*`, `AGENT_SECRET`, and provider credentials should be set on each relevant service explicitly.
+- For local development, `.env.local` can be shared as a source of truth, but deployment values must still be synced to each Railway service/environment.
+
 #### Model Routing
 
 The agent uses dynamic multi-model routing (`model-router.ts`) to select the cheapest capable model per channel, with N-tier fallback cascade on errors (`model-fallback.ts`):
@@ -294,6 +303,10 @@ Key optional:
 - `OBS_SAMPLE_RATE`
 - `OBS_LOG_LEVEL`
 - `OBS_INCLUDE_CONTENT`
+
+Deployment note:
+
+- Because runtime roles are split into separate Railway services, set agent env vars per service/environment (for example both `agent-core` and `agent-whatsapp-cloud` in `development`).
 
 ### Backend/Convex env
 
