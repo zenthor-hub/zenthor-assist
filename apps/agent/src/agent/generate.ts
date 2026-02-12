@@ -9,6 +9,22 @@ import { selectModel } from "./model-router";
 import { tools } from "./tools";
 import { getWebSearchTool } from "./tools/web-search";
 
+/**
+ * The Codex endpoint requires system instructions via the `instructions`
+ * field in the request body. The AI SDK normally maps `system` into the
+ * input array as a system-role message, but Codex ignores that and
+ * requires `instructions` explicitly via provider options.
+ */
+function buildProviderOptions(
+  mode: string,
+  systemPrompt: string,
+): Record<string, Record<string, string>> | undefined {
+  if (mode !== "openai_subscription") return undefined;
+  return {
+    openai: { instructions: systemPrompt },
+  };
+}
+
 const BASE_SYSTEM_PROMPT = `You are a helpful personal AI assistant for Guilherme (gbarros). You can assist with questions, tasks, and general conversation. Be concise but friendly. When you don't know something, say so. Use tools when appropriate.
 
 ## Tool usage guidance
@@ -56,11 +72,6 @@ interface GenerateResult {
   content: string;
   toolCalls?: ToolCallRecord[];
   modelUsed: string;
-}
-
-async function getModel(name: string) {
-  const provider = await getAIProvider();
-  return provider.model(name);
 }
 
 const WHATSAPP_FORMATTING_INSTRUCTIONS = `
@@ -194,17 +205,21 @@ export async function generateResponse(
     channel: options?.channel,
   });
 
+  const systemPrompt = buildSystemPrompt(skills, options?.agentConfig, options?.channel);
+
   const { result, modelUsed } = await runWithFallback({
     primaryModel,
     fallbackModels,
     run: async (modelName) => {
-      const m = await getModel(modelName);
+      const provider = await getAIProvider();
+      const m = provider.model(modelName);
       const result = await generateText({
         model: m,
-        system: buildSystemPrompt(skills, options?.agentConfig, options?.channel),
+        system: systemPrompt,
         messages: conversationMessages,
         tools: resolveToolsForModel(modelName, options?.toolsOverride),
         stopWhen: stepCountIs(10),
+        providerOptions: buildProviderOptions(provider.mode, systemPrompt),
       });
 
       const allToolCalls = result.steps.flatMap((step) => step.toolCalls);
@@ -254,17 +269,21 @@ export async function generateResponseStreaming(
     channel: options?.channel,
   });
 
+  const streamSystemPrompt = buildSystemPrompt(skills, options?.agentConfig, options?.channel);
+
   const { result, modelUsed } = await runWithFallback({
     primaryModel,
     fallbackModels,
     run: async (modelName) => {
-      const m = await getModel(modelName);
+      const provider = await getAIProvider();
+      const m = provider.model(modelName);
       const streamResult = streamText({
         model: m,
-        system: buildSystemPrompt(skills, options?.agentConfig, options?.channel),
+        system: streamSystemPrompt,
         messages: conversationMessages,
         tools: resolveToolsForModel(modelName, options?.toolsOverride),
         stopWhen: stepCountIs(10),
+        providerOptions: buildProviderOptions(provider.mode, streamSystemPrompt),
       });
 
       let accumulated = "";
