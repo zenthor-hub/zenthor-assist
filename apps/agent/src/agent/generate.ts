@@ -30,6 +30,7 @@ const BASE_SYSTEM_PROMPT = `You are a helpful personal AI assistant for Guilherm
 ## Tool usage guidance
 - Use \`calculate\` for precise math instead of doing mental arithmetic.
 - Use \`date_calc\` for date arithmetic, differences between dates, or getting day-of-week/week-number info.
+- Use web search tools (\`web_search\` when available, otherwise \`internet_search\`) when the user asks for current events, latest information, or anything that requires searching the web.
 - Use \`browse_url\` to read web pages, articles, or documentation when the user shares a URL or you need to look up page content.
 - Use \`memory_search\` and \`memory_store\` to recall and save important facts across conversations.
 - Use \`schedule_task\` to set up recurring reminders or tasks.
@@ -128,6 +129,28 @@ function getDefaultTools(modelName: string): Record<string, Tool> {
 
 const SEARCH_TOOL_NAMES = ["web_search", "google_search"] as const;
 
+function removeProviderSearchTools(allTools: Record<string, Tool>): Record<string, Tool> {
+  const next = { ...allTools };
+  for (const searchToolName of SEARCH_TOOL_NAMES) {
+    delete next[searchToolName];
+  }
+  return next;
+}
+
+function shouldRetryWithoutProviderSearch(mode: string, err: unknown): boolean {
+  if (mode !== "openai_subscription") return false;
+
+  const maybeError = err as { message?: string; status?: number; statusCode?: number };
+  const status = maybeError.status ?? maybeError.statusCode;
+  const message = maybeError.message ?? String(err);
+
+  // Codex web-search/tool schema errors surface as HTTP 400 with tool-related details.
+  return (
+    status === 400 &&
+    /(web[_\s-]?search|tool|unsupported|invalid request|bad request|responses)/i.test(message)
+  );
+}
+
 function resolveToolsForModel(
   modelName: string,
   toolsOverride?: Record<string, Tool>,
@@ -213,14 +236,40 @@ export async function generateResponse(
     run: async (modelName) => {
       const provider = await getAIProvider();
       const m = provider.model(modelName);
-      const result = await generateText({
-        model: m,
-        system: systemPrompt,
-        messages: conversationMessages,
-        tools: resolveToolsForModel(modelName, options?.toolsOverride),
-        stopWhen: stepCountIs(10),
-        providerOptions: buildProviderOptions(provider.mode, systemPrompt),
-      });
+      const resolvedTools = resolveToolsForModel(modelName, options?.toolsOverride);
+      const providerOptions = buildProviderOptions(provider.mode, systemPrompt);
+
+      let result;
+      try {
+        result = await generateText({
+          model: m,
+          system: systemPrompt,
+          messages: conversationMessages,
+          tools: resolvedTools,
+          stopWhen: stepCountIs(10),
+          providerOptions,
+        });
+      } catch (err) {
+        const hasProviderSearchTool = SEARCH_TOOL_NAMES.some((name) => name in resolvedTools);
+        if (!hasProviderSearchTool || !shouldRetryWithoutProviderSearch(provider.mode, err)) {
+          throw err;
+        }
+
+        void logger.warn("agent.model.search_tool.fallback", {
+          modelName,
+          channel: options?.channel,
+          mode: provider.mode,
+        });
+
+        result = await generateText({
+          model: m,
+          system: systemPrompt,
+          messages: conversationMessages,
+          tools: removeProviderSearchTools(resolvedTools),
+          stopWhen: stepCountIs(10),
+          providerOptions,
+        });
+      }
 
       const allToolCalls = result.steps.flatMap((step) => step.toolCalls);
       const allToolResults = result.steps.flatMap((step) => step.toolResults);
@@ -277,23 +326,49 @@ export async function generateResponseStreaming(
     run: async (modelName) => {
       const provider = await getAIProvider();
       const m = provider.model(modelName);
-      const streamResult = streamText({
-        model: m,
-        system: streamSystemPrompt,
-        messages: conversationMessages,
-        tools: resolveToolsForModel(modelName, options?.toolsOverride),
-        stopWhen: stepCountIs(10),
-        providerOptions: buildProviderOptions(provider.mode, streamSystemPrompt),
-      });
+      const resolvedTools = resolveToolsForModel(modelName, options?.toolsOverride);
+      const providerOptions = buildProviderOptions(provider.mode, streamSystemPrompt);
 
-      let accumulated = "";
-      for await (const chunk of streamResult.textStream) {
-        accumulated += chunk;
-        callbacks?.onChunk(accumulated);
+      const executeStream = async (toolsToUse: Record<string, Tool>) => {
+        const streamResult = streamText({
+          model: m,
+          system: streamSystemPrompt,
+          messages: conversationMessages,
+          tools: toolsToUse,
+          stopWhen: stepCountIs(10),
+          providerOptions,
+        });
+
+        let accumulated = "";
+        for await (const chunk of streamResult.textStream) {
+          accumulated += chunk;
+          callbacks?.onChunk(accumulated);
+        }
+
+        const steps = await streamResult.steps;
+        const text = await streamResult.text;
+        return { steps, text };
+      };
+
+      let streamed;
+      try {
+        streamed = await executeStream(resolvedTools);
+      } catch (err) {
+        const hasProviderSearchTool = SEARCH_TOOL_NAMES.some((name) => name in resolvedTools);
+        if (!hasProviderSearchTool || !shouldRetryWithoutProviderSearch(provider.mode, err)) {
+          throw err;
+        }
+
+        void logger.warn("agent.model.search_tool.fallback", {
+          modelName,
+          channel: options?.channel,
+          mode: provider.mode,
+        });
+
+        streamed = await executeStream(removeProviderSearchTools(resolvedTools));
       }
 
-      const steps = await streamResult.steps;
-      const text = await streamResult.text;
+      const { steps, text } = streamed;
 
       const allToolCalls = steps.flatMap((step) => step.toolCalls);
       const allToolResults = steps.flatMap((step) => step.toolResults);
