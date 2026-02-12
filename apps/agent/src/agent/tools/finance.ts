@@ -161,7 +161,7 @@ const listTransactionsSchema = z.object({
   date_from: z.string().optional().describe("Start date filter (YYYY-MM-DD)"),
   date_to: z.string().optional().describe("End date filter (YYYY-MM-DD)"),
   search: z.string().optional().describe("Search in description, display name, and notes"),
-  limit: z.number().min(1).max(100).optional().describe("Max results (default 20)"),
+  limit: z.number().optional().describe("Max results (default 20, max 100)"),
 });
 
 const spendingSummarySchema = z.object({
@@ -174,7 +174,7 @@ const spendingByCategorySchema = z.object({
   date_from: z.string().optional().describe("Start date (YYYY-MM-DD)"),
   date_to: z.string().optional().describe("End date (YYYY-MM-DD)"),
   target_currency: z.string().optional().describe("Convert all totals to this currency"),
-  limit: z.number().min(1).max(50).optional().describe("Max categories to return (default 20)"),
+  limit: z.number().optional().describe("Max categories to return (default 20, max 50)"),
 });
 
 const listCategoriesSchema = z.object({
@@ -184,7 +184,7 @@ const listCategoriesSchema = z.object({
 const createTransactionSchema = z.object({
   account_id: z.string().describe("Account ID for the transaction"),
   type: z.enum(["income", "expense"]).describe("Transaction type"),
-  amount: z.number().positive().describe("Amount in display units (e.g. 10.50 for $10.50)"),
+  amount: z.number().describe("Amount in display units (e.g. 10.50 for $10.50, must be positive)"),
   description: z.string().describe("Transaction description"),
   date_time: z
     .number()
@@ -204,7 +204,7 @@ const createTransactionSchema = z.object({
 const createTransferSchema = z.object({
   from_account_id: z.string().describe("Source account ID"),
   to_account_id: z.string().describe("Destination account ID"),
-  amount: z.number().positive().describe("Transfer amount in display units"),
+  amount: z.number().describe("Transfer amount in display units (must be positive)"),
   description: z.string().describe("Transfer description"),
   date_time: z.number().describe("Transaction timestamp in milliseconds"),
   timezone: z.string().describe("Timezone (e.g. America/Sao_Paulo)"),

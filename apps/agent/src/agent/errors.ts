@@ -68,7 +68,8 @@ const PATTERNS: Array<{ reason: FailoverReason; regex: RegExp; statuses?: number
   },
   {
     reason: "format",
-    regex: /invalid request|tool_use\.id/i,
+    regex: /invalid request|bad request|tool_use\.id/i,
+    statuses: [400],
   },
   {
     reason: "context_overflow",

@@ -33,6 +33,9 @@ describe("classifyError", () => {
 
   it("classifies format errors", () => {
     expect(classifyError(new Error("invalid request body"))).toBe("format");
+    expect(classifyError(new Error("Bad Request"))).toBe("format");
+    const apiErr = Object.assign(new Error("Bad Request"), { status: 400 });
+    expect(classifyError(apiErr)).toBe("format");
   });
 
   it("classifies context overflow", () => {

@@ -27,7 +27,7 @@ const timezoneField = z
 
 const durationSchema = z
   .object({
-    amount: z.number().min(1).describe("Duration amount"),
+    amount: z.number().describe("Duration amount (must be at least 1)"),
     unit: z.enum(["minute", "day"]).describe("Duration unit"),
   })
   .optional()
@@ -38,8 +38,6 @@ const createInputSchema = z.object({
   description: z.string().optional().describe("Optional task details"),
   priority: z
     .number()
-    .min(1)
-    .max(4)
     .optional()
     .describe("Priority: 1=normal, 2=medium, 3=high, 4=urgent"),
   dueDate: dueDateField,
@@ -55,9 +53,9 @@ const createInputSchema = z.object({
 
 const listInputSchema = z.object({
   status: z.enum(["todo", "in_progress", "done"]).optional().describe("Filter by status"),
-  priority: z.number().min(1).max(4).optional().describe("Filter by priority (1=normal, 4=urgent)"),
+  priority: z.number().optional().describe("Filter by priority (1=normal, 4=urgent)"),
   labels: z.array(z.string()).optional().describe("Filter by labels"),
-  limit: z.number().min(1).max(100).optional().describe("Max tasks to return (default 50)"),
+  limit: z.number().optional().describe("Max tasks to return (default 50, max 100)"),
 });
 
 const updateInputSchema = z.object({
@@ -65,7 +63,7 @@ const updateInputSchema = z.object({
   title: z.string().optional().describe("New title"),
   description: z.string().optional().describe("New description"),
   status: z.enum(["todo", "in_progress", "done"]).optional().describe("New status"),
-  priority: z.number().min(1).max(4).optional().describe("New priority (1=normal, 4=urgent)"),
+  priority: z.number().optional().describe("New priority (1=normal, 4=urgent)"),
   dueDate: dueDateField,
   dueDateTime: dueDateTimeField,
   dueString: dueStringField,

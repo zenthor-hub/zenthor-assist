@@ -27,16 +27,9 @@ export const internetSearch = tool({
   description:
     "Search the internet for recent or factual information and return ranked source results. Use this for current events, latest updates, fact-checking, and finding relevant URLs before reading pages with browse_url.",
   inputSchema: z.object({
-    query: z
-      .string()
-      .min(2)
-      .max(500)
-      .describe("Natural-language search query to run on the public web"),
+    query: z.string().describe("Natural-language search query to run on the public web"),
     maxResults: z
       .number()
-      .int()
-      .min(1)
-      .max(10)
       .optional()
       .describe("Maximum number of results to return (1-10, default 5)"),
   }),

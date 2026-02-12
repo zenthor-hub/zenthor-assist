@@ -127,7 +127,7 @@ function getDefaultTools(modelName: string): Record<string, Tool> {
   };
 }
 
-const SEARCH_TOOL_NAMES = ["web_search", "google_search"] as const;
+const SEARCH_TOOL_NAMES = ["web_search", "google_search", "internet_search"] as const;
 
 function removeProviderSearchTools(allTools: Record<string, Tool>): Record<string, Tool> {
   const next = { ...allTools };

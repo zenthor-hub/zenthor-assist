@@ -28,7 +28,7 @@ export const browseUrl = tool({
   description:
     "Fetch and extract readable text content from a URL. Useful for reading web pages, articles, documentation, etc. Returns the text content stripped of HTML tags and navigation elements.",
   inputSchema: z.object({
-    url: z.string().url().describe("The URL to fetch and extract text from"),
+    url: z.string().describe("The URL to fetch and extract text from"),
   }),
   execute: async ({ url }) => {
     // SSRF prevention
