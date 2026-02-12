@@ -50,6 +50,9 @@ test-results
 # WhatsApp auth state
 .whatsapp-auth
 
+# OAuth/auth runtime caches
+.auth
+
 # Misc
 *.tgz
 .cache
