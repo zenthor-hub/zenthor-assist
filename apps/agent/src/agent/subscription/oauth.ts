@@ -300,33 +300,36 @@ export async function browserOAuthFlow(): Promise<TokenResponse> {
 
   void logger.lineInfo(`[oauth] Open this URL in your browser:\n  ${authUrl}`);
 
-  const tokens = await new Promise<TokenResponse>((resolve, reject) => {
-    const timeout = setTimeout(
-      () => {
-        if (pendingOAuth) {
-          pendingOAuth = undefined;
-          reject(new Error("OAuth callback timeout (5 min)"));
-        }
-      },
-      5 * 60 * 1000,
-    );
+  try {
+    const tokens = await new Promise<TokenResponse>((resolve, reject) => {
+      const timeout = setTimeout(
+        () => {
+          if (pendingOAuth) {
+            pendingOAuth = undefined;
+            reject(new Error("OAuth callback timeout (5 min)"));
+          }
+        },
+        5 * 60 * 1000,
+      );
 
-    pendingOAuth = {
-      pkce,
-      state,
-      resolve: (t) => {
-        clearTimeout(timeout);
-        resolve(t);
-      },
-      reject: (e) => {
-        clearTimeout(timeout);
-        reject(e);
-      },
-    };
-  });
+      pendingOAuth = {
+        pkce,
+        state,
+        resolve: (t) => {
+          clearTimeout(timeout);
+          resolve(t);
+        },
+        reject: (e) => {
+          clearTimeout(timeout);
+          reject(e);
+        },
+      };
+    });
 
-  stopOAuthServer();
-  return tokens;
+    return tokens;
+  } finally {
+    stopOAuthServer();
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@zenthor-assist/env/agent", () => ({
   env: {
@@ -11,6 +11,7 @@ vi.mock("../../observability/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), lineInfo: vi.fn(), lineWarn: vi.fn() },
 }));
 
+import * as oauth from "./oauth";
 import {
   buildAuthorizeUrl,
   extractAccountId,
@@ -21,6 +22,38 @@ import {
   type IdTokenClaims,
   type TokenResponse,
 } from "./oauth";
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
+
+async function waitForLocalServer(url: string): Promise<void> {
+  for (let i = 0; i < 50; i += 1) {
+    try {
+      await fetch(url);
+      return;
+    } catch {
+      // wait for server startup
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+
+  throw new Error("OAuth callback server did not start in time");
+}
+
+async function waitForLocalServerStop(url: string): Promise<void> {
+  for (let i = 0; i < 50; i += 1) {
+    try {
+      await fetch(url);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    } catch {
+      return;
+    }
+  }
+
+  throw new Error("OAuth callback server did not stop in time");
+}
 
 // ---------------------------------------------------------------------------
 // PKCE generation
@@ -219,5 +252,49 @@ describe("buildAuthorizeUrl", () => {
     expect(parsed.searchParams.get("originator")).toBe("zenthor-assist");
     expect(parsed.searchParams.get("id_token_add_organizations")).toBe("true");
     expect(parsed.searchParams.get("codex_cli_simplified_flow")).toBe("true");
+  });
+});
+
+describe("browserOAuthFlow", () => {
+  it("stops the local callback server on callback error response", async () => {
+    const flowResult = oauth.browserOAuthFlow().then(
+      (value) => ({ ok: true, value }) as const,
+      (error: Error) => ({ ok: false, error }) as const,
+    );
+    await waitForLocalServer("http://localhost:9999/health");
+
+    const response = await fetch("http://localhost:9999/auth/callback?error=access_denied");
+    expect(response.status).toBe(200);
+    const body = await response.text();
+    expect(body).toContain("Auth Failed");
+
+    const flow = await flowResult;
+    if (!flow.ok) {
+      expect(flow.error).toBeInstanceOf(Error);
+      expect(flow.error.message).toContain("access_denied");
+    } else {
+      throw new Error("Expected browserOAuthFlow to reject with access_denied");
+    }
+    await waitForLocalServerStop("http://localhost:9999/health");
+  });
+
+  it("stops the local callback server on timeout", async () => {
+    vi.useFakeTimers();
+    const flowResult = oauth.browserOAuthFlow().then(
+      (value) => ({ ok: true, value }) as const,
+      (error: Error) => ({ ok: false, error }) as const,
+    );
+    await waitForLocalServer("http://localhost:9999/health");
+
+    await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+    const flow = await flowResult;
+    if (!flow.ok) {
+      expect(flow.error).toBeInstanceOf(Error);
+      expect(flow.error.message).toContain("OAuth callback timeout (5 min)");
+    } else {
+      throw new Error("Expected browserOAuthFlow to reject with timeout");
+    }
+    vi.useRealTimers();
+    await waitForLocalServerStop("http://localhost:9999/health");
   });
 });
