@@ -18,10 +18,10 @@ import { getWebSearchTool } from "./tools/web-search";
 function buildProviderOptions(
   mode: string,
   systemPrompt: string,
-): Record<string, Record<string, string>> | undefined {
+): Record<string, Record<string, string | boolean>> | undefined {
   if (mode !== "openai_subscription") return undefined;
   return {
-    openai: { instructions: systemPrompt },
+    openai: { instructions: systemPrompt, store: false },
   };
 }
 
