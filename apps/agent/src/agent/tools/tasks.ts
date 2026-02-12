@@ -36,10 +36,7 @@ const durationSchema = z
 const createInputSchema = z.object({
   title: z.string().describe("Task title"),
   description: z.string().optional().describe("Optional task details"),
-  priority: z
-    .number()
-    .optional()
-    .describe("Priority: 1=normal, 2=medium, 3=high, 4=urgent"),
+  priority: z.number().optional().describe("Priority: 1=normal, 2=medium, 3=high, 4=urgent"),
   dueDate: dueDateField,
   dueDateTime: dueDateTimeField,
   dueString: dueStringField,
