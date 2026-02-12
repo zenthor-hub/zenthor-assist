@@ -2,7 +2,7 @@
 
 ## Repository Snapshot
 
-Verified against this repository on 2026-02-07.
+Verified against this repository on 2026-02-12.
 
 - Monorepo: Bun workspaces + Turborepo
 - Apps:
@@ -84,6 +84,10 @@ Important:
 - For behavior/runtime logic changes, run relevant tests:
   - `bun run test:run` (full)
   - `bun run test:run -- <path-to-test-file>` (targeted)
+
+## Recent Verification
+
+- 2026-02-12: `bun run static-analysis` passes (root lint, format check, typecheck, knip).
 
 ## Project Structure
 
