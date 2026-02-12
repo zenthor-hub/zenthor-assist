@@ -230,6 +230,8 @@ export async function generateResponse(
 
   const systemPrompt = buildSystemPrompt(skills, options?.agentConfig, options?.channel);
 
+  const useStreaming = (await getAIProvider()).mode === "openai_subscription";
+
   const { result, modelUsed } = await runWithFallback({
     primaryModel,
     fallbackModels,
@@ -239,30 +241,30 @@ export async function generateResponse(
       const resolvedTools = resolveToolsForModel(modelName, options?.toolsOverride);
       const providerOptions = buildProviderOptions(provider.mode, systemPrompt);
 
-      let result;
-      try {
-        result = await generateText({
-          model: m,
-          system: systemPrompt,
-          messages: conversationMessages,
-          tools: resolvedTools,
-          stopWhen: stepCountIs(10),
-          providerOptions,
-        });
-      } catch (err) {
-        // Temporary: dump raw API error for debugging (bypasses redaction)
-        const rawErr = err as Record<string, unknown>;
-        console.error("[DEBUG] Raw API error:", {
-          message: rawErr.message,
-          status: rawErr.status ?? rawErr.statusCode,
-          responseBody: rawErr.responseBody ?? rawErr.data ?? rawErr.body,
-          cause: rawErr.cause,
-          url: rawErr.url,
-          requestBodyValues: rawErr.requestBodyValues
-            ? JSON.stringify(rawErr.requestBodyValues).slice(0, 500)
-            : undefined,
-        });
+      const callOptions = {
+        model: m,
+        system: systemPrompt,
+        messages: conversationMessages,
+        stopWhen: stepCountIs(10),
+        providerOptions,
+      };
 
+      const execute = async (toolsToUse: Record<string, Tool>) => {
+        if (useStreaming) {
+          // Subscription endpoints require stream=true; consume the stream fully.
+          const stream = streamText({ ...callOptions, tools: toolsToUse });
+          const text = await stream.text;
+          const steps = await stream.steps;
+          return { text, steps };
+        }
+        const gen = await generateText({ ...callOptions, tools: toolsToUse });
+        return { text: gen.text, steps: gen.steps };
+      };
+
+      let completed;
+      try {
+        completed = await execute(resolvedTools);
+      } catch (err) {
         const hasProviderSearchTool = SEARCH_TOOL_NAMES.some((name) => name in resolvedTools);
         if (!hasProviderSearchTool || !shouldRetryWithoutProviderSearch(provider.mode, err)) {
           throw err;
@@ -274,18 +276,11 @@ export async function generateResponse(
           mode: provider.mode,
         });
 
-        result = await generateText({
-          model: m,
-          system: systemPrompt,
-          messages: conversationMessages,
-          tools: removeProviderSearchTools(resolvedTools),
-          stopWhen: stepCountIs(10),
-          providerOptions,
-        });
+        completed = await execute(removeProviderSearchTools(resolvedTools));
       }
 
-      const allToolCalls = result.steps.flatMap((step) => step.toolCalls);
-      const allToolResults = result.steps.flatMap((step) => step.toolResults);
+      const allToolCalls = completed.steps.flatMap((step) => step.toolCalls);
+      const allToolResults = completed.steps.flatMap((step) => step.toolResults);
 
       const resultsByCallId = new Map(allToolResults.map((tr) => [tr.toolCallId, tr.output]));
 
@@ -296,14 +291,14 @@ export async function generateResponse(
       }));
 
       return {
-        content: result.text,
+        content: completed.text,
         toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
       };
     },
   });
 
   void logger.info("agent.model.generate.completed", {
-    mode: "non_streaming",
+    mode: useStreaming ? "stream_consumed" : "non_streaming",
     modelUsed,
     durationMs: Date.now() - startedAt,
     channel: options?.channel,
