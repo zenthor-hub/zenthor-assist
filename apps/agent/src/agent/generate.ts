@@ -250,6 +250,19 @@ export async function generateResponse(
           providerOptions,
         });
       } catch (err) {
+        // Temporary: dump raw API error for debugging (bypasses redaction)
+        const rawErr = err as Record<string, unknown>;
+        console.error("[DEBUG] Raw API error:", {
+          message: rawErr.message,
+          status: rawErr.status ?? rawErr.statusCode,
+          responseBody: rawErr.responseBody ?? rawErr.data ?? rawErr.body,
+          cause: rawErr.cause,
+          url: rawErr.url,
+          requestBodyValues: rawErr.requestBodyValues
+            ? JSON.stringify(rawErr.requestBodyValues).slice(0, 500)
+            : undefined,
+        });
+
         const hasProviderSearchTool = SEARCH_TOOL_NAMES.some((name) => name in resolvedTools);
         if (!hasProviderSearchTool || !shouldRetryWithoutProviderSearch(provider.mode, err)) {
           throw err;
