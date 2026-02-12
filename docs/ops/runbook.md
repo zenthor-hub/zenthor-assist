@@ -331,6 +331,36 @@ bunx convex run whatsappLeases.listEnabledAccounts
 bunx convex run whatsappSession.getAll
 ```
 
+## Runtime Alert Check (Railway)
+
+Use this command to detect operational alert conditions before incidents escalate:
+
+```bash
+cd apps/agent
+bun run ops:check-alerts
+```
+
+Default checks:
+
+- Socket reconnect burst: alert when `WebSocket closed with code 1006` is >= 10 within 10 minutes (for `agent-whatsapp-cloud` and `agent-core`).
+- Socket mismatch: alert when disconnect and reconnect counts differ in the same burst window.
+- WhatsApp Cloud critical events over 24h lookback:
+  - `whatsapp.cloud.lease.heartbeat.lost`
+  - `whatsapp.cloud.outbound.loop.error`
+  - `whatsapp.cloud.send.failed`
+
+Optional overrides:
+
+```bash
+cd apps/agent
+bun run ops:check-alerts -- --environment development --burst-window 10m --lookback 24h --threshold 10 --lines 2000
+```
+
+Exit codes:
+
+- `0` = healthy
+- `2` = alert condition detected
+
 ## Validation Summary Checklist
 
 Before production rollout, confirm all pass:

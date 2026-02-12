@@ -16,6 +16,7 @@
     "start:whatsapp-ingress": "bun src/index.whatsapp-ingress.ts",
     "start:whatsapp-egress": "bun src/index.whatsapp-egress.ts",
     "start:whatsapp-cloud": "bun src/index.whatsapp-cloud.ts",
+    "ops:check-alerts": "bun src/ops/railway-alert-check.ts",
     "auth:subscription": "bun src/subscription-auth.ts",
     "lint": "oxlint",
     "format": "oxfmt --write",
