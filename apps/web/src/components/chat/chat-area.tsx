@@ -3,7 +3,7 @@
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import type { Id } from "@zenthor-assist/backend/convex/_generated/dataModel";
 import { useMutation } from "convex/react";
-import { Check, MessageSquare, ShieldAlert, X } from "lucide-react";
+import { AlertCircle, Check, MessageSquare, ShieldAlert, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
@@ -186,6 +186,13 @@ export function ChatArea({ conversationId }: ChatAreaProps) {
                     <MessageContent>
                       {msg.role === "user" ? (
                         <p className="whitespace-pre-wrap">{msg.content}</p>
+                      ) : msg.status === "failed" ? (
+                        <div className="flex items-start gap-2 py-1">
+                          <AlertCircle className="text-destructive mt-0.5 size-4 shrink-0" />
+                          <p className="text-muted-foreground text-sm">
+                            Failed to generate a response. Please try sending your message again.
+                          </p>
+                        </div>
                       ) : (
                         <>
                           {msg.content ? (

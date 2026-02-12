@@ -20,6 +20,7 @@ interface ChatMessage {
   toolCalls?: { name: string; input: unknown; output?: unknown }[];
   modelUsed?: string;
   streaming?: boolean;
+  status?: "pending" | "sent" | "delivered" | "failed";
   position: MessagePosition;
 }
 
@@ -39,6 +40,7 @@ function computePositions(
     toolCalls?: { name: string; input: unknown; output?: unknown }[];
     modelUsed?: string;
     streaming?: boolean;
+    status?: "pending" | "sent" | "delivered" | "failed";
   }[],
 ): ChatMessage[] {
   return messages.map((msg, i) => {
@@ -96,6 +98,7 @@ export function useConvexMessages(conversationId: Id<"conversations">) {
         toolCalls?: { name: string; input: unknown; output?: unknown }[];
         modelUsed?: string;
         streaming?: boolean;
+        status?: "pending" | "sent" | "delivered" | "failed";
       }[],
     );
   }, [rawMessages]);
