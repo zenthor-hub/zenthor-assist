@@ -222,6 +222,29 @@ export const finalizeMessage = serviceMutation({
   },
 });
 
+/**
+ * Mark a placeholder message as failed. Called when job generation
+ * fails so the UI stops showing infinite loading dots.
+ */
+export const failPlaceholder = serviceMutation({
+  args: {
+    messageId: v.id("messages"),
+    errorMessage: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const msg = await ctx.db.get(args.messageId);
+    if (!msg) return null;
+
+    await ctx.db.patch(args.messageId, {
+      content: args.errorMessage ?? "Sorry, something went wrong. Please try again.",
+      streaming: false,
+      status: "failed",
+    });
+    return null;
+  },
+});
+
 export const updateMediaTranscript = serviceMutation({
   args: {
     messageId: v.id("messages"),

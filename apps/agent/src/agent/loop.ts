@@ -1,4 +1,5 @@
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
+import type { Id } from "@zenthor-assist/backend/convex/_generated/dataModel";
 import { env } from "@zenthor-assist/env/agent";
 import type { Tool } from "ai";
 
@@ -84,6 +85,7 @@ export function startAgentLoop() {
     for (const job of jobs) {
       const startedAt = Date.now();
       let heartbeatInterval: ReturnType<typeof setInterval> | undefined;
+      let placeholderId: Id<"messages"> | undefined;
       try {
         const claimed = await client.mutation(api.agent.claimJob, {
           serviceKey,
@@ -312,12 +314,13 @@ export function startAgentLoop() {
             continue;
           }
 
-          const placeholderId = await client.mutation(api.messages.createPlaceholder, {
+          placeholderId = await client.mutation(api.messages.createPlaceholder, {
             serviceKey,
             conversationId: job.conversationId,
             channel: "web",
           });
           if (!placeholderId) continue;
+          const activeMessageId = placeholderId;
 
           let lastPatchTime = 0;
           const THROTTLE_MS = 200;
@@ -335,7 +338,7 @@ export function startAgentLoop() {
                   client
                     .mutation(api.messages.updateStreamingContent, {
                       serviceKey,
-                      messageId: placeholderId,
+                      messageId: activeMessageId,
                       content: accumulatedText,
                     })
                     .catch((err) => {
@@ -359,6 +362,13 @@ export function startAgentLoop() {
           modelUsed = response.modelUsed;
 
           if (checkLease("post_generate")) {
+            await client
+              .mutation(api.messages.failPlaceholder, {
+                serviceKey,
+                messageId: activeMessageId,
+                errorMessage: "Processing was interrupted. Please try again.",
+              })
+              .catch(() => {});
             continue;
           }
 
@@ -366,7 +376,7 @@ export function startAgentLoop() {
           await client
             .mutation(api.messages.updateStreamingContent, {
               serviceKey,
-              messageId: placeholderId,
+              messageId: activeMessageId,
               content: response.content,
             })
             .catch((err) => {
@@ -377,12 +387,19 @@ export function startAgentLoop() {
             });
 
           if (checkLease("pre_finalize")) {
+            await client
+              .mutation(api.messages.failPlaceholder, {
+                serviceKey,
+                messageId: activeMessageId,
+                errorMessage: "Processing was interrupted. Please try again.",
+              })
+              .catch(() => {});
             continue;
           }
 
           await client.mutation(api.messages.finalizeMessage, {
             serviceKey,
-            messageId: placeholderId,
+            messageId: activeMessageId,
             content: response.content,
             toolCalls: response.toolCalls,
             modelUsed,
@@ -483,6 +500,17 @@ export function startAgentLoop() {
           errorMessage,
           durationMs: Date.now() - startedAt,
         });
+
+        // Clean up orphaned placeholder message so UI doesn't show infinite loading
+        if (placeholderId) {
+          await client
+            .mutation(api.messages.failPlaceholder, {
+              serviceKey,
+              messageId: placeholderId,
+              errorMessage: "Sorry, something went wrong. Please try again.",
+            })
+            .catch(() => {});
+        }
 
         if (isRetryable(reason)) {
           const retried = await client

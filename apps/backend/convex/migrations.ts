@@ -32,6 +32,36 @@ export const backfillUserRoles = internalMutation({
 });
 
 /**
+ * Fix orphaned streaming messages stuck with streaming=true.
+ * These occur when a job fails after creating a placeholder but
+ * before finalizing the message. Safe to run multiple times.
+ */
+export const fixOrphanedStreamingMessages = internalMutation({
+  args: {},
+  returns: v.object({
+    updated: v.number(),
+    total: v.number(),
+  }),
+  handler: async (ctx) => {
+    const messages = await ctx.db.query("messages").collect();
+    let updated = 0;
+
+    for (const msg of messages) {
+      if (msg.streaming === true) {
+        await ctx.db.patch(msg._id, {
+          streaming: false,
+          status: "failed",
+          content: msg.content || "Sorry, something went wrong. Please try again.",
+        });
+        updated += 1;
+      }
+    }
+
+    return { updated, total: messages.length };
+  },
+});
+
+/**
  * Backfill unowned skills to a specific owner user. Safe to run multiple times.
  */
 export const backfillSkillOwners = internalMutation({

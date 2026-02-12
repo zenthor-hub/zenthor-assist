@@ -17,18 +17,18 @@ Railway/production deployments choose mode via `AI_PROVIDER_MODE` env var. Busin
 
 ### New env vars (`packages/env/src/agent.ts`)
 
-| Var | Type | Default | Notes |
-|-----|------|---------|-------|
-| `AI_PROVIDER_MODE` | `"gateway" \| "openai_subscription"` | `"gateway"` | Mode selector |
-| `AI_SUBSCRIPTION_BASE_URL` | string | `https://chatgpt.com/backend-api/codex` | Codex endpoint base |
-| `AI_SUBSCRIPTION_CLIENT_ID` | string | `app_EMoamEEZ73f0CkXaXp7hrann` | OAuth client ID |
-| `AI_SUBSCRIPTION_ACCESS_TOKEN` | string | — | Optional env-seeded token |
-| `AI_SUBSCRIPTION_REFRESH_TOKEN` | string | — | Optional env-seeded refresh token |
-| `AI_SUBSCRIPTION_EXPIRES_AT` | number | — | Token expiry timestamp (ms) |
-| `AI_SUBSCRIPTION_ACCOUNT_ID` | string | — | ChatGPT account ID |
-| `AI_SUBSCRIPTION_AUTH_METHOD` | `"browser" \| "device"` | `"device"` | OAuth flow method |
-| `AI_SUBSCRIPTION_OAUTH_PORT` | number | `1455` | Local callback server port |
-| `AI_SUBSCRIPTION_AUTO_LOGIN` | boolean | `false` | Auto-trigger OAuth if no valid creds |
+| Var                             | Type                                 | Default                                 | Notes                                |
+| ------------------------------- | ------------------------------------ | --------------------------------------- | ------------------------------------ |
+| `AI_PROVIDER_MODE`              | `"gateway" \| "openai_subscription"` | `"gateway"`                             | Mode selector                        |
+| `AI_SUBSCRIPTION_BASE_URL`      | string                               | `https://chatgpt.com/backend-api/codex` | Codex endpoint base                  |
+| `AI_SUBSCRIPTION_CLIENT_ID`     | string                               | `app_EMoamEEZ73f0CkXaXp7hrann`          | OAuth client ID                      |
+| `AI_SUBSCRIPTION_ACCESS_TOKEN`  | string                               | —                                       | Optional env-seeded token            |
+| `AI_SUBSCRIPTION_REFRESH_TOKEN` | string                               | —                                       | Optional env-seeded refresh token    |
+| `AI_SUBSCRIPTION_EXPIRES_AT`    | number                               | —                                       | Token expiry timestamp (ms)          |
+| `AI_SUBSCRIPTION_ACCOUNT_ID`    | string                               | —                                       | ChatGPT account ID                   |
+| `AI_SUBSCRIPTION_AUTH_METHOD`   | `"browser" \| "device"`              | `"device"`                              | OAuth flow method                    |
+| `AI_SUBSCRIPTION_OAUTH_PORT`    | number                               | `1455`                                  | Local callback server port           |
+| `AI_SUBSCRIPTION_AUTO_LOGIN`    | boolean                              | `false`                                 | Auto-trigger OAuth if no valid creds |
 
 ### Existing env behavior
 
@@ -53,9 +53,11 @@ _resetProviders(): void               — test helper
 ```
 
 ### Gateway branch
+
 Uses `@ai-sdk/gateway` with `AI_GATEWAY_API_KEY`. Identical to pre-V3 behavior.
 
 ### Subscription branch
+
 1. Calls `createSubscriptionFetch()` from token manager
 2. Creates `@ai-sdk/openai` provider with dummy API key + custom fetch
 3. Custom fetch: injects `Authorization: Bearer` + `ChatGPT-Account-Id` headers, rewrites `/v1/responses` and `/chat/completions` URLs to `{baseUrl}/responses`
@@ -65,6 +67,7 @@ Uses `@ai-sdk/gateway` with `AI_GATEWAY_API_KEY`. Identical to pre-V3 behavior.
 ### Token Manager (`apps/agent/src/agent/subscription/token-manager.ts`)
 
 5-step credential resolution:
+
 1. In-memory cache (fast path, not expired)
 2. Env vars (`AI_SUBSCRIPTION_ACCESS_TOKEN` + `AI_SUBSCRIPTION_REFRESH_TOKEN`)
 3. Local file cache (`.auth/openai-subscription.json`)
@@ -76,6 +79,7 @@ Uses `@ai-sdk/gateway` with `AI_GATEWAY_API_KEY`. Identical to pre-V3 behavior.
 ### OAuth Module (`apps/agent/src/agent/subscription/oauth.ts`)
 
 Two flows:
+
 - **Browser flow**: local HTTP callback server on configurable port, PKCE, 5-min timeout
 - **Device flow**: headless/SSH-friendly, polls `auth.openai.com` device auth endpoints
 
@@ -93,6 +97,7 @@ bun run auth:subscription status   # Show credential state
 ## Files Changed
 
 ### Created
+
 - `apps/agent/src/agent/subscription/oauth.ts` — OAuth PKCE + flows
 - `apps/agent/src/agent/subscription/token-manager.ts` — Token lifecycle
 - `apps/agent/src/agent/subscription/oauth.test.ts` — 20 tests
@@ -101,6 +106,7 @@ bun run auth:subscription status   # Show credential state
 - `apps/agent/src/subscription-auth.ts` — CLI entrypoint
 
 ### Modified
+
 - `packages/env/src/agent.ts` — New env vars
 - `apps/agent/src/agent/ai-gateway.ts` — Provider abstraction
 - `apps/agent/src/agent/ai-gateway.test.ts` — Extended to 14 tests (was 3)
@@ -114,12 +120,12 @@ bun run auth:subscription status   # Show credential state
 
 ## Test Coverage
 
-| File | Tests | Coverage |
-|------|-------|----------|
-| `ai-gateway.test.ts` | 14 | Legacy shim, normalizeModelId, getProviderMode, getAIProvider (both modes), singleton, reset |
-| `oauth.test.ts` | 20 | PKCE generation, generateState, parseJwtClaims, extractAccountIdFromClaims, extractAccountId, buildAuthorizeUrl |
-| `env-requirements.test.ts` | 17 | Role×mode matrix for required/recommended env vars |
-| `web-search.test.ts` | 7 | Gateway provider routing + subscription mode empty-object guard |
+| File                       | Tests | Coverage                                                                                                        |
+| -------------------------- | ----- | --------------------------------------------------------------------------------------------------------------- |
+| `ai-gateway.test.ts`       | 14    | Legacy shim, normalizeModelId, getProviderMode, getAIProvider (both modes), singleton, reset                    |
+| `oauth.test.ts`            | 20    | PKCE generation, generateState, parseJwtClaims, extractAccountIdFromClaims, extractAccountId, buildAuthorizeUrl |
+| `env-requirements.test.ts` | 17    | Role×mode matrix for required/recommended env vars                                                              |
+| `web-search.test.ts`       | 7     | Gateway provider routing + subscription mode empty-object guard                                                 |
 
 **Total: 58 new/updated tests, 359 tests pass across 29 test files.**
 
