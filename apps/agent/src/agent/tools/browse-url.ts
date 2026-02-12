@@ -1,15 +1,129 @@
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
+
 import { tool } from "ai";
 import { convert } from "html-to-text";
 import { z } from "zod";
 
-const BLOCKED_PROTOCOLS = ["file:", "data:", "javascript:", "blob:"];
+const ALLOWED_PROTOCOLS = ["http:", "https:"] as const;
+const ALLOWED_PORTS = new Set([80, 443]);
+const MAX_PORT = 65_535;
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024; // 5MB
 const MAX_OUTPUT_CHARS = 100_000;
 const TIMEOUT_MS = 15_000;
 
-function isBlockedProtocol(url: string): boolean {
-  const lower = url.toLowerCase().trim();
-  return BLOCKED_PROTOCOLS.some((p) => lower.startsWith(p));
+function isDisallowedHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  return (
+    normalized === "localhost" ||
+    normalized.endsWith(".localhost") ||
+    normalized.endsWith(".local") ||
+    normalized === "localhost.localdomain" ||
+    normalized === "local" ||
+    normalized.endsWith(".internal")
+  );
+}
+
+function isBlockedIPv4(address: string): boolean {
+  const parts = address.split(".").map((part) => Number.parseInt(part, 10));
+  if (parts.length !== 4 || parts.some((part) => Number.isNaN(part) || part < 0 || part > 255)) {
+    return false;
+  }
+
+  const [first, second] = parts;
+  if (first === undefined || second === undefined) {
+    return false;
+  }
+
+  return (
+    first === 10 ||
+    first === 127 ||
+    first === 0 ||
+    first === 255 ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168) ||
+    (first === 100 && second >= 64 && second <= 127)
+  );
+}
+
+function isBlockedIPv6(address: string): boolean {
+  const normalized = address.toLowerCase();
+  return (
+    normalized === "::" ||
+    normalized === "::1" ||
+    normalized === "0:0:0:0:0:0:0:1" ||
+    normalized.startsWith("fe80") ||
+    normalized.startsWith("fc") ||
+    normalized.startsWith("fd") ||
+    normalized.startsWith("ff") ||
+    normalized.startsWith("2001:db8") ||
+    normalized.startsWith("2002:") ||
+    (normalized.startsWith("::ffff:") && isBlockedIPv4(normalized.slice("::ffff:".length)))
+  );
+}
+
+function isBlockedIp(address: string): boolean {
+  const family = isIP(address);
+  if (!family) return false;
+  return family === 4 ? isBlockedIPv4(address) : isBlockedIPv6(address);
+}
+
+function isBlockedPort(port: number, protocol: string): boolean {
+  if (!ALLOWED_PORTS.has(port)) return true;
+
+  if (port > MAX_PORT || port <= 0) return true;
+  if (protocol === "https:" && port !== 443) return true;
+  if (protocol === "http:" && port !== 80) return true;
+  return false;
+}
+
+async function isPrivateOrBlockedTarget(rawUrl: string): Promise<string | undefined> {
+  let url: URL;
+
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return "Error: Invalid URL format.";
+  }
+
+  if (!ALLOWED_PROTOCOLS.includes(url.protocol as (typeof ALLOWED_PROTOCOLS)[number])) {
+    return `Error: Protocol not allowed. Blocked protocols: file:, data:, javascript:, blob:.`;
+  }
+
+  const hostname =
+    url.hostname.startsWith("[") && url.hostname.endsWith("]")
+      ? url.hostname.slice(1, -1)
+      : url.hostname;
+  const port = url.port ? Number.parseInt(url.port, 10) : url.protocol === "https:" ? 443 : 80;
+
+  if (isNaN(port) || isBlockedPort(port, url.protocol)) {
+    return "Error: Port not allowed. Use http/https on ports 80 or 443 only.";
+  }
+
+  if (isDisallowedHostname(hostname)) {
+    return "Error: Hostname is blocked for security reasons.";
+  }
+
+  if (isBlockedIp(hostname)) {
+    return "Error: Direct IP address target is blocked.";
+  }
+
+  try {
+    const addresses = await lookup(hostname, { all: true });
+    if (addresses.length === 0) {
+      return "Error: Hostname did not resolve to any addresses.";
+    }
+
+    const blocked = addresses.some((record) => isBlockedIp(record.address));
+    if (blocked) {
+      return "Error: Hostname resolves to blocked/private IP range.";
+    }
+  } catch {
+    return "Error: Hostname resolution failed or is blocked.";
+  }
+
+  return undefined;
 }
 
 function isBinaryContentType(ct: string): boolean {
@@ -31,9 +145,9 @@ export const browseUrl = tool({
     url: z.string().describe("The URL to fetch and extract text from"),
   }),
   execute: async ({ url }) => {
-    // SSRF prevention
-    if (isBlockedProtocol(url)) {
-      return `Error: Protocol not allowed. Blocked protocols: ${BLOCKED_PROTOCOLS.join(", ")}`;
+    const validationError = await isPrivateOrBlockedTarget(url);
+    if (validationError) {
+      return validationError;
     }
 
     try {
