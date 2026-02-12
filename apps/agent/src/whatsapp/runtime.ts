@@ -16,6 +16,7 @@ interface WhatsAppRuntimeOptions {
 }
 
 const OUTBOUND_LOCK_MS = 120_000;
+let leaseLost = false;
 
 async function acquireLease(accountId: string, ownerId: string): Promise<void> {
   const client = getConvexClient();
@@ -56,6 +57,25 @@ async function startOutboundLoop(accountId: string, ownerId: string): Promise<vo
   typedEvent.info("whatsapp.outbound.loop.started", { accountId, ownerId });
 
   while (true) {
+    if (leaseLost) {
+      void logger.lineWarn(
+        `[whatsapp] Outbound loop paused — lease lost for '${accountId}', attempting recovery`,
+      );
+      try {
+        await acquireLease(accountId, ownerId);
+        leaseLost = false;
+        void logger.lineInfo(
+          `[whatsapp] Lease recovered for account '${accountId}' by '${ownerId}'`,
+        );
+      } catch (error) {
+        void logger.lineError(
+          `[whatsapp] Lease recovery error: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        await sleep(2_000);
+      }
+      continue;
+    }
+
     try {
       const job = await client.mutation(api.delivery.claimNextOutbound, {
         serviceKey: env.AGENT_SECRET,
@@ -76,6 +96,13 @@ async function startOutboundLoop(accountId: string, ownerId: string): Promise<vo
           error: "Missing recipient phone for WhatsApp outbound message",
           retry: false,
         });
+        continue;
+      }
+
+      if (leaseLost) {
+        void logger.lineWarn(
+          "[whatsapp] Lease lost after claim — skipping send to avoid duplicate",
+        );
         continue;
       }
 
@@ -111,6 +138,7 @@ export async function startWhatsAppRuntime(options: WhatsAppRuntimeOptions): Pro
   const accountId = env.WHATSAPP_ACCOUNT_ID ?? "default";
   const ownerId = env.WORKER_ID ?? `worker-${crypto.randomUUID().slice(0, 8)}`;
   const heartbeatMs = Math.max(5_000, env.WHATSAPP_HEARTBEAT_MS ?? 15_000);
+  leaseLost = false;
 
   await client.mutation(api.whatsappLeases.upsertAccount, {
     serviceKey: env.AGENT_SECRET,
@@ -132,6 +160,7 @@ export async function startWhatsAppRuntime(options: WhatsAppRuntimeOptions): Pro
       })
       .then((ok) => {
         if (!ok) {
+          leaseLost = true;
           void logger.lineError(
             `[whatsapp] Lease heartbeat lost for account '${accountId}' (owner '${ownerId}')`,
           );
@@ -142,6 +171,7 @@ export async function startWhatsAppRuntime(options: WhatsAppRuntimeOptions): Pro
         }
       })
       .catch((error) => {
+        leaseLost = true;
         void logger.lineError(
           `[whatsapp] Lease heartbeat error: ${error instanceof Error ? error.message : String(error)}`,
         );
