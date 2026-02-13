@@ -2,6 +2,7 @@
 
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
+import { T, useGT } from "gt-next";
 import { MessageCircle, MessageSquare, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -11,19 +12,20 @@ import Loader from "@/components/loader";
 import { PageWrapper } from "@/components/page-wrapper";
 import { Button } from "@/components/ui/button";
 
-function formatRelativeTime(timestamp: number) {
+function formatRelativeTime(t: (key: string) => string, timestamp: number) {
   const diff = Date.now() - timestamp;
   const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return "Just now";
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 1) return t("Just now");
+  if (minutes < 60) return `${minutes}${t("m ago")}`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return `${hours}${t("h ago")}`;
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
+  if (days < 7) return `${days}${t("d ago")}`;
   return new Date(timestamp).toLocaleDateString();
 }
 
 export default function ChatOverviewPage() {
+  const t = useGT();
   const conversations = useQuery(api.conversations.listRecentWithLastMessage, {});
   const createConversation = useMutation(api.conversations.create);
   const router = useRouter();
@@ -41,7 +43,7 @@ export default function ChatOverviewPage() {
       const id = await createConversation({});
       router.push(`/chat/${id}`);
     } catch {
-      toast.error("Failed to create conversation");
+      toast.error(t("Failed to create conversation"));
     }
   }
 
@@ -54,11 +56,11 @@ export default function ChatOverviewPage() {
 
   return (
     <PageWrapper
-      title="Overview"
+      title={<T>Overview</T>}
       actions={
         <Button onClick={handleNewChat} size="sm" className="gap-1.5">
           <Plus className="size-3.5" />
-          New chat
+          <T>New chat</T>
         </Button>
       }
     >
@@ -66,20 +68,26 @@ export default function ChatOverviewPage() {
         {/* Stats */}
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-lg border p-4">
-            <p className="text-muted-foreground text-xs">Total</p>
+            <p className="text-muted-foreground text-xs">
+              <T>Total</T>
+            </p>
             <p className="text-xl font-semibold">{conversations.length}</p>
           </div>
           <div className="rounded-lg border p-4">
             <div className="flex items-center gap-1.5">
               <MessageSquare className="text-muted-foreground size-3" />
-              <p className="text-muted-foreground text-xs">Web</p>
+              <p className="text-muted-foreground text-xs">
+                <T>Web</T>
+              </p>
             </div>
             <p className="text-xl font-semibold">{webCount}</p>
           </div>
           <div className="rounded-lg border p-4">
             <div className="flex items-center gap-1.5">
               <MessageCircle className="size-3 text-emerald-600 dark:text-emerald-400" />
-              <p className="text-muted-foreground text-xs">WhatsApp</p>
+              <p className="text-muted-foreground text-xs">
+                <T>WhatsApp</T>
+              </p>
             </div>
             <p className="text-xl font-semibold">{whatsappCount}</p>
           </div>
@@ -87,25 +95,33 @@ export default function ChatOverviewPage() {
 
         {/* Active today */}
         <p className="text-muted-foreground text-xs">
-          {activeToday} conversation{activeToday !== 1 ? "s" : ""} active today
+          {activeToday === 1 ? (
+            <T>1 conversation active today</T>
+          ) : (
+            <>
+              {activeToday} <T>conversations active today</T>
+            </>
+          )}
         </p>
 
         {/* Recent conversations */}
         <div>
           <h2 className="text-muted-foreground mb-3 text-xs font-medium tracking-wider uppercase">
-            Recent conversations
+            <T>Recent conversations</T>
           </h2>
           {conversations.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 rounded-lg border py-12">
               <MessageSquare className="text-muted-foreground/50 size-8" />
               <div className="text-center">
-                <p className="text-foreground text-sm font-medium">No conversations yet</p>
+                <p className="text-foreground text-sm font-medium">
+                  <T>No conversations yet</T>
+                </p>
                 <p className="text-muted-foreground mt-1 text-sm">
-                  Start your first chat to see it here.
+                  <T>Start your first chat to see it here.</T>
                 </p>
               </div>
               <Button onClick={handleNewChat} variant="outline" size="sm" className="mt-1">
-                Start a conversation
+                <T>Start a conversation</T>
               </Button>
             </div>
           ) : (
@@ -123,23 +139,23 @@ export default function ChatOverviewPage() {
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="truncate text-xs font-medium">{conv.title || "Chat"}</p>
+                      <p className="truncate text-xs font-medium">{conv.title || <T>Chat</T>}</p>
                       {conv.channel === "whatsapp" && (
                         <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
-                          WhatsApp
+                          <T>WhatsApp</T>
                         </span>
                       )}
                     </div>
                     {conv.lastMessage && (
                       <p className="text-muted-foreground truncate text-xs">
-                        {conv.lastMessage.role === "assistant" ? "Assistant: " : ""}
+                        {conv.lastMessage.role === "assistant" ? <T>Assistant:</T> : ""}
                         {conv.lastMessage.content}
                       </p>
                     )}
                   </div>
                   {conv.lastMessage && (
                     <span className="text-muted-foreground shrink-0 text-xs">
-                      {formatRelativeTime(conv.lastMessage.createdAt)}
+                      {formatRelativeTime(t, conv.lastMessage.createdAt)}
                     </span>
                   )}
                 </Link>

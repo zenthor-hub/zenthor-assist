@@ -1,6 +1,7 @@
 "use client";
 
 import { SignedIn, SignedOut } from "@clerk/nextjs";
+import { T } from "gt-next";
 import { House, LogIn, MessageCircle, Sparkles, Zap } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -47,7 +48,7 @@ export default function Home() {
             className="hidden dark:block"
           />
           <span className="bg-primary/10 text-primary rounded-sm px-1.5 py-0.5 text-[10px] font-semibold tracking-wider uppercase">
-            Beta
+            <T>Beta</T>
           </span>
         </div>
         <ModeToggle />
@@ -61,7 +62,11 @@ export default function Home() {
             className="animate-fade-up text-foreground text-center text-4xl leading-[1.1] font-bold tracking-tight md:text-5xl"
             style={{ animationDelay: "0.15s" }}
           >
-            Conversation, <span className="text-primary">elevated.</span>
+            <T>Conversation,</T>{" "}
+            <span className="text-primary">
+              {" "}
+              <T>elevated.</T>
+            </span>
           </h1>
 
           {/* Subtitle */}
@@ -69,8 +74,10 @@ export default function Home() {
             className="animate-fade-up text-muted-foreground mt-4 max-w-md text-center text-sm leading-relaxed md:text-base"
             style={{ animationDelay: "0.3s" }}
           >
-            Your intelligent companion — always ready, always sharp, always learning from every
-            exchange.
+            <T>
+              Your intelligent companion — always ready, always sharp, always learning from every
+              exchange.
+            </T>
           </p>
 
           {/* CTA */}
@@ -81,18 +88,18 @@ export default function Home() {
             <SignedOut>
               <Button asChild size="lg" className="gap-2 px-6">
                 <Link href={"/sign-in" as "/"}>
-                  Sign in
+                  <T>Sign in</T>
                   <LogIn className="size-4" />
                 </Link>
               </Button>
               <p className="text-muted-foreground text-xs">
-                Invite only — not open for sign-up yet.
+                <T>Invite only — not open for sign-up yet.</T>
               </p>
             </SignedOut>
             <SignedIn>
               <Button asChild size="lg" className="gap-2 px-6">
                 <Link href={"/home" as "/"}>
-                  Go to home
+                  <T>Go to home</T>
                   <House className="size-4" />
                 </Link>
               </Button>
@@ -113,9 +120,11 @@ export default function Home() {
               <MessageCircle className="size-4" />
             </div>
             <div>
-              <p className="text-foreground text-sm font-medium">WhatsApp & Web</p>
+              <p className="text-foreground text-sm font-medium">
+                <T>WhatsApp &amp; Web</T>
+              </p>
               <p className="text-muted-foreground text-sm leading-relaxed">
-                Your assistant meets you where you are — chat on WhatsApp or the web.
+                <T>Your assistant meets you where you are — chat on WhatsApp or the web.</T>
               </p>
             </div>
           </div>
@@ -124,9 +133,11 @@ export default function Home() {
               <Zap className="size-4" />
             </div>
             <div>
-              <p className="text-foreground text-sm font-medium">Powerful skills</p>
+              <p className="text-foreground text-sm font-medium">
+                <T>Powerful skills</T>
+              </p>
               <p className="text-muted-foreground text-sm leading-relaxed">
-                Web search, task scheduling, and a growing toolkit that gets things done.
+                <T>Web search, task scheduling, and a growing toolkit that gets things done.</T>
               </p>
             </div>
           </div>
@@ -135,9 +146,11 @@ export default function Home() {
               <Sparkles className="size-4" />
             </div>
             <div>
-              <p className="text-foreground text-sm font-medium">Always learning</p>
+              <p className="text-foreground text-sm font-medium">
+                <T>Always learning</T>
+              </p>
               <p className="text-muted-foreground text-sm leading-relaxed">
-                Context-aware memory that sharpens with every conversation.
+                <T>Context-aware memory that sharpens with every conversation.</T>
               </p>
             </div>
           </div>

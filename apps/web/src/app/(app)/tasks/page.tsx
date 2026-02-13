@@ -3,6 +3,7 @@
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import type { Id } from "@zenthor-assist/backend/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
+import { T, useGT } from "gt-next";
 import { CheckSquare, Circle, Clock, Pencil, Plus, Repeat, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -31,7 +32,10 @@ interface DueObject {
   lang?: string;
 }
 
-function formatRelativeDue(due: DueObject): { text: string; overdue: boolean; hasTime: boolean } {
+function formatRelativeDue(
+  t: (key: string) => string,
+  due: DueObject,
+): { text: string; overdue: boolean; hasTime: boolean } {
   const dueMs = due.datetime
     ? new Date(due.datetime).getTime()
     : new Date(`${due.date}T00:00:00`).getTime();
@@ -49,9 +53,9 @@ function formatRelativeDue(due: DueObject): { text: string; overdue: boolean; ha
         hour: "numeric",
         minute: "2-digit",
       });
-      text = `Today ${time}`;
+      text = `${t("Today")} ${time}`;
     } else {
-      text = "Today";
+      text = t("Today");
     }
     return { text, overdue: false, hasTime };
   }
@@ -62,17 +66,17 @@ function formatRelativeDue(due: DueObject): { text: string; overdue: boolean; ha
         hour: "numeric",
         minute: "2-digit",
       });
-      text = `Tomorrow ${time}`;
+      text = `${t("Tomorrow")} ${time}`;
     } else {
-      text = "Tomorrow";
+      text = t("Tomorrow");
     }
     return { text, overdue: false, hasTime };
   }
 
-  if (absDays === 1 && overdue) return { text: "Yesterday", overdue: true, hasTime };
+  if (absDays === 1 && overdue) return { text: t("Yesterday"), overdue: true, hasTime };
 
   if (absDays < 7) {
-    text = overdue ? `${absDays}d ago` : `In ${absDays}d`;
+    text = overdue ? `${absDays}${t("d ago")}` : `${t("In")} ${absDays}${t("d")}`;
     return { text, overdue, hasTime };
   }
 
@@ -105,6 +109,7 @@ interface TaskData {
 }
 
 export default function TasksPage() {
+  const t = useGT();
   const [filter, setFilter] = useState<FilterTab>("all");
   const [formOpen, setFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskData | undefined>();
@@ -147,9 +152,9 @@ export default function TasksPage() {
     try {
       await createTask({ title });
       setQuickAddTitle("");
-      toast.success("Task added");
+      toast.success(t("Task added"));
     } catch {
-      toast.error("Failed to add task");
+      toast.error(t("Failed to add task"));
     }
   }
 
@@ -157,7 +162,7 @@ export default function TasksPage() {
     try {
       await toggleComplete({ id: taskId });
     } catch {
-      toast.error("Failed to update task");
+      toast.error(t("Failed to update task"));
     }
   }
 
@@ -165,37 +170,43 @@ export default function TasksPage() {
     e.stopPropagation();
     try {
       await removeTask({ id: taskId });
-      toast.success("Task deleted");
+      toast.success(t("Task deleted"));
     } catch {
-      toast.error("Failed to delete task");
+      toast.error(t("Failed to delete task"));
     }
   }
 
   return (
     <PageWrapper
-      title="Tasks"
+      title={<T>Tasks</T>}
       actions={
         <Button size="sm" onClick={handleAdd}>
           <Plus className="size-4" />
-          New task
+          <T>New task</T>
         </Button>
       }
     >
       <div className="flex flex-col gap-6">
         {/* Filter tabs */}
         <div className="flex items-center gap-1">
-          {(["all", "active", "done"] as const).map((tab) => (
+          {(
+            [
+              { value: "all", label: t("All") },
+              { value: "active", label: t("Active") },
+              { value: "done", label: t("Done") },
+            ] as const
+          ).map((tab) => (
             <button
-              key={tab}
+              key={tab.value}
               type="button"
-              onClick={() => setFilter(tab)}
+              onClick={() => setFilter(tab.value)}
               className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                filter === tab
+                filter === tab.value
                   ? "bg-foreground text-background"
                   : "text-muted-foreground hover:bg-muted/50"
               }`}
             >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab.label}
             </button>
           ))}
         </div>
@@ -208,7 +219,7 @@ export default function TasksPage() {
               type="text"
               value={quickAddTitle}
               onChange={(e) => setQuickAddTitle(e.target.value)}
-              placeholder="Add a task..."
+              placeholder={t("Add a task...")}
               className="placeholder:text-muted-foreground flex-1 bg-transparent text-sm outline-none"
             />
           </div>
@@ -218,16 +229,18 @@ export default function TasksPage() {
         {filteredTasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-lg border py-12">
             <CheckSquare className="text-muted-foreground size-8" />
-            <p className="text-sm font-medium">No tasks yet</p>
+            <p className="text-sm font-medium">
+              <T>No tasks yet</T>
+            </p>
             <p className="text-muted-foreground text-xs">
-              Create your first task or ask the assistant
+              <T>Create your first task or ask the assistant</T>
             </p>
           </div>
         ) : (
           <div className="divide-border divide-y rounded-lg border">
             {filteredTasks.map((task) => {
               const isDone = task.status === "done";
-              const due = task.due ? formatRelativeDue(task.due) : null;
+              const due = task.due ? formatRelativeDue(t, task.due) : null;
 
               return (
                 <div key={task._id} className="group flex items-center gap-3 px-4 py-3">
@@ -267,7 +280,7 @@ export default function TasksPage() {
                     <span className="text-muted-foreground flex shrink-0 items-center gap-0.5 text-[10px]">
                       <Clock className="size-2.5" />
                       {task.duration.amount}
-                      {task.duration.unit === "minute" ? "m" : "d"}
+                      {task.duration.unit === "minute" ? <T>m</T> : <T>d</T>}
                     </span>
                   )}
 

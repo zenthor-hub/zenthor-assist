@@ -3,6 +3,7 @@
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import type { Id } from "@zenthor-assist/backend/convex/_generated/dataModel";
 import { useQuery } from "convex/react";
+import { T, useGT } from "gt-next";
 import { MessageCircle } from "lucide-react";
 import { use } from "react";
 
@@ -15,6 +16,7 @@ export default function ChatConversationPage({
 }: {
   params: Promise<{ conversationId: string }>;
 }) {
+  const t = useGT();
   const { conversationId } = use(params);
   const conversation = useQuery(api.conversations.get, {
     id: conversationId as Id<"conversations">,
@@ -31,7 +33,9 @@ export default function ChatConversationPage({
   if (conversation === null) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <p className="text-muted-foreground">Conversation not found</p>
+        <p className="text-muted-foreground">
+          <T>Conversation not found</T>
+        </p>
       </div>
     );
   }
@@ -45,11 +49,11 @@ export default function ChatConversationPage({
             <MessageCircle className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
           )}
           <h1 className="text-foreground truncate text-sm font-semibold tracking-tight">
-            {conversation.title || "Chat"}
+            {conversation.title || t("Chat")}
           </h1>
           {conversation.channel === "whatsapp" && (
             <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
-              WhatsApp
+              <T>WhatsApp</T>
             </span>
           )}
         </div>

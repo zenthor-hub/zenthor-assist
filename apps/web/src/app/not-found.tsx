@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "gt-next";
 import { ArrowLeft, Compass, Satellite } from "lucide-react";
 import Link from "next/link";
 
@@ -61,8 +62,10 @@ export default function NotFound() {
             className="animate-fade-up text-muted-foreground mt-4 max-w-md text-base leading-relaxed md:text-base"
             style={{ animationDelay: "0.4s" }}
           >
-            That page isn&apos;t in the Zenthor network. Choose a waypoint below to get back on
-            track.
+            <T>
+              That page isn&apos;t in the Zenthor network. Choose a waypoint below to get back on
+              track.
+            </T>
           </p>
 
           <div
@@ -71,13 +74,13 @@ export default function NotFound() {
           >
             <Button asChild size="lg" className="gap-2 px-5">
               <Link href="/">
-                Back home
+                <T>Back home</T>
                 <ArrowLeft className="size-4" />
               </Link>
             </Button>
             <Button asChild size="lg" variant="outline" className="gap-2 px-5">
               <Link href={"/chat" as "/"}>
-                Open chat
+                <T>Open chat</T>
                 <Compass className="size-4" />
               </Link>
             </Button>
@@ -89,10 +92,12 @@ export default function NotFound() {
         <div className="mx-auto flex max-w-2xl flex-col items-start gap-3 text-left sm:flex-row sm:items-center sm:justify-between">
           <div className="text-muted-foreground flex items-center gap-2 text-base">
             <Satellite className="text-primary size-4" />
-            <span>Routing back to safe navigation.</span>
+            <span>
+              <T>Routing back to safe navigation.</T>
+            </span>
           </div>
           <span className="text-muted-foreground text-base">
-            Lost? Try home or start a new session.
+            <T>Lost? Try home or start a new session.</T>
           </span>
         </div>
       </footer>

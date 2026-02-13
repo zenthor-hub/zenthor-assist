@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "gt-next";
 import { AlertTriangle, ArrowLeft, RotateCw } from "lucide-react";
 import { Geist, Geist_Mono, Noto_Sans } from "next/font/google";
 import Link from "next/link";
@@ -103,8 +104,10 @@ export default function GlobalError({
                 className="animate-fade-up text-muted-foreground mt-4 max-w-md text-base leading-relaxed md:text-base"
                 style={{ animationDelay: "0.4s" }}
               >
-                Zenthor hit an unexpected snag while loading this view. Reset the connection or head
-                back home.
+                <T>
+                  Zenthor hit an unexpected snag while loading this view. Reset the connection or
+                  head back home.
+                </T>
               </p>
 
               <div
@@ -116,9 +119,11 @@ export default function GlobalError({
                     <AlertTriangle className="size-4" />
                   </div>
                   <div>
-                    <p className="text-base font-semibold">Unexpected error</p>
+                    <p className="text-base font-semibold">
+                      <T>Unexpected error</T>
+                    </p>
                     <p className="text-muted-foreground text-base leading-relaxed">
-                      We couldn&apos;t complete that request.
+                      <T>We couldn&apos;t complete that request.</T>
                     </p>
                   </div>
                 </div>
@@ -128,7 +133,9 @@ export default function GlobalError({
                   </p>
                 ) : null}
                 {error.digest ? (
-                  <p className="text-muted-foreground mt-2 text-base">Reference: {error.digest}</p>
+                  <p className="text-muted-foreground mt-2 text-base">
+                    <T>Reference:</T> {error.digest}
+                  </p>
                 ) : null}
               </div>
 
@@ -137,12 +144,12 @@ export default function GlobalError({
                 style={{ animationDelay: "0.6s" }}
               >
                 <Button size="lg" className="gap-2 px-5" onClick={() => reset()}>
-                  Try again
+                  <T>Try again</T>
                   <RotateCw className="size-4" />
                 </Button>
                 <Button asChild size="lg" variant="outline" className="gap-2 px-5">
                   <Link href="/">
-                    Back home
+                    <T>Back home</T>
                     <ArrowLeft className="size-4" />
                   </Link>
                 </Button>

@@ -3,6 +3,7 @@
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import type { Id } from "@zenthor-assist/backend/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
+import { T, useGT } from "gt-next";
 import { Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -22,6 +23,7 @@ interface SkillData {
 }
 
 export default function SkillsPage() {
+  const t = useGT();
   const me = useQuery(api.users.me);
   const isAdmin = me?.role === "admin";
   const skills = useQuery(api.skills.list, isAdmin ? {} : "skip");
@@ -43,9 +45,9 @@ export default function SkillsPage() {
 
   if (!isAdmin) {
     return (
-      <PageWrapper title="Skills">
+      <PageWrapper title={<T>Skills</T>}>
         <div className="text-muted-foreground rounded-xl border p-6">
-          You do not have permission to manage skills.
+          <T>You do not have permission to manage skills.</T>
         </div>
       </PageWrapper>
     );
@@ -67,10 +69,12 @@ export default function SkillsPage() {
     try {
       const result = await seedRecommended({});
       toast.success(
-        `Recommended skills ready: ${result.created} created, ${result.existing} already existed.`,
+        t("Recommended skills ready: {created} created, {existing} already existed.")
+          .replace("{created}", String(result.created))
+          .replace("{existing}", String(result.existing)),
       );
     } catch {
-      toast.error("Failed to add recommended skills");
+      toast.error(t("Failed to add recommended skills"));
     }
   }
 
@@ -78,29 +82,31 @@ export default function SkillsPage() {
     try {
       const result = await claimLegacy({});
       if (result.adopted === 0) {
-        toast.message("No legacy skills found to claim");
+        toast.message(t("No legacy skills found to claim"));
       } else {
-        toast.success(`Claimed ${result.adopted} legacy skills`);
+        toast.success(
+          t("Claimed {count} legacy skills").replace("{count}", String(result.adopted)),
+        );
       }
     } catch {
-      toast.error("Failed to claim legacy skills");
+      toast.error(t("Failed to claim legacy skills"));
     }
   }
 
   return (
     <PageWrapper
-      title="Skills"
+      title={<T>Skills</T>}
       actions={
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={handleClaimLegacy}>
-            Claim legacy
+            <T>Claim legacy</T>
           </Button>
           <Button size="sm" variant="outline" onClick={handleSeedRecommended}>
-            Add recommended
+            <T>Add recommended</T>
           </Button>
           <Button size="sm" onClick={handleAdd}>
             <Plus className="size-4" />
-            Add skill
+            <T>Add skill</T>
           </Button>
         </div>
       }
@@ -109,13 +115,15 @@ export default function SkillsPage() {
         {adminSkills.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 rounded-lg border py-12">
             <Sparkles className="text-muted-foreground size-8" />
-            <p className="text-muted-foreground text-sm">No skills configured yet</p>
+            <p className="text-muted-foreground text-sm">
+              <T>No skills configured yet</T>
+            </p>
             <div className="mt-2 flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={handleSeedRecommended}>
-                Add recommended skills
+                <T>Add recommended skills</T>
               </Button>
               <Button variant="outline" size="sm" onClick={handleAdd}>
-                Create your first skill
+                <T>Create your first skill</T>
               </Button>
             </div>
           </div>
@@ -134,7 +142,7 @@ export default function SkillsPage() {
                       try {
                         await toggleSkill({ id: skill._id });
                       } catch {
-                        toast.error("Failed to toggle skill");
+                        toast.error(t("Failed to toggle skill"));
                       }
                     }}
                   />
@@ -151,9 +159,9 @@ export default function SkillsPage() {
                     onClick={async () => {
                       try {
                         await removeSkill({ id: skill._id });
-                        toast.success("Skill removed");
+                        toast.success(t("Skill removed"));
                       } catch {
-                        toast.error("Failed to remove skill");
+                        toast.error(t("Failed to remove skill"));
                       }
                     }}
                   >
