@@ -71,3 +71,40 @@ export async function sendCloudApiMessage(phone: string, text: string): Promise<
 
   return wamid;
 }
+
+/**
+ * Send a typing indicator ("typing...") to a WhatsApp user via Cloud API.
+ * Non-critical — failures are logged but never thrown.
+ */
+export async function sendTypingIndicator(phone: string): Promise<void> {
+  const accessToken = env.WHATSAPP_CLOUD_ACCESS_TOKEN;
+  const phoneNumberId = env.WHATSAPP_CLOUD_PHONE_NUMBER_ID;
+
+  if (!accessToken || !phoneNumberId) {
+    throw new Error("WHATSAPP_CLOUD_ACCESS_TOKEN and WHATSAPP_CLOUD_PHONE_NUMBER_ID are required");
+  }
+
+  const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}/messages`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to: phone,
+      typing_indicator: { type: "text" },
+    }),
+    signal: AbortSignal.timeout(5_000),
+  });
+
+  if (!response.ok) {
+    const rawBody = await response.text().catch(() => "");
+    throw new Error(`Typing indicator failed: HTTP ${response.status} — ${rawBody.slice(0, 200)}`);
+  }
+
+  void logger.lineInfo(`[whatsapp-cloud] Typing indicator sent to ${phone}`);
+}

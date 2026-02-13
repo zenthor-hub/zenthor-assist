@@ -3,7 +3,7 @@ import { env } from "@zenthor-assist/env/agent";
 
 import { getConvexClient } from "../convex/client";
 import { logger, typedEvent } from "../observability/logger";
-import { sendCloudApiMessage } from "./sender";
+import { sendCloudApiMessage, sendTypingIndicator } from "./sender";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -108,7 +108,11 @@ async function startOutboundLoop(accountId: string, ownerId: string): Promise<vo
       }
 
       try {
-        await sendCloudApiMessage(job.to, job.payload.content);
+        if (job.payload.metadata?.kind === "typing_indicator") {
+          await sendTypingIndicator(job.to);
+        } else {
+          await sendCloudApiMessage(job.to, job.payload.content);
+        }
         await client.mutation(api.delivery.completeOutbound, {
           serviceKey: env.AGENT_SECRET,
           id: job._id,

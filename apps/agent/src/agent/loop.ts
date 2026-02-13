@@ -238,6 +238,27 @@ export function startAgentLoop() {
         }
 
         const channel = context.conversation.channel as "web" | "whatsapp";
+
+        // Enqueue typing indicator for WhatsApp (processed by agent-whatsapp-cloud)
+        if (channel === "whatsapp" && context.contact?.phone) {
+          client
+            .mutation(api.delivery.enqueueOutbound, {
+              serviceKey,
+              channel: "whatsapp",
+              accountId: context.conversation.accountId ?? env.WHATSAPP_ACCOUNT_ID ?? "default",
+              conversationId: job.conversationId,
+              messageId: job.messageId,
+              to: context.contact.phone,
+              content: "",
+              metadata: { kind: "typing_indicator" },
+            })
+            .catch((err) => {
+              void logger.lineWarn(
+                `[agent] Failed to enqueue typing indicator: ${err instanceof Error ? err.message : String(err)}`,
+              );
+            });
+        }
+
         const pluginTools = await resolvePluginTools({
           client,
           channel,
