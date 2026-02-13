@@ -32,7 +32,18 @@
     "test": "vitest",
     "test:run": "vitest run",
     "clean": "git clean -xdf .cache .turbo dist node_modules",
-    "clean:workspaces": "turbo run clean"
+    "clean:workspaces": "turbo run clean",
+    "release": "bun run scripts/release-workspace.ts",
+    "release:check": "bun run scripts/release-workspace.ts --workspace agent --bump patch --dry-run",
+    "release:agent:patch": "bun run scripts/release-workspace.ts --workspace agent --bump patch",
+    "release:agent:minor": "bun run scripts/release-workspace.ts --workspace agent --bump minor",
+    "release:agent:major": "bun run scripts/release-workspace.ts --workspace agent --bump major",
+    "release:backend:patch": "bun run scripts/release-workspace.ts --workspace backend --bump patch",
+    "release:backend:minor": "bun run scripts/release-workspace.ts --workspace backend --bump minor",
+    "release:backend:major": "bun run scripts/release-workspace.ts --workspace backend --bump major",
+    "release:web:patch": "bun run scripts/release-workspace.ts --workspace web --bump patch",
+    "release:web:minor": "bun run scripts/release-workspace.ts --workspace web --bump minor",
+    "release:web:major": "bun run scripts/release-workspace.ts --workspace web --bump major"
   },
   "dependencies": {
     "@zenthor-assist/env": "workspace:*",
