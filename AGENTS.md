@@ -191,6 +191,23 @@ zenthor-assist/
 - Observability/secrets like `AXIOM_TOKEN`, `AXIOM_DATASET`, `OBS_*`, `AGENT_SECRET`, and provider credentials should be set on each relevant service explicitly.
 - For local development, `.env.local` can be shared as a source of truth, but deployment values must still be synced to each Railway service/environment.
 
+#### Service Boundary: agent-core ↔ agent-whatsapp-cloud
+
+**RULE — DO NOT VIOLATE:** `agent-core` and `agent-whatsapp-cloud` are separate services with a strict boundary. All communication between them goes through Convex (the `outboundMessages` table).
+
+- **`agent-core` (`apps/agent/src/agent/`)** MUST NEVER import from or call the WhatsApp Cloud API directly. It has no access to `WHATSAPP_CLOUD_ACCESS_TOKEN` or `WHATSAPP_CLOUD_PHONE_NUMBER_ID`. To send anything to WhatsApp (messages, typing indicators, read receipts, etc.), `agent-core` enqueues an outbound job via `api.delivery.enqueueOutbound` with the appropriate `metadata.kind`.
+- **`agent-whatsapp-cloud` (`apps/agent/src/whatsapp-cloud/`)** owns all WhatsApp Cloud API credentials and HTTP calls. Its outbound loop claims jobs from the `outboundMessages` table and dispatches based on `metadata.kind` (e.g. `"assistant_message"`, `"tool_approval_request"`, `"typing_indicator"`).
+- **Never add `WHATSAPP_CLOUD_*` env vars to `agent-core`.** If you need a new WhatsApp interaction from the agent loop, add a new `metadata.kind` value, enqueue it in `loop.ts`, and handle it in the whatsapp-cloud runtime (`runtime.ts` + `sender.ts`).
+
+```
+agent-core  →  Convex (outboundMessages)  →  agent-whatsapp-cloud  →  WhatsApp Cloud API
+```
+
+This separation ensures:
+1. Credentials are scoped to the service that needs them.
+2. Outbound delivery is lease-aware (no duplicate sends from concurrent workers).
+3. Services can be scaled, deployed, and restarted independently.
+
 #### Model Routing
 
 The agent uses dynamic multi-model routing (`model-router.ts`) to select the cheapest capable model per channel, with N-tier fallback cascade on errors (`model-fallback.ts`):

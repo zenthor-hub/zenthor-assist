@@ -140,6 +140,7 @@ The authenticated app follows a Vercel-inspired minimal aesthetic. All new pages
   - `apps/agent/src/index.whatsapp-ingress.ts`
   - `apps/agent/src/index.whatsapp-egress.ts`
 - WhatsApp Cloud egress runtime in `apps/agent/src/whatsapp-cloud/` — lease-aware outbound delivery via Meta Cloud API. Run with `AGENT_ROLE=whatsapp-cloud`.
+- **Service boundary rule:** `agent-core` MUST NEVER call the WhatsApp Cloud API directly or import from `whatsapp-cloud/`. To send anything to WhatsApp, enqueue via `api.delivery.enqueueOutbound` with the appropriate `metadata.kind`. The `agent-whatsapp-cloud` runtime dispatches on `kind` in its outbound loop. See `AGENTS.md` "Service Boundary" for full details.
 - Main loop in `apps/agent/src/agent/loop.ts`:
   - claims queue jobs with lock + heartbeat,
   - resolves plugin/builtin tools and policies,
