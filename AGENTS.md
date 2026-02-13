@@ -393,6 +393,19 @@ When behavior/scripts/architecture changes, update these together in the same PR
 - `apps/backend/convex/README.md` (backend-specific contributor notes)
 - `docs/ops/runtime-topology.md` and `docs/ops/runbook.md` (runtime operations)
 
+### Release process and changelog
+
+- Release workflow: manual dispatch via GitHub Actions (`Release`).
+- Release scope is workspace-specific for `agent`, `backend`, and `web`.
+- Release tags follow: `agent-vX.Y.Z`, `backend-vX.Y.Z`, `web-vX.Y.Z`.
+- Release notes are generated under `.github/release-notes/`.
+- Keep changelog files up to date:
+  - `CHANGELOG.md`
+  - `apps/agent/CHANGELOG.md`
+  - `apps/backend/CHANGELOG.md`
+  - `apps/web/CHANGELOG.md`.
+- New release commands are available at the repo root `package.json` under `release:*`.
+
 ## PR and Collaboration Guidelines
 
 - Keep PRs focused on a single purpose.

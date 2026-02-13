@@ -226,3 +226,15 @@ Observability:
 - `apps/backend/convex/README.md` - backend-specific dev notes
 - `docs/ops/runtime-topology.md` - role topology and scaling
 - `docs/ops/runbook.md` - smoke tests and operations checklist
+
+### Releases / changelog workflow
+
+The repo now supports GitHub Releases with workspace-scoped versioning.
+
+- Trigger releases manually through GitHub Actions (`Release` workflow).
+- Choose workspace and bump level at dispatch time.
+- Release notes are written under `.github/release-notes/`.
+- Generated release artifacts update these files:
+  - `CHANGELOG.md`
+  - workspace changelog under `apps/<workspace>/CHANGELOG.md`
+  - `apps/<workspace>/package.json` version field.

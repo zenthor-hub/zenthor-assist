@@ -87,6 +87,35 @@ cd apps/agent && bun run dev:core
 - Keep shared secrets/telemetry vars synced across relevant services (`AGENT_SECRET`, `AXIOM_TOKEN`, `AXIOM_DATASET`, `OBS_*`, model/provider vars).
 - Local `apps/agent/.env.local` is a source of truth for development, but deployment values still need to be explicitly synced to each Railway service/environment.
 
+## Release process
+
+This repository now uses workspace-scoped release artifacts and changelogs.
+
+- Workspace changelogs:
+  - `apps/agent/CHANGELOG.md`
+  - `apps/backend/CHANGELOG.md`
+  - `apps/web/CHANGELOG.md`
+- Monorepo changelog: `CHANGELOG.md`
+
+### Release workflow
+
+Use the manual GitHub Actions workflow `Release` with these inputs:
+
+- `workspace`: `agent | backend | web`
+- `bump`: `patch | minor | major`
+
+The workflow updates the selected workspace package version, updates changelog entries,
+creates a workspace-scoped tag (`agent-vX.Y.Z`, `backend-vX.Y.Z`, `web-vX.Y.Z`)
+and creates a GitHub Release with generated notes.
+
+### Workspace release commands
+
+- `bun run scripts/release-workspace.ts -- --workspace <agent|backend|web> --bump <major|minor|patch>`
+- `bun run release:agent:patch`
+- `bun run release:backend:minor`
+- `bun run release:web:major`
+- `bun run release:check` (agent patch dry run)
+
 ## Common Commands
 
 ### Root
