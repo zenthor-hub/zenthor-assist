@@ -204,6 +204,7 @@ agent-core  →  Convex (outboundMessages)  →  agent-whatsapp-cloud  →  What
 ```
 
 This separation ensures:
+
 1. Credentials are scoped to the service that needs them.
 2. Outbound delivery is lease-aware (no duplicate sends from concurrent workers).
 3. Services can be scaled, deployed, and restarted independently.
