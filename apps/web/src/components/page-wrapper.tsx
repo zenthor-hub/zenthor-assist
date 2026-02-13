@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 import { SidebarTrigger } from "./ui/sidebar";
 
 interface PageWrapperProps {
-  title: string;
+  title: ReactNode;
   children: ReactNode;
   actions?: ReactNode;
   maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl" | "full";

@@ -1,6 +1,7 @@
 "use client";
 
 import { SignOutButton, useUser } from "@clerk/nextjs";
+import { T } from "gt-next";
 import { ChevronsUpDown, LogOut, Settings } from "lucide-react";
 import Link from "next/link";
 
@@ -69,14 +70,14 @@ export function NavUser() {
             <DropdownMenuItem asChild>
               <Link href={"/settings" as "/"}>
                 <Settings />
-                Settings
+                <T>Settings</T>
               </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <SignOutButton>
               <DropdownMenuItem>
                 <LogOut />
-                Sign out
+                <T>Sign out</T>
               </DropdownMenuItem>
             </SignOutButton>
           </DropdownMenuContent>

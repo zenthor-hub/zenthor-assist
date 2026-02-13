@@ -1,7 +1,8 @@
 "use client";
 
+import { T } from "gt-next";
 import { ArrowDownIcon, DownloadIcon } from "lucide-react";
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { useCallback } from "react";
 import { StickToBottom, useStickToBottomContext } from "use-stick-to-bottom";
 
@@ -26,16 +27,16 @@ export const ConversationContent = ({ className, ...props }: ConversationContent
   <StickToBottom.Content className={cn("flex flex-col gap-8 p-4", className)} {...props} />
 );
 
-export type ConversationEmptyStateProps = ComponentProps<"div"> & {
-  title?: string;
-  description?: string;
-  icon?: React.ReactNode;
+export type ConversationEmptyStateProps = Omit<ComponentProps<"div">, "title"> & {
+  title?: string | ReactNode;
+  description?: string | ReactNode;
+  icon?: ReactNode;
 };
 
 export const ConversationEmptyState = ({
   className,
-  title = "No messages yet",
-  description = "Start a conversation to see messages here",
+  title = <T>No messages yet</T>,
+  description = <T>Start a conversation to see messages here</T>,
   icon,
   children,
   ...props

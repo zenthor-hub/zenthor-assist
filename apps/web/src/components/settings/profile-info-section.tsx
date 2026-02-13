@@ -1,5 +1,6 @@
 "use client";
 
+import { T, useGT } from "gt-next";
 import { Camera, Loader2, Pencil } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
@@ -33,6 +34,7 @@ function getInitials(firstName?: string | null, lastName?: string | null) {
 }
 
 function useProfileEdit(user: ClerkUser) {
+  const t = useGT();
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
@@ -59,7 +61,7 @@ function useProfileEdit(user: ClerkUser) {
         lastName: lastName.trim(),
       });
       logWebClientEvent({ event: "web.settings.profile.updated", level: "info" });
-      toast.success("Profile updated successfully");
+      toast.success(t("Profile updated successfully"));
       setIsEditDialogOpen(false);
     } catch (error) {
       console.error("Failed to update profile:", error);
@@ -68,7 +70,7 @@ function useProfileEdit(user: ClerkUser) {
         level: "error",
         payload: { error: error instanceof Error ? error.message : String(error) },
       });
-      toast.error("Failed to update profile. Please try again.");
+      toast.error(t("Failed to update profile. Please try again."));
     } finally {
       setIsUpdating(false);
     }
@@ -86,13 +88,13 @@ function useProfileEdit(user: ClerkUser) {
       file.type as (typeof SUPPORTED_IMAGE_TYPES)[number],
     );
     if (!isSupported) {
-      toast.error("Please use JPG, PNG, GIF, or WebP format");
+      toast.error(t("Please use JPG, PNG, GIF, or WebP format"));
       clearFileInput();
       return;
     }
 
     if (file.size > MAX_AVATAR_SIZE_BYTES) {
-      toast.error("Image must be less than 10MB");
+      toast.error(t("Image must be less than 10MB"));
       clearFileInput();
       return;
     }
@@ -101,7 +103,7 @@ function useProfileEdit(user: ClerkUser) {
     try {
       await user.setProfileImage({ file });
       logWebClientEvent({ event: "web.settings.profile.avatar_uploaded", level: "info" });
-      toast.success("Profile photo updated");
+      toast.success(t("Profile photo updated"));
     } catch (error) {
       console.error("Failed to upload avatar:", error);
       logWebClientEvent({
@@ -109,7 +111,7 @@ function useProfileEdit(user: ClerkUser) {
         level: "error",
         payload: { error: error instanceof Error ? error.message : String(error) },
       });
-      toast.error("Failed to upload photo. Please try again.");
+      toast.error(t("Failed to upload photo. Please try again."));
     } finally {
       setIsUploadingAvatar(false);
       clearFileInput();
@@ -152,40 +154,50 @@ function EditProfileDialog({
   isUpdating: boolean;
   onSave: () => void;
 }) {
+  const t = useGT();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Edit Profile</DialogTitle>
-          <DialogDescription>Update your profile information</DialogDescription>
+          <DialogTitle>
+            <T>Edit Profile</T>
+          </DialogTitle>
+          <DialogDescription>
+            <T>Update your profile information</T>
+          </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor="first-name">First name</Label>
+            <Label htmlFor="first-name">
+              <T>First name</T>
+            </Label>
             <Input
               id="first-name"
               value={firstName}
               onChange={(e) => onFirstNameChange(e.target.value)}
-              placeholder="Enter your first name"
+              placeholder={t("Enter your first name")}
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="last-name">Last name</Label>
+            <Label htmlFor="last-name">
+              <T>Last name</T>
+            </Label>
             <Input
               id="last-name"
               value={lastName}
               onChange={(e) => onLastNameChange(e.target.value)}
-              placeholder="Enter your last name"
+              placeholder={t("Enter your last name")}
             />
           </div>
         </div>
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isUpdating}>
-            Cancel
+            <T>Cancel</T>
           </Button>
           <Button onClick={onSave} disabled={isUpdating}>
             {isUpdating && <Loader2 className="size-4 animate-spin" />}
-            Save changes
+            <T>Save changes</T>
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -194,8 +206,9 @@ function EditProfileDialog({
 }
 
 export function ProfileInfoSection({ user }: { user: ClerkUser }) {
+  const t = useGT();
   const profileEdit = useProfileEdit(user);
-  const displayName = user.fullName || user.firstName || "User";
+  const displayName = user.fullName || user.firstName || t("User");
 
   return (
     <>
@@ -237,7 +250,7 @@ export function ProfileInfoSection({ user }: { user: ClerkUser }) {
         </div>
         <Button variant="outline" size="sm" onClick={profileEdit.handleOpenEditDialog}>
           <Pencil className="size-4" />
-          Edit
+          <T>Edit</T>
         </Button>
       </div>
 

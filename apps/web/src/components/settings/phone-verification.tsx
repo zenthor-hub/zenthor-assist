@@ -2,6 +2,7 @@
 
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
+import { T, useGT } from "gt-next";
 import { CheckCircle, Loader2, Phone, Unlink } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -36,6 +37,7 @@ const COUNTRY_CODES = [
 ] as const;
 
 export function PhoneVerification() {
+  const t = useGT();
   const user = useQuery(api.users.getCurrentUser);
   const pendingVerification = useQuery(api.phoneVerification.getVerificationStatus, {});
 
@@ -54,7 +56,7 @@ export function PhoneVerification() {
   async function handleSendCode() {
     const digits = localNumber.replace(/\D/g, "");
     if (!digits) {
-      toast.error("Enter a valid phone number");
+      toast.error(t("Enter a valid phone number"));
       return;
     }
 
@@ -63,12 +65,12 @@ export function PhoneVerification() {
     try {
       const result = await requestVerification({ phone: fullPhone });
       if (result.success) {
-        toast.success("Verification code sent via WhatsApp");
+        toast.success(t("Verification code sent via WhatsApp"));
       } else {
-        toast.error(result.error ?? "Failed to send code");
+        toast.error(result.error ?? t("Failed to send code"));
       }
     } catch {
-      toast.error("Failed to send verification code");
+      toast.error(t("Failed to send verification code"));
     } finally {
       setLoading(false);
     }
@@ -76,7 +78,7 @@ export function PhoneVerification() {
 
   async function handleVerify() {
     if (code.length !== 6) {
-      toast.error("Enter the 6-digit code");
+      toast.error(t("Enter the 6-digit code"));
       return;
     }
 
@@ -84,14 +86,14 @@ export function PhoneVerification() {
     try {
       const result = await confirmVerification({ code });
       if (result.success) {
-        toast.success("Phone verified successfully");
+        toast.success(t("Phone verified successfully"));
         setCode("");
         setLocalNumber("");
       } else {
-        toast.error(result.error ?? "Verification failed");
+        toast.error(result.error ?? t("Verification failed"));
       }
     } catch {
-      toast.error("Failed to verify code");
+      toast.error(t("Failed to verify code"));
     } finally {
       setLoading(false);
     }
@@ -101,9 +103,9 @@ export function PhoneVerification() {
     setLoading(true);
     try {
       await unlinkPhone({});
-      toast.success("Phone unlinked");
+      toast.success(t("Phone unlinked"));
     } catch {
-      toast.error("Failed to unlink phone");
+      toast.error(t("Failed to unlink phone"));
     } finally {
       setLoading(false);
     }
@@ -118,7 +120,9 @@ export function PhoneVerification() {
             <CheckCircle className="size-4 text-emerald-600 dark:text-emerald-400" />
           </div>
           <div className="flex-1">
-            <h3 className="text-sm font-medium">WhatsApp linked</h3>
+            <h3 className="text-sm font-medium">
+              <T>WhatsApp linked</T>
+            </h3>
             <p className="text-muted-foreground text-xs">+{phone}</p>
           </div>
           <Button variant="outline" size="sm" onClick={handleUnlink} disabled={loading}>
@@ -127,11 +131,11 @@ export function PhoneVerification() {
             ) : (
               <Unlink className="size-3.5" />
             )}
-            Unlink
+            <T>Unlink</T>
           </Button>
         </div>
         <p className="text-muted-foreground mt-3 text-xs">
-          Your WhatsApp conversations appear in the sidebar.
+          <T>Your WhatsApp conversations appear in the sidebar.</T>
         </p>
       </div>
     );
@@ -146,9 +150,11 @@ export function PhoneVerification() {
             <Phone className="text-muted-foreground size-4" />
           </div>
           <div>
-            <h3 className="text-sm font-medium">Verify your phone</h3>
+            <h3 className="text-sm font-medium">
+              <T>Verify your phone</T>
+            </h3>
             <p className="text-muted-foreground text-xs">
-              Code sent to +{pendingVerification.phone}
+              {t("Code sent to {phone}", { phone: `+${pendingVerification.phone}` })}
             </p>
           </div>
         </div>
@@ -156,7 +162,7 @@ export function PhoneVerification() {
         <div className="flex flex-col gap-3">
           <div>
             <Label htmlFor="code" className="text-xs">
-              Verification code
+              <T>Verification code</T>
             </Label>
             <Input
               id="code"
@@ -170,10 +176,10 @@ export function PhoneVerification() {
           <div className="flex items-center gap-2">
             <Button onClick={handleVerify} disabled={loading || code.length !== 6} size="sm">
               {loading && <Loader2 className="size-3.5 animate-spin" />}
-              Verify
+              <T>Verify</T>
             </Button>
             <Button variant="ghost" size="sm" onClick={handleSendCode} disabled={loading}>
-              Resend code
+              <T>Resend code</T>
             </Button>
           </div>
         </div>
@@ -189,16 +195,20 @@ export function PhoneVerification() {
           <Phone className="text-muted-foreground size-4" />
         </div>
         <div>
-          <h3 className="text-sm font-medium">Link WhatsApp</h3>
+          <h3 className="text-sm font-medium">
+            <T>Link WhatsApp</T>
+          </h3>
           <p className="text-muted-foreground text-xs">
-            Verify your phone to see WhatsApp conversations here.
+            <T>Verify your phone to see WhatsApp conversations here.</T>
           </p>
         </div>
       </div>
 
       <div className="flex flex-col gap-3">
         <div>
-          <Label className="text-xs">Phone number</Label>
+          <Label className="text-xs">
+            <T>Phone number</T>
+          </Label>
           <div className="mt-1.5 flex gap-2">
             <Select value={countryCode} onValueChange={setCountryCode}>
               <SelectTrigger className="w-28">
@@ -227,7 +237,7 @@ export function PhoneVerification() {
           className="w-fit"
         >
           {loading && <Loader2 className="size-3.5 animate-spin" />}
-          Send code
+          <T>Send code</T>
         </Button>
       </div>
     </div>

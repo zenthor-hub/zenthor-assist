@@ -3,6 +3,7 @@
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import type { Id } from "@zenthor-assist/backend/convex/_generated/dataModel";
 import { useMutation } from "convex/react";
+import { T, useGT } from "gt-next";
 import { AlertCircle, Check, MessageSquare, ShieldAlert, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
@@ -50,6 +51,7 @@ function ApprovalCard({
 }) {
   const [resolving, setResolving] = useState<"approved" | "rejected" | null>(null);
   const resolve = useMutation(api.toolApprovals.resolve);
+  const t = useGT();
 
   const isPending = approval.status === "pending" && !resolving;
 
@@ -61,7 +63,7 @@ function ApprovalCard({
         status: decision,
       });
     } catch (error) {
-      toast.error("Failed to resolve tool approval");
+      toast.error(t("Failed to resolve tool approval"));
       logWebClientEvent({
         event: "web.chat.tool_approval.resolve_failed",
         level: "error",
@@ -102,13 +104,13 @@ function ApprovalCard({
         {displayStatus === "approved" && (
           <span className="flex items-center gap-1 text-base text-green-600 dark:text-green-400">
             <Check className="size-3" />
-            Approved
+            <T>Approved</T>
           </span>
         )}
         {displayStatus === "rejected" && (
           <span className="flex items-center gap-1 text-base text-red-600 dark:text-red-400">
             <X className="size-3" />
-            Rejected
+            <T>Rejected</T>
           </span>
         )}
       </div>
@@ -122,7 +124,7 @@ function ApprovalCard({
             onClick={() => handleResolve("approved")}
           >
             <Check />
-            Approve
+            <T>Approve</T>
           </Button>
           <Button
             size="xs"
@@ -132,7 +134,7 @@ function ApprovalCard({
             onClick={() => handleResolve("rejected")}
           >
             <X />
-            Reject
+            <T>Reject</T>
           </Button>
         </div>
       )}
@@ -141,6 +143,7 @@ function ApprovalCard({
 }
 
 export function ChatArea({ conversationId }: ChatAreaProps) {
+  const t = useGT();
   const {
     messages,
     isProcessing,
@@ -165,8 +168,8 @@ export function ChatArea({ conversationId }: ChatAreaProps) {
         <ConversationContent className="gap-0 p-4">
           {messages === null ? null : messages.length === 0 ? (
             <ConversationEmptyState
-              title="Start a conversation"
-              description="Send a message to begin chatting"
+              title={<T>Start a conversation</T>}
+              description={<T>Send a message to begin chatting</T>}
               icon={<MessageSquare className="size-8" />}
             />
           ) : (
@@ -190,7 +193,9 @@ export function ChatArea({ conversationId }: ChatAreaProps) {
                         <div className="flex items-start gap-2 py-1">
                           <AlertCircle className="text-destructive mt-0.5 size-4 shrink-0" />
                           <p className="text-muted-foreground text-sm">
-                            Failed to generate a response. Please try sending your message again.
+                            <T>
+                              Failed to generate a response. Please try sending your message again.
+                            </T>
                           </p>
                         </div>
                       ) : (
@@ -253,7 +258,7 @@ export function ChatArea({ conversationId }: ChatAreaProps) {
 
       <div className="border-t p-4">
         <PromptInput onSubmit={handleSend}>
-          <PromptInputTextarea placeholder="Type a message..." />
+          <PromptInputTextarea placeholder={t("Type a message...")} />
           <PromptInputFooter>
             <div />
             <PromptInputSubmit />

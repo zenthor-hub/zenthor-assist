@@ -2,6 +2,7 @@
 
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
+import { T, useGT } from "gt-next";
 import { CheckCircle2, Link2, Link2Off, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -27,6 +28,7 @@ export function TodoistIntegrationSection() {
   const startOAuth = useMutation(api.todoist.startOAuth);
   const completeOAuth = useMutation(api.todoist.completeOAuth);
   const disconnect = useMutation(api.todoist.disconnect);
+  const t = useGT();
 
   const [isConnecting, setIsConnecting] = useState(false);
   const [isDisconnecting, setIsDisconnecting] = useState(false);
@@ -43,7 +45,7 @@ export function TodoistIntegrationSection() {
 
     if (error && isTodoistCallback && !errorHandledRef.current) {
       errorHandledRef.current = true;
-      toast.error(errorDescription ? safeDecode(errorDescription) : "Todoist connection failed");
+      toast.error(errorDescription ? safeDecode(errorDescription) : t("Todoist connection failed"));
       window.history.replaceState({}, "", "/settings");
       return;
     }
@@ -55,17 +57,17 @@ export function TodoistIntegrationSection() {
 
     void completeOAuth({ code, state })
       .then(() => {
-        toast.success("Todoist connected successfully");
+        toast.success(t("Todoist connected successfully"));
         window.history.replaceState({}, "", "/settings");
       })
       .catch((error) => {
-        toast.error(`Failed to complete Todoist connection: ${getErrorMessage(error)}`);
+        toast.error(`${t("Failed to complete Todoist connection")}: ${getErrorMessage(error)}`);
         window.history.replaceState({}, "", "/settings");
       })
       .finally(() => {
         setIsConnecting(false);
       });
-  }, [completeOAuth]);
+  }, [completeOAuth, t]);
 
   async function handleConnect() {
     setIsConnecting(true);
@@ -74,7 +76,7 @@ export function TodoistIntegrationSection() {
       window.location.assign(authorizationUrl);
     } catch (error) {
       setIsConnecting(false);
-      toast.error(`Failed to start Todoist connection: ${getErrorMessage(error)}`);
+      toast.error(`${t("Failed to start Todoist connection")}: ${getErrorMessage(error)}`);
     }
   }
 
@@ -82,9 +84,9 @@ export function TodoistIntegrationSection() {
     setIsDisconnecting(true);
     try {
       await disconnect({});
-      toast.success("Todoist disconnected");
+      toast.success(t("Todoist disconnected"));
     } catch (error) {
-      toast.error(`Failed to disconnect Todoist: ${getErrorMessage(error)}`);
+      toast.error(`${t("Failed to disconnect Todoist")}: ${getErrorMessage(error)}`);
     } finally {
       setIsDisconnecting(false);
     }
@@ -108,11 +110,11 @@ export function TodoistIntegrationSection() {
                   variant="outline"
                   className="border-green-500/30 bg-green-500/10 text-xs text-green-600 dark:text-green-400"
                 >
-                  Connected
+                  <T>Connected</T>
                 </Badge>
               ) : (
                 <Badge variant="outline" className="text-xs">
-                  Not connected
+                  <T>Not connected</T>
                 </Badge>
               )}
             </div>
@@ -122,7 +124,7 @@ export function TodoistIntegrationSection() {
               </p>
             ) : (
               <p className="text-muted-foreground text-xs">
-                Use your Todoist account for planning workflows.
+                <T>Use your Todoist account for planning workflows.</T>
               </p>
             )}
           </div>
@@ -140,7 +142,7 @@ export function TodoistIntegrationSection() {
             ) : (
               <Link2Off className="size-4" />
             )}
-            Disconnect
+            <T>Disconnect</T>
           </Button>
         ) : (
           <Button
@@ -154,7 +156,7 @@ export function TodoistIntegrationSection() {
             ) : (
               <Link2 className="size-4" />
             )}
-            Connect
+            <T>Connect</T>
           </Button>
         )}
       </div>

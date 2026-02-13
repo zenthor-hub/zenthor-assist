@@ -1,6 +1,7 @@
 "use client";
 
 import type { DynamicToolUIPart, ToolUIPart } from "ai";
+import { useGT } from "gt-next";
 import {
   CheckCircleIcon,
   ChevronDownIcon,
@@ -61,10 +62,10 @@ const statusIcons: Record<ToolPart["state"], ReactNode> = {
   "output-error": <XCircleIcon className="size-4 text-red-600" />,
 };
 
-export const getStatusBadge = (status: ToolPart["state"]) => (
+export const getStatusBadge = (status: ToolPart["state"], t: (key: string) => string) => (
   <Badge className="gap-1.5 rounded-full text-base" variant="secondary">
     {statusIcons[status]}
-    {statusLabels[status]}
+    {t(statusLabels[status])}
   </Badge>
 );
 
@@ -76,6 +77,7 @@ export const ToolHeader = ({
   toolName,
   ...props
 }: ToolHeaderProps) => {
+  const t = useGT();
   const derivedName = type === "dynamic-tool" ? toolName : type.split("-").slice(1).join("-");
 
   return (
@@ -86,7 +88,7 @@ export const ToolHeader = ({
       <div className="flex items-center gap-2">
         <WrenchIcon className="text-muted-foreground size-4" />
         <span className="text-base font-medium">{title ?? derivedName}</span>
-        {getStatusBadge(state)}
+        {getStatusBadge(state, t)}
       </div>
       <ChevronDownIcon className="text-muted-foreground size-4 transition-transform group-data-[state=open]:rotate-180" />
     </CollapsibleTrigger>
@@ -109,16 +111,20 @@ export type ToolInputProps = ComponentProps<"div"> & {
   input: ToolPart["input"];
 };
 
-export const ToolInput = ({ className, input, ...props }: ToolInputProps) => (
-  <div className={cn("space-y-2 overflow-hidden", className)} {...props}>
-    <h4 className="text-muted-foreground text-base font-medium tracking-wide uppercase">
-      Parameters
-    </h4>
-    <div className="bg-muted/50 rounded-md">
-      <CodeBlock code={JSON.stringify(input, null, 2)} language="json" />
+export const ToolInput = ({ className, input, ...props }: ToolInputProps) => {
+  const t = useGT();
+
+  return (
+    <div className={cn("space-y-2 overflow-hidden", className)} {...props}>
+      <h4 className="text-muted-foreground text-base font-medium tracking-wide uppercase">
+        {t("Parameters")}
+      </h4>
+      <div className="bg-muted/50 rounded-md">
+        <CodeBlock code={JSON.stringify(input, null, 2)} language="json" />
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export type ToolOutputProps = ComponentProps<"div"> & {
   output: ToolPart["output"];
@@ -126,6 +132,8 @@ export type ToolOutputProps = ComponentProps<"div"> & {
 };
 
 export const ToolOutput = ({ className, output, errorText, ...props }: ToolOutputProps) => {
+  const t = useGT();
+
   if (!(output || errorText)) {
     return null;
   }
@@ -141,7 +149,7 @@ export const ToolOutput = ({ className, output, errorText, ...props }: ToolOutpu
   return (
     <div className={cn("space-y-2", className)} {...props}>
       <h4 className="text-muted-foreground text-base font-medium tracking-wide uppercase">
-        {errorText ? "Error" : "Result"}
+        {errorText ? t("Error") : t("Result")}
       </h4>
       <div
         className={cn(

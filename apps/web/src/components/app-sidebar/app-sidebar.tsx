@@ -2,6 +2,7 @@
 
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
+import { T, useGT } from "gt-next";
 import {
   Archive,
   ArrowLeft,
@@ -52,6 +53,7 @@ function getSidebarModeFromPath(pathname: string): SidebarMode {
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
   const router = useRouter();
+  const t = useGT();
   const [mode, setMode] = useState<SidebarMode>(() => getSidebarModeFromPath(pathname));
   const transitionDir = useRef<"forward" | "back" | null>(null);
 
@@ -86,12 +88,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       await archiveConversation({
         id: conversationId as Parameters<typeof archiveConversation>[0]["id"],
       });
-      toast.success("Conversation archived");
+      toast.success(t("Conversation archived"));
       if (pathname.includes(conversationId)) {
         router.push("/chat/overview");
       }
     } catch {
-      toast.error("Failed to archive conversation");
+      toast.error(t("Failed to archive conversation"));
     }
   }
 
@@ -136,48 +138,58 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           >
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === "/home"} tooltip="Home">
+                <SidebarMenuButton asChild isActive={pathname === "/home"} tooltip={t("Home")}>
                   <Link href={"/home" as "/"}>
                     <House className="size-4" />
-                    <span>Home</span>
+                    <span>
+                      <T>Home</T>
+                    </span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={pathname.startsWith("/chat")}
-                  tooltip="Chats"
+                  tooltip={t("Chats")}
                   onClick={goToChats}
                 >
                   <MessageSquare className="size-4" />
-                  <span className="flex-1">Chats</span>
+                  <span className="flex-1">
+                    <T>Chats</T>
+                  </span>
                   <ArrowRight className="text-muted-foreground size-3.5" />
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === "/tasks"} tooltip="Tasks">
+                <SidebarMenuButton asChild isActive={pathname === "/tasks"} tooltip={t("Tasks")}>
                   <Link href={"/tasks" as "/"}>
                     <CheckSquare className="size-4" />
-                    <span>Tasks</span>
+                    <span>
+                      <T>Tasks</T>
+                    </span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={pathname === "/skills"} tooltip="Skills">
+                <SidebarMenuButton asChild isActive={pathname === "/skills"} tooltip={t("Skills")}>
                   <Link href={"/skills" as "/"}>
                     <Sparkles className="size-4" />
-                    <span>Skills</span>
+                    <span>
+                      <T>Skills</T>
+                    </span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={pathname.startsWith("/settings")}
-                  tooltip="Settings"
+                  tooltip={t("Settings")}
                   onClick={goToSettings}
                 >
                   <Settings className="size-4" />
-                  <span className="flex-1">Settings</span>
+                  <span className="flex-1">
+                    <T>Settings</T>
+                  </span>
                   <ArrowRight className="text-muted-foreground size-3.5" />
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -193,7 +205,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   className="hover:bg-sidebar-accent text-sidebar-foreground flex w-full items-center rounded-md px-2 py-1.5 text-sm transition-colors"
                 >
                   <ArrowLeft className="size-4 shrink-0" />
-                  <span className="flex-1 text-center font-medium">Chats</span>
+                  <span className="flex-1 text-center font-medium">
+                    <T>Chats</T>
+                  </span>
                   <span className="size-4 shrink-0" />
                 </button>
               </SidebarMenuItem>
@@ -204,11 +218,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   <SidebarMenuButton
                     asChild
                     isActive={pathname === "/chat/overview"}
-                    tooltip="Overview"
+                    tooltip={t("Overview")}
                   >
                     <Link href={"/chat/overview" as "/"}>
                       <LayoutGrid className="size-4" />
-                      <span>Overview</span>
+                      <span>
+                        <T>Overview</T>
+                      </span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -221,27 +237,28 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   const isWhatsAppConversation = conv.channel === "whatsapp";
                   return (
                     <SidebarMenuItem key={conv._id}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={isActive}
-                        tooltip={
-                          isWhatsAppConversation
-                            ? `${conv.title || "Chat"} (WhatsApp)`
-                            : conv.title || "Chat"
-                        }
-                      >
-                        <Link href={`/chat/${conv._id}` as "/"}>
-                          {isWhatsAppConversation && (
-                            <MessageCircle className="size-4 text-emerald-600 dark:text-emerald-400" />
-                          )}
-                          <span className="truncate">{conv.title || "Chat"}</span>
-                          {isWhatsAppConversation && (
-                            <span className="text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
-                              WA
-                            </span>
-                          )}
-                        </Link>
-                      </SidebarMenuButton>
+                      {(() => {
+                        const fallbackTitle = conv.title || t("Chat");
+                        const tooltip = isWhatsAppConversation
+                          ? `${fallbackTitle} (${t("WhatsApp")})`
+                          : fallbackTitle;
+
+                        return (
+                          <SidebarMenuButton asChild isActive={isActive} tooltip={tooltip}>
+                            <Link href={`/chat/${conv._id}` as "/"}>
+                              {isWhatsAppConversation && (
+                                <MessageCircle className="size-4 text-emerald-600 dark:text-emerald-400" />
+                              )}
+                              <span className="truncate">{fallbackTitle}</span>
+                              {isWhatsAppConversation && (
+                                <span className="text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
+                                  WA
+                                </span>
+                              )}
+                            </Link>
+                          </SidebarMenuButton>
+                        );
+                      })()}
                       {conv.channel === "web" && (
                         <SidebarMenuAction onClick={(e) => handleArchive(e, conv._id)} showOnHover>
                           <Archive className="size-4" />
@@ -252,7 +269,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 })}
                 {conversations?.length === 0 && (
                   <div className="text-muted-foreground px-3 py-8 text-center text-xs">
-                    No conversations yet
+                    <T>No conversations yet</T>
                   </div>
                 )}
               </SidebarMenu>
@@ -268,7 +285,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   className="hover:bg-sidebar-accent text-sidebar-foreground flex w-full items-center rounded-md px-2 py-1.5 text-sm transition-colors"
                 >
                   <ArrowLeft className="size-4 shrink-0" />
-                  <span className="flex-1 text-center font-medium">Settings</span>
+                  <span className="flex-1 text-center font-medium">
+                    <T>Settings</T>
+                  </span>
                   <span className="size-4 shrink-0" />
                 </button>
               </SidebarMenuItem>
@@ -279,11 +298,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   <SidebarMenuButton
                     asChild
                     isActive={pathname === "/settings/general"}
-                    tooltip="General"
+                    tooltip={t("General")}
                   >
                     <Link href={"/settings/general" as "/"}>
                       <SlidersHorizontal className="size-4" />
-                      <span>General</span>
+                      <span>
+                        <T>General</T>
+                      </span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -291,11 +312,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   <SidebarMenuButton
                     asChild
                     isActive={pathname === "/settings/profile"}
-                    tooltip="Profile"
+                    tooltip={t("Profile")}
                   >
                     <Link href={"/settings/profile" as "/"}>
                       <UserCircle className="size-4" />
-                      <span>Profile</span>
+                      <span>
+                        <T>Profile</T>
+                      </span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -303,11 +326,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   <SidebarMenuButton
                     asChild
                     isActive={pathname === "/settings/integrations"}
-                    tooltip="Integrations"
+                    tooltip={t("Integrations")}
                   >
                     <Link href={"/settings/integrations" as "/"}>
                       <Blocks className="size-4" />
-                      <span>Integrations</span>
+                      <span>
+                        <T>Integrations</T>
+                      </span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

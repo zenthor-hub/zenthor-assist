@@ -3,6 +3,7 @@
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import type { Id } from "@zenthor-assist/backend/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
+import { useGT } from "gt-next";
 import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 
@@ -79,6 +80,7 @@ function computePositions(
 }
 
 export function useConvexMessages(conversationId: Id<"conversations">) {
+  const t = useGT();
   const rawMessages = useQuery(api.messages.listByConversation, {
     conversationId,
   });
@@ -139,7 +141,7 @@ export function useConvexMessages(conversationId: Id<"conversations">) {
           channel: "web",
         });
       } catch (error) {
-        toast.error("Failed to send message");
+        toast.error(t("Failed to send message"));
         logWebClientEvent({
           event: "web.chat.send.failed",
           level: "error",
@@ -156,7 +158,7 @@ export function useConvexMessages(conversationId: Id<"conversations">) {
         });
       }
     },
-    [sendMutation, conversationId],
+    [conversationId, sendMutation, t],
   );
 
   return {

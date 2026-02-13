@@ -1,5 +1,6 @@
 "use client";
 
+import { T, useGT } from "gt-next";
 import { Link2, Link2Off, Loader2, MoreHorizontal } from "lucide-react";
 
 import {
@@ -90,14 +91,14 @@ function ConnectedAccountRow({
                   variant="outline"
                   className="border-green-500/30 bg-green-500/10 text-xs text-green-600 dark:text-green-400"
                 >
-                  Connected
+                  <T>Connected</T>
                 </Badge>
               ) : (
                 <Badge
                   variant="outline"
                   className="border-amber-500/30 bg-amber-500/10 text-xs text-amber-600 dark:text-amber-400"
                 >
-                  Pending
+                  <T>Pending</T>
                 </Badge>
               ))}
           </div>
@@ -117,7 +118,9 @@ function ConnectedAccountRow({
           <DropdownMenuContent align="end">
             {!isVerified && account.verification?.externalVerificationRedirectURL && (
               <DropdownMenuItem asChild>
-                <a href={account.verification.externalVerificationRedirectURL.href}>Reverify</a>
+                <a href={account.verification.externalVerificationRedirectURL.href}>
+                  <T>Reverify</T>
+                </a>
               </DropdownMenuItem>
             )}
             <DropdownMenuItem
@@ -125,7 +128,7 @@ function ConnectedAccountRow({
               className="text-destructive focus:text-destructive"
             >
               <Link2Off className="mr-2 size-4" />
-              Disconnect
+              <T>Disconnect</T>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -136,7 +139,7 @@ function ConnectedAccountRow({
           ) : (
             <Link2 className="size-4" />
           )}
-          Connect
+          <T>Connect</T>
         </Button>
       )}
     </div>
@@ -157,22 +160,28 @@ function DisconnectAccountDialog({
   const providerName = account?.provider
     ? account.provider.charAt(0).toUpperCase() + account.provider.slice(1)
     : "";
+  const t = useGT();
+  const providerSuffix = account?.emailAddress ? ` (${account.emailAddress})` : "";
 
   return (
     <AlertDialog open={account !== null} onOpenChange={(open) => !open && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Disconnect {providerName}</AlertDialogTitle>
+          <AlertDialogTitle>{t("Disconnect {providerName}", { providerName })}</AlertDialogTitle>
           <AlertDialogDescription>
-            Are you sure you want to disconnect your {providerName} account
-            {account?.emailAddress && (
-              <span className="font-medium"> ({account.emailAddress})</span>
+            {t(
+              "Are you sure you want to disconnect your {providerName} account{providerSuffix}. You can reconnect it later.",
+              {
+                providerName,
+                providerSuffix,
+              },
             )}
-            ? You can reconnect it later.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={isDisconnecting}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={isDisconnecting}>
+            <T>Cancel</T>
+          </AlertDialogCancel>
           <AlertDialogAction
             variant="destructive"
             onClick={(e) => {
@@ -182,7 +191,7 @@ function DisconnectAccountDialog({
             disabled={isDisconnecting}
           >
             {isDisconnecting && <Loader2 className="mr-2 size-4 animate-spin" />}
-            Disconnect
+            <T>Disconnect</T>
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -199,9 +208,11 @@ export function ConnectedAccountsSection({
     <>
       <div className="space-y-4">
         <div>
-          <h3 className="text-sm font-medium">Connected Accounts</h3>
+          <h3 className="text-sm font-medium">
+            <T>Connected Accounts</T>
+          </h3>
           <p className="text-muted-foreground text-xs">
-            Connect external accounts for easier sign-in
+            <T>Connect external accounts for easier sign-in</T>
           </p>
         </div>
         <div className="space-y-3">

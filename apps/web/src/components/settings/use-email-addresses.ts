@@ -2,6 +2,7 @@
 
 import type { useUser } from "@clerk/nextjs";
 import { useUser as useClerkUser, useReverification } from "@clerk/nextjs";
+import { useGT } from "gt-next";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -67,15 +68,16 @@ function useEmailAddActions(
   setPrimaryWithReverification: (emailId: string) => Promise<void>,
 ) {
   const { user, newEmail } = state;
+  const t = useGT();
 
   const handleAddEmail = async () => {
     const trimmedEmail = newEmail.trim();
     if (!user || !trimmedEmail) {
-      toast.error("Please enter an email address");
+      toast.error(t("Please enter an email address"));
       return;
     }
     if (!EMAIL_REGEX.test(trimmedEmail)) {
-      toast.error("Please enter a valid email address");
+      toast.error(t("Please enter a valid email address"));
       return;
     }
     state.setIsAdding(true);
@@ -85,7 +87,7 @@ function useEmailAddActions(
         logWebClientEvent({ event: "web.settings.email.added", level: "info" });
         state.setVerificationMode({ type: "new", email: emailAddress });
         state.setIsAddDialogOpen(false);
-        toast.success("Verification code sent to your email");
+        toast.success(t("Verification code sent to your email"));
       }
     } catch (error) {
       console.error("Failed to add email:", error);
@@ -94,7 +96,7 @@ function useEmailAddActions(
         level: "error",
         payload: { error: error instanceof Error ? error.message : String(error) },
       });
-      const message = error instanceof Error ? error.message : "Failed to add email";
+      const message = error instanceof Error ? error.message : t("Failed to add email");
       toast.error(message);
     } finally {
       state.setIsAdding(false);
@@ -108,7 +110,7 @@ function useEmailAddActions(
     try {
       await setPrimaryWithReverification(emailId);
       logWebClientEvent({ event: "web.settings.email.primary_changed", level: "info" });
-      toast.success("Primary email updated");
+      toast.success(t("Primary email updated"));
     } catch (error) {
       console.error("Failed to set primary email:", error);
       logWebClientEvent({
@@ -116,7 +118,7 @@ function useEmailAddActions(
         level: "error",
         payload: { error: error instanceof Error ? error.message : String(error), emailId },
       });
-      toast.error("Failed to update primary email");
+      toast.error(t("Failed to update primary email"));
     } finally {
       state.setIsSettingPrimary(null);
     }
@@ -127,10 +129,11 @@ function useEmailAddActions(
 
 function useEmailVerifyActions(state: EmailState) {
   const { verificationMode, verificationCode } = state;
+  const t = useGT();
 
   const handleVerify = async () => {
     if (verificationMode.type === "none" || !verificationCode.trim()) {
-      toast.error("Please enter the verification code");
+      toast.error(t("Please enter the verification code"));
       return;
     }
     state.setIsVerifying(true);
@@ -138,13 +141,13 @@ function useEmailVerifyActions(state: EmailState) {
       await verificationMode.email.attemptVerification({
         code: verificationCode,
       });
-      toast.success("Email verified successfully");
+      toast.success(t("Email verified successfully"));
       state.setVerificationMode({ type: "none" });
       state.setVerificationCode("");
       state.setNewEmail("");
     } catch (error) {
       console.error("Failed to verify email:", error);
-      toast.error("Invalid verification code. Please try again.");
+      toast.error(t("Invalid verification code. Please try again."));
     } finally {
       state.setIsVerifying(false);
     }
@@ -157,7 +160,7 @@ function useEmailVerifyActions(state: EmailState) {
       await verificationMode.email.prepareVerification({
         strategy: "email_code",
       });
-      toast.success("Verification code resent");
+      toast.success(t("Verification code resent"));
     } catch (error) {
       console.error("Failed to resend code:", error);
       logWebClientEvent({
@@ -165,7 +168,7 @@ function useEmailVerifyActions(state: EmailState) {
         level: "error",
         payload: { error: error instanceof Error ? error.message : String(error) },
       });
-      toast.error("Failed to resend code. Please try again.");
+      toast.error(t("Failed to resend code. Please try again."));
     } finally {
       state.setIsSendingCode(false);
     }
@@ -176,7 +179,7 @@ function useEmailVerifyActions(state: EmailState) {
     try {
       await email.prepareVerification({ strategy: "email_code" });
       state.setVerificationMode({ type: "existing", email });
-      toast.success("Verification code sent");
+      toast.success(t("Verification code sent"));
     } catch (error) {
       console.error("Failed to send verification:", error);
       logWebClientEvent({
@@ -184,7 +187,7 @@ function useEmailVerifyActions(state: EmailState) {
         level: "error",
         payload: { error: error instanceof Error ? error.message : String(error) },
       });
-      toast.error("Failed to send verification code");
+      toast.error(t("Failed to send verification code"));
     } finally {
       state.setIsSendingCode(false);
     }
@@ -207,6 +210,7 @@ function useEmailVerifyActions(state: EmailState) {
 
 function useEmailDeleteAction(state: EmailState) {
   const { emailToDelete } = state;
+  const t = useGT();
 
   const handleDeleteEmail = async () => {
     if (!emailToDelete) return;
@@ -214,7 +218,7 @@ function useEmailDeleteAction(state: EmailState) {
     try {
       await emailToDelete.destroy();
       logWebClientEvent({ event: "web.settings.email.deleted", level: "info" });
-      toast.success("Email removed");
+      toast.success(t("Email removed"));
       state.setEmailToDelete(null);
     } catch (error) {
       console.error("Failed to delete email:", error);
@@ -223,7 +227,7 @@ function useEmailDeleteAction(state: EmailState) {
         level: "error",
         payload: { error: error instanceof Error ? error.message : String(error) },
       });
-      toast.error("Failed to remove email");
+      toast.error(t("Failed to remove email"));
     } finally {
       state.setIsDeleting(false);
     }

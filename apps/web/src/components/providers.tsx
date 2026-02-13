@@ -5,6 +5,7 @@ import { dark } from "@clerk/themes";
 import { env } from "@zenthor-assist/env/web";
 import { ConvexReactClient } from "convex/react";
 import { ConvexProviderWithClerk } from "convex/react-clerk";
+import { GTProvider } from "gt-next";
 import { useTheme } from "next-themes";
 
 import { ThemeProvider } from "./theme-provider";
@@ -48,7 +49,9 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
       <ThemedClerkProvider>
         <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
-          <TooltipProvider>{children}</TooltipProvider>
+          <TooltipProvider>
+            <GTProvider>{children}</GTProvider>
+          </TooltipProvider>
         </ConvexProviderWithClerk>
         <Toaster richColors />
       </ThemedClerkProvider>

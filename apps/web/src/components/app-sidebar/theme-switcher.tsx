@@ -1,5 +1,6 @@
 "use client";
 
+import { useGT } from "gt-next";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import type { ComponentType } from "react";
@@ -9,9 +10,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 
 type ThemeOption = {
-  label: string;
   value: "light" | "dark" | "system";
   icon: ComponentType<{ className?: string }>;
+  label: string;
 };
 
 const themeOptions: ThemeOption[] = [
@@ -22,15 +23,17 @@ const themeOptions: ThemeOption[] = [
 
 export function ThemeSwitcher() {
   const { theme, setTheme } = useTheme();
+  const t = useGT();
 
   return (
     <div
       role="group"
-      aria-label="Theme switcher"
+      aria-label={t("Theme switcher")}
       className="border-sidebar-border bg-sidebar-accent/30 flex items-center justify-between rounded-md border p-0.5 group-data-[collapsible=icon]:hidden"
     >
-      {themeOptions.map(({ icon: Icon, label, value }) => {
+      {themeOptions.map(({ icon: Icon, value, label: labelKey }) => {
         const isActive = (theme ?? "system") === value;
+        const label = t(labelKey);
 
         return (
           <Tooltip key={value}>

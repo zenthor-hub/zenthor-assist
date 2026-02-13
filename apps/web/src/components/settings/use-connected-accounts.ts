@@ -2,6 +2,7 @@
 
 import type { useUser } from "@clerk/nextjs";
 import { useUser as useClerkUser, useReverification } from "@clerk/nextjs";
+import { useGT } from "gt-next";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -48,6 +49,8 @@ function useConnectedAccountActions(
   connectWithReverification: (strategy: OAuthStrategy) => Promise<ExternalAccount | undefined>,
   disconnectWithReverification: (account: ExternalAccount) => Promise<void>,
 ) {
+  const t = useGT();
+
   const handleConnect = async (strategy: OAuthStrategy) => {
     if (!state.user) return;
     state.setIsConnecting(strategy);
@@ -68,7 +71,7 @@ function useConnectedAccountActions(
           strategy,
         },
       });
-      const message = error instanceof Error ? error.message : "Failed to connect account";
+      const message = error instanceof Error ? error.message : t("Failed to connect account");
       toast.error(message);
       state.setIsConnecting(null);
     }
@@ -85,7 +88,7 @@ function useConnectedAccountActions(
         level: "info",
         payload: { provider },
       });
-      toast.success("Account disconnected");
+      toast.success(t("Account disconnected"));
       state.setAccountToDisconnect(null);
     } catch (error) {
       console.error("Failed to disconnect account:", error);
@@ -97,7 +100,7 @@ function useConnectedAccountActions(
           provider: state.accountToDisconnect?.provider,
         },
       });
-      toast.error("Failed to disconnect account");
+      toast.error(t("Failed to disconnect account"));
     } finally {
       state.setIsDisconnecting(false);
     }
@@ -111,6 +114,7 @@ function useSyncExternalAccountEmails(
   isLoaded: boolean,
 ) {
   const syncedRef = useRef<Set<string>>(new Set());
+  const t = useGT();
   const createEmailWithReverification = useReverification(async (email: string) => {
     const emailAddress = await user?.createEmailAddress({ email });
     if (emailAddress) {
@@ -137,7 +141,9 @@ function useSyncExternalAccountEmails(
         .then((emailAddress) => {
           if (!emailAddress) return;
           toast.success(
-            `Verification code sent to ${account.emailAddress} to link it to your account`,
+            t("Verification code sent to {emailAddress} to link it to your account", {
+              emailAddress: account.emailAddress,
+            }),
           );
         })
         .catch((error) => {
@@ -153,7 +159,7 @@ function useSyncExternalAccountEmails(
           syncedRef.current.delete(email);
         });
     }
-  }, [createEmailWithReverification, isLoaded, user]);
+  }, [createEmailWithReverification, isLoaded, t, user]);
 }
 
 export function useConnectedAccounts() {

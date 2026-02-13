@@ -5,6 +5,7 @@ import { code } from "@streamdown/code";
 import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
 import type { UIMessage } from "ai";
+import { T, useGT } from "gt-next";
 import { ChevronLeftIcon, ChevronRightIcon, ExternalLinkIcon, ShieldAlertIcon } from "lucide-react";
 import type { ComponentProps, HTMLAttributes, ReactElement } from "react";
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useState } from "react";
@@ -226,11 +227,12 @@ export const MessageBranchSelector = ({ className, ...props }: MessageBranchSele
 export type MessageBranchPreviousProps = ComponentProps<typeof Button>;
 
 export const MessageBranchPrevious = ({ children, ...props }: MessageBranchPreviousProps) => {
+  const t = useGT();
   const { goToPrevious, totalBranches } = useMessageBranch();
 
   return (
     <Button
-      aria-label="Previous branch"
+      aria-label={t("Previous branch")}
       disabled={totalBranches <= 1}
       onClick={goToPrevious}
       size="icon-sm"
@@ -246,11 +248,12 @@ export const MessageBranchPrevious = ({ children, ...props }: MessageBranchPrevi
 export type MessageBranchNextProps = ComponentProps<typeof Button>;
 
 export const MessageBranchNext = ({ children, ...props }: MessageBranchNextProps) => {
+  const t = useGT();
   const { goToNext, totalBranches } = useMessageBranch();
 
   return (
     <Button
-      aria-label="Next branch"
+      aria-label={t("Next branch")}
       disabled={totalBranches <= 1}
       onClick={goToNext}
       size="icon-sm"
@@ -267,13 +270,14 @@ export type MessageBranchPageProps = HTMLAttributes<HTMLSpanElement>;
 
 export const MessageBranchPage = ({ className, ...props }: MessageBranchPageProps) => {
   const { currentBranch, totalBranches } = useMessageBranch();
+  const t = useGT();
 
   return (
     <ButtonGroupText
       className={cn("text-muted-foreground border-none bg-transparent shadow-none", className)}
       {...props}
     >
-      {currentBranch + 1} of {totalBranches}
+      {currentBranch + 1} {t("of")} {totalBranches}
     </ButtonGroupText>
   );
 };
@@ -296,11 +300,11 @@ function LinkSafetyModal({ url, isOpen, onClose, onConfirm }: LinkSafetyModalPro
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShieldAlertIcon className="size-4" />
-            External Link
+            <T>External Link</T>
           </DialogTitle>
           <DialogDescription>
-            You&apos;re about to visit <span className="font-medium">{hostname}</span>. Are you sure
-            you want to continue?
+            <T>You&apos;re about to visit</T> <span className="font-medium">{hostname}</span>.{" "}
+            <T>Are you sure you want to continue?</T>
           </DialogDescription>
         </DialogHeader>
         <div className="text-muted-foreground bg-muted rounded-md p-2 text-base break-all">
@@ -308,11 +312,11 @@ function LinkSafetyModal({ url, isOpen, onClose, onConfirm }: LinkSafetyModalPro
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            <T>Cancel</T>
           </Button>
           <Button onClick={onConfirm}>
             <ExternalLinkIcon className="size-3.5" />
-            Open Link
+            <T>Open Link</T>
           </Button>
         </DialogFooter>
       </DialogContent>

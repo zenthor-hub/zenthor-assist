@@ -1,5 +1,6 @@
 "use client";
 
+import { T, useGT } from "gt-next";
 import { Link2, Loader2, Mail, MoreHorizontal, Plus, Shield } from "lucide-react";
 
 import {
@@ -66,7 +67,7 @@ function EmailRow({
             <span className="text-sm font-medium">{email.emailAddress}</span>
             {isPrimary && (
               <Badge variant="secondary" className="text-xs">
-                Primary
+                <T>Primary</T>
               </Badge>
             )}
             {isVerified ? (
@@ -75,14 +76,14 @@ function EmailRow({
                 className="border-green-500/30 bg-green-500/10 text-xs text-green-600 dark:text-green-400"
               >
                 <Shield className="mr-1 size-3" />
-                Verified
+                <T>Verified</T>
               </Badge>
             ) : (
               <Badge
                 variant="outline"
                 className="border-amber-500/30 bg-amber-500/10 text-xs text-amber-600 dark:text-amber-400"
               >
-                Unverified
+                <T>Unverified</T>
               </Badge>
             )}
             {isLinked && (
@@ -91,7 +92,7 @@ function EmailRow({
                 className="border-blue-500/30 bg-blue-500/10 text-xs text-blue-600 dark:text-blue-400"
               >
                 <Link2 className="mr-1 size-3" />
-                Linked
+                <T>Linked</T>
               </Badge>
             )}
           </div>
@@ -109,19 +110,19 @@ function EmailRow({
             {isVerified ? (
               <DropdownMenuItem onClick={onSetPrimary} disabled={isSettingPrimary}>
                 {isSettingPrimary && <Loader2 className="mr-2 size-4 animate-spin" />}
-                Set as primary
+                <T>Set as primary</T>
               </DropdownMenuItem>
             ) : (
               <DropdownMenuItem onClick={onVerify} disabled={isSendingCode}>
                 {isSendingCode && <Loader2 className="mr-2 size-4 animate-spin" />}
-                Verify email
+                <T>Verify email</T>
               </DropdownMenuItem>
             )}
             <DropdownMenuItem
               onClick={onDelete}
               className="text-destructive focus:text-destructive"
             >
-              Remove
+              <T>Remove</T>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -145,24 +146,30 @@ function AddEmailDialog({
   isAdding: boolean;
   onAdd: () => void;
 }) {
+  const t = useGT();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add Email Address</DialogTitle>
+          <DialogTitle>
+            <T>Add Email Address</T>
+          </DialogTitle>
           <DialogDescription>
-            Add a new email address to your account. You'll need to verify it.
+            <T>Add a new email address to your account. You&apos;ll need to verify it.</T>
           </DialogDescription>
         </DialogHeader>
         <div className="py-4">
           <div className="grid gap-2">
-            <Label htmlFor="new-email">Email address</Label>
+            <Label htmlFor="new-email">
+              <T>Email address</T>
+            </Label>
             <Input
               id="new-email"
               type="email"
               value={email}
               onChange={(e) => onEmailChange(e.target.value)}
-              placeholder="Enter email address"
+              placeholder={t("Enter email address")}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !isAdding) onAdd();
               }}
@@ -178,11 +185,11 @@ function AddEmailDialog({
             }}
             disabled={isAdding}
           >
-            Cancel
+            <T>Cancel</T>
           </Button>
           <Button onClick={onAdd} disabled={isAdding}>
             {isAdding && <Loader2 className="size-4 animate-spin" />}
-            Add email
+            <T>Add email</T>
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -209,6 +216,8 @@ function VerifyEmailDialog({
   onResend: () => void;
   onClose: () => void;
 }) {
+  const t = useGT();
+
   return (
     <Dialog
       open={verificationMode.type !== "none"}
@@ -218,22 +227,25 @@ function VerifyEmailDialog({
     >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Verify Email</DialogTitle>
+          <DialogTitle>
+            <T>Verify Email</T>
+          </DialogTitle>
           <DialogDescription>
-            Enter the verification code sent to{" "}
-            <span className="font-medium">
-              {verificationMode.type !== "none" ? verificationMode.email.emailAddress : ""}
-            </span>
+            {t("Enter the verification code sent to {email}", {
+              email: verificationMode.type !== "none" ? verificationMode.email.emailAddress : "",
+            })}
           </DialogDescription>
         </DialogHeader>
         <div className="py-4">
           <div className="grid gap-2">
-            <Label htmlFor="verification-code">Verification code</Label>
+            <Label htmlFor="verification-code">
+              <T>Verification code</T>
+            </Label>
             <Input
               id="verification-code"
               value={code}
               onChange={(e) => onCodeChange(e.target.value)}
-              placeholder="Enter 6-digit code"
+              placeholder={t("Enter 6-digit code")}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !isVerifying) onVerify();
               }}
@@ -243,19 +255,19 @@ function VerifyEmailDialog({
             type="button"
             onClick={onResend}
             disabled={isSendingCode}
-            aria-label="Resend verification code"
+            aria-label={t("Resend verification code")}
             className="text-primary mt-2 text-sm hover:underline disabled:opacity-50"
           >
-            {isSendingCode ? "Sending..." : "Resend code"}
+            {isSendingCode ? <T>Sending...</T> : <T>Resend code</T>}
           </button>
         </div>
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={onClose} disabled={isVerifying}>
-            Cancel
+            <T>Cancel</T>
           </Button>
           <Button onClick={onVerify} disabled={isVerifying}>
             {isVerifying && <Loader2 className="size-4 animate-spin" />}
-            Verify
+            <T>Verify</T>
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -274,19 +286,25 @@ function DeleteEmailDialog({
   onDelete: () => void;
   onClose: () => void;
 }) {
+  const t = useGT();
+
   return (
     <AlertDialog open={email !== null} onOpenChange={(open) => !open && onClose()}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Remove Email Address</AlertDialogTitle>
+          <AlertDialogTitle>
+            <T>Remove Email Address</T>
+          </AlertDialogTitle>
           <AlertDialogDescription>
-            Are you sure you want to remove{" "}
-            <span className="font-medium">{email?.emailAddress}</span>? This action cannot be
-            undone.
+            {t("Are you sure you want to remove {email}? This action cannot be undone.", {
+              email: email?.emailAddress ?? "",
+            })}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={isDeleting}>
+            <T>Cancel</T>
+          </AlertDialogCancel>
           <AlertDialogAction
             variant="destructive"
             onClick={(e) => {
@@ -296,7 +314,7 @@ function DeleteEmailDialog({
             disabled={isDeleting}
           >
             {isDeleting && <Loader2 className="mr-2 size-4 animate-spin" />}
-            Remove
+            <T>Remove</T>
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -320,12 +338,16 @@ export function EmailAddressesSection({
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-medium">Email Addresses</h3>
-            <p className="text-muted-foreground text-xs">Manage your email addresses</p>
+            <h3 className="text-sm font-medium">
+              <T>Email Addresses</T>
+            </h3>
+            <p className="text-muted-foreground text-xs">
+              <T>Manage your email addresses</T>
+            </p>
           </div>
           <Button variant="outline" size="sm" onClick={() => emailState.setIsAddDialogOpen(true)}>
             <Plus className="size-4" />
-            Add
+            <T>Add</T>
           </Button>
         </div>
         <div className="space-y-3">
