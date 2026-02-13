@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "translate": "npx gtx-cli translate",
     "start": "next start",
     "lint": "oxlint",
     "format": "oxfmt --write",
@@ -31,6 +32,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "convex": "catalog:",
+    "gt-next": "^6.12.11",
     "lucide-react": "^0.563.0",
     "nanoid": "^5.1.6",
     "next": "^16.1.1",
@@ -53,6 +55,7 @@
     "@types/node": "catalog:",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "gtx-cli": "^2.6.20",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.10",
     "typescript": "catalog:"

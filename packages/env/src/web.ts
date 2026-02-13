@@ -5,6 +5,8 @@ export const env = createEnv({
   server: {
     AXIOM_TOKEN: z.string().min(1).optional(),
     AXIOM_DATASET: z.string().min(1).optional(),
+    GT_API_KEY: z.string().min(1).optional(),
+    GT_PROJECT_ID: z.string().min(1).optional(),
     OBS_ENABLED: z
       .enum(["true", "false"])
       .optional()
@@ -23,6 +25,8 @@ export const env = createEnv({
   runtimeEnv: {
     AXIOM_TOKEN: process.env.AXIOM_TOKEN,
     AXIOM_DATASET: process.env.AXIOM_DATASET,
+    GT_API_KEY: process.env.GT_API_KEY,
+    GT_PROJECT_ID: process.env.GT_PROJECT_ID,
     OBS_ENABLED: process.env.OBS_ENABLED,
     OBS_SAMPLE_RATE: process.env.OBS_SAMPLE_RATE,
     OBS_LOG_LEVEL: process.env.OBS_LOG_LEVEL,
