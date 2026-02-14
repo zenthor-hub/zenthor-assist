@@ -50,17 +50,23 @@ describe("selectModel", () => {
     expect(result.tier).toBe("standard");
   });
 
-  it("escalates to standard at message threshold (>=15)", () => {
-    const result = selectModel({ channel: "whatsapp", toolCount: 1, messageCount: 15 });
+  it("escalates web to standard at message threshold (>=15)", () => {
+    const result = selectModel({ channel: "web", toolCount: 0, messageCount: 15 });
     expect(result.primary).toBe("anthropic/claude-sonnet-4-5-20250929");
     expect(result.tier).toBe("standard");
   });
 
-  it("escalates complex WhatsApp to sonnet (standard)", () => {
+  it("keeps WhatsApp on lite even with high message count", () => {
+    const result = selectModel({ channel: "whatsapp", toolCount: 0, messageCount: 30 });
+    expect(result.primary).toBe("xai/grok-4.1-fast-reasoning");
+    expect(result.tier).toBe("lite");
+  });
+
+  it("keeps WhatsApp on lite even with high tool count", () => {
     const result = selectModel({ channel: "whatsapp", toolCount: 6, messageCount: 3 });
-    expect(result.primary).toBe("anthropic/claude-sonnet-4-5-20250929");
-    expect(result.tier).toBe("standard");
-    expect(result.fallbacks).toEqual(["anthropic/claude-opus-4-6"]);
+    expect(result.primary).toBe("xai/grok-4.1-fast-reasoning");
+    expect(result.tier).toBe("lite");
+    expect(result.fallbacks).toContain("anthropic/claude-sonnet-4-5-20250929");
   });
 
   it("escalates complex web to sonnet (standard)", () => {
@@ -70,10 +76,10 @@ describe("selectModel", () => {
     expect(result.fallbacks).toEqual(["anthropic/claude-opus-4-6"]);
   });
 
-  it("escalates when both tool count and message count are high", () => {
+  it("WhatsApp never escalates regardless of complexity signals", () => {
     const result = selectModel({ channel: "whatsapp", toolCount: 8, messageCount: 25 });
-    expect(result.primary).toBe("anthropic/claude-sonnet-4-5-20250929");
-    expect(result.tier).toBe("standard");
+    expect(result.primary).toBe("xai/grok-4.1-fast-reasoning");
+    expect(result.tier).toBe("lite");
   });
 
   it("keeps opus as fallback-only (never primary)", () => {

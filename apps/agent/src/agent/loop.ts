@@ -375,7 +375,7 @@ export function startAgentLoop() {
               toolsOverride: approvalTools,
               agentConfig,
               channel,
-              toolCount: Object.keys(filteredTools).length,
+              toolCount: 0,
               messageCount: compactedMessages.length,
             },
           );
@@ -430,7 +430,7 @@ export function startAgentLoop() {
             toolsOverride: approvalTools,
             agentConfig,
             channel,
-            toolCount: Object.keys(filteredTools).length,
+            toolCount: 0,
             messageCount: compactedMessages.length,
           });
           modelUsed = response.modelUsed;
@@ -446,8 +446,16 @@ export function startAgentLoop() {
             const parts: string[] = [];
             if (context.preferences.showModelInfo && modelUsed)
               parts.push(`Model: ${friendlyModelName(modelUsed)}`);
-            if (context.preferences.showToolDetails && response.toolCalls?.length)
-              parts.push(`Tools: ${response.toolCalls.map((tc) => tc.name).join(", ")}`);
+            if (context.preferences.showToolDetails && response.toolCalls?.length) {
+              const counts = new Map<string, number>();
+              for (const tc of response.toolCalls) {
+                counts.set(tc.name, (counts.get(tc.name) ?? 0) + 1);
+              }
+              const summary = [...counts.entries()]
+                .map(([name, count]) => (count > 1 ? `${name} x${count}` : name))
+                .join(", ");
+              parts.push(`Tools: ${summary}`);
+            }
             if (parts.length > 0) {
               // Strip any model/tool info the LLM may have echoed from conversation history
               content = content.replace(/\n+_?Model:.*$/s, "").trimEnd();

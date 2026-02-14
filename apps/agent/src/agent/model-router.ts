@@ -37,25 +37,8 @@ export function selectModel(ctx: RouteContext): RouteResult {
   const buildFallbacks = (...models: (string | undefined)[]): string[] =>
     models.filter((m): m is string => Boolean(m));
 
-  const complex = isComplexTask(ctx);
-
-  // Complex tasks always use the standard model regardless of channel
-  if (complex) {
-    void logger.info("agent.model.route.selected", {
-      tier: "standard",
-      channel: ctx.channel,
-      toolCount: ctx.toolCount,
-      messageCount: ctx.messageCount,
-      model: standard,
-    });
-    return {
-      primary: standard,
-      fallbacks: buildFallbacks(power),
-      tier: "standard",
-    };
-  }
-
-  // Simple tasks use the lite model (fast + cheap) on any channel
+  // WhatsApp always uses the lite model — fast responses matter more than
+  // model strength, and the compaction system handles long conversations.
   if (ctx.channel === "whatsapp") {
     void logger.info("agent.model.route.selected", {
       tier: "lite",
@@ -71,7 +54,24 @@ export function selectModel(ctx: RouteContext): RouteResult {
     };
   }
 
-  // Web simple tasks also use lite, with standard as first fallback
+  // Web: escalate to standard for complex tasks
+  const complex = isComplexTask(ctx);
+  if (complex) {
+    void logger.info("agent.model.route.selected", {
+      tier: "standard",
+      channel: ctx.channel,
+      toolCount: ctx.toolCount,
+      messageCount: ctx.messageCount,
+      model: standard,
+    });
+    return {
+      primary: standard,
+      fallbacks: buildFallbacks(power),
+      tier: "standard",
+    };
+  }
+
+  // Web simple tasks use lite, with standard as first fallback
   void logger.info("agent.model.route.selected", {
     tier: "lite",
     channel: ctx.channel,
