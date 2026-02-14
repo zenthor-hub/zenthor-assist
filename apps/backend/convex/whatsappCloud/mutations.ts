@@ -8,6 +8,42 @@ import { classifyApprovalText } from "../lib/approvalKeywords";
 const CLOUD_API_ACCOUNT_ID = "cloud-api";
 
 /**
+ * Generate phone number variants for lookup.
+ * Handles the Brazilian 9th digit issue: mobile numbers may appear as
+ * 55{area}{8digits} or 55{area}9{8digits} depending on the source.
+ */
+function phoneVariants(phone: string): string[] {
+  const variants = [phone];
+  // Brazilian numbers: country code 55, 2-digit area code
+  if (phone.startsWith("55") && phone.length >= 12) {
+    const area = phone.slice(2, 4);
+    const local = phone.slice(4);
+    if (local.length === 8) {
+      // 8-digit local → try adding leading 9
+      variants.push(`55${area}9${local}`);
+    } else if (local.length === 9 && local.startsWith("9")) {
+      // 9-digit local → try removing leading 9
+      variants.push(`55${area}${local.slice(1)}`);
+    }
+  }
+  return variants;
+}
+
+/**
+ * Look up a contact by phone, trying normalized variants.
+ */
+async function findContactByPhone(ctx: MutationCtx, phone: string) {
+  for (const variant of phoneVariants(phone)) {
+    const contact = await ctx.db
+      .query("contacts")
+      .withIndex("by_phone", (q) => q.eq("phone", variant))
+      .first();
+    if (contact) return contact;
+  }
+  return null;
+}
+
+/**
  * Attempt to resolve the first pending tool approval for a conversation
  * by interpreting user text as an approval keyword.
  * Returns the resolved status or null if no match / no pending approvals.
@@ -67,11 +103,8 @@ export const handleIncoming = internalMutation({
       createdAt: Date.now(),
     });
 
-    // 2. Contact lookup + isAllowed gate
-    const contact = await ctx.db
-      .query("contacts")
-      .withIndex("by_phone", (q) => q.eq("phone", args.from))
-      .first();
+    // 2. Contact lookup + isAllowed gate (with phone normalization)
+    const contact = await findContactByPhone(ctx, args.from);
 
     if (!contact) {
       // Auto-create contact as not-allowed (no linked user account yet)
@@ -182,11 +215,8 @@ export const handleIncomingMedia = internalMutation({
       createdAt: Date.now(),
     });
 
-    // 2. Contact lookup + isAllowed gate
-    const contact = await ctx.db
-      .query("contacts")
-      .withIndex("by_phone", (q) => q.eq("phone", args.from))
-      .first();
+    // 2. Contact lookup + isAllowed gate (with phone normalization)
+    const contact = await findContactByPhone(ctx, args.from);
 
     if (!contact) {
       await ctx.db.insert("contacts", {
