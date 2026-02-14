@@ -54,11 +54,23 @@ export const getOrCreateFromClerk = mutation({
       if (!existing.role) {
         await ctx.db.patch(existing._id, { role, updatedAt: Date.now() });
       }
+      const onboarding = await ctx.db
+        .query("userOnboarding")
+        .withIndex("by_userId", (q) => q.eq("userId", existing._id))
+        .unique();
+      if (!onboarding) {
+        await ctx.db.insert("userOnboarding", {
+          userId: existing._id,
+          status: "pending",
+          currentStep: "preferredName",
+          updatedAt: Date.now(),
+        });
+      }
       return existing._id;
     }
 
     const now = Date.now();
-    return await ctx.db.insert("users", {
+    const userId = await ctx.db.insert("users", {
       externalId,
       name: args.name,
       email: args.email ?? "",
@@ -68,6 +80,15 @@ export const getOrCreateFromClerk = mutation({
       createdAt: now,
       updatedAt: now,
     });
+
+    await ctx.db.insert("userOnboarding", {
+      userId,
+      status: "pending",
+      currentStep: "preferredName",
+      updatedAt: now,
+    });
+
+    return userId;
   },
 });
 

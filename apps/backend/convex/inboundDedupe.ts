@@ -10,7 +10,7 @@ import { serviceMutation } from "./auth";
  */
 export const checkAndRegister = serviceMutation({
   args: {
-    channel: v.union(v.literal("whatsapp"), v.literal("web")),
+    channel: v.union(v.literal("whatsapp"), v.literal("web"), v.literal("telegram")),
     channelMessageId: v.string(),
     accountId: v.optional(v.string()),
   },

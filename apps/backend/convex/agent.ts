@@ -100,7 +100,7 @@ const contactDoc = v.object({
 const conversationDoc = v.object({
   _id: v.id("conversations"),
   _creationTime: v.number(),
-  channel: v.union(v.literal("whatsapp"), v.literal("web")),
+  channel: v.union(v.literal("whatsapp"), v.literal("web"), v.literal("telegram")),
   userId: v.optional(v.id("users")),
   contactId: v.optional(v.id("contacts")),
   agentId: v.optional(v.id("agents")),
@@ -115,7 +115,7 @@ const messageDoc = v.object({
   conversationId: v.id("conversations"),
   role: v.union(v.literal("user"), v.literal("assistant"), v.literal("system")),
   content: v.string(),
-  channel: v.union(v.literal("whatsapp"), v.literal("web")),
+  channel: v.union(v.literal("whatsapp"), v.literal("web"), v.literal("telegram")),
   toolCalls: v.optional(v.any()),
   media: v.optional(
     v.object({
@@ -360,6 +360,46 @@ const preferencesDoc = v.object({
   updatedAt: v.number(),
 });
 
+const onboardingDoc = v.object({
+  _id: v.id("userOnboarding"),
+  _creationTime: v.number(),
+  userId: v.id("users"),
+  status: v.union(v.literal("pending"), v.literal("in_progress"), v.literal("completed")),
+  currentStep: v.union(
+    v.literal("preferredName"),
+    v.literal("agentName"),
+    v.literal("timezone"),
+    v.literal("communicationStyle"),
+    v.literal("focusArea"),
+    v.literal("boundaries"),
+  ),
+  lastPromptedStep: v.optional(
+    v.union(
+      v.literal("preferredName"),
+      v.literal("agentName"),
+      v.literal("timezone"),
+      v.literal("communicationStyle"),
+      v.literal("focusArea"),
+      v.literal("boundaries"),
+    ),
+  ),
+  onboardingConversationId: v.optional(v.id("conversations")),
+  answers: v.optional(
+    v.object({
+      preferredName: v.optional(v.string()),
+      agentName: v.optional(v.string()),
+      timezone: v.optional(v.string()),
+      communicationStyle: v.optional(
+        v.union(v.literal("concise"), v.literal("balanced"), v.literal("detailed")),
+      ),
+      focusArea: v.optional(v.string()),
+      boundaries: v.optional(v.string()),
+    }),
+  ),
+  completedAt: v.optional(v.number()),
+  updatedAt: v.number(),
+});
+
 export const getConversationContext = serviceQuery({
   args: { conversationId: v.id("conversations") },
   returns: v.union(
@@ -371,6 +411,7 @@ export const getConversationContext = serviceQuery({
       skills: v.array(skillDoc),
       agent: v.union(agentDoc, v.null()),
       preferences: v.union(preferencesDoc, v.null()),
+      onboarding: v.union(onboardingDoc, v.null()),
     }),
     v.null(),
   ),
@@ -415,6 +456,13 @@ export const getConversationContext = serviceQuery({
           .unique()
       : null;
 
-    return { conversation, user, contact, messages, skills, agent, preferences };
+    const onboarding = ownerUserId
+      ? await ctx.db
+          .query("userOnboarding")
+          .withIndex("by_userId", (q) => q.eq("userId", ownerUserId))
+          .unique()
+      : null;
+
+    return { conversation, user, contact, messages, skills, agent, preferences, onboarding };
   },
 });

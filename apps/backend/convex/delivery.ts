@@ -13,13 +13,14 @@ const outboundMetadataValidator = v.optional(
   v.object({
     kind: v.string(),
     toolName: v.optional(v.string()),
+    buttons: v.optional(v.array(v.object({ id: v.string(), title: v.string() }))),
   }),
 );
 
 const outboundDoc = v.object({
   _id: v.id("outboundMessages"),
   _creationTime: v.number(),
-  channel: v.union(v.literal("web"), v.literal("whatsapp")),
+  channel: v.union(v.literal("web"), v.literal("whatsapp"), v.literal("telegram")),
   accountId: v.optional(v.string()),
   conversationId: v.id("conversations"),
   messageId: v.id("messages"),
@@ -39,7 +40,7 @@ const outboundDoc = v.object({
 
 export const enqueueOutbound = serviceMutation({
   args: {
-    channel: v.union(v.literal("web"), v.literal("whatsapp")),
+    channel: v.union(v.literal("web"), v.literal("whatsapp"), v.literal("telegram")),
     accountId: v.optional(v.string()),
     conversationId: v.id("conversations"),
     messageId: v.id("messages"),
@@ -71,7 +72,7 @@ export const enqueueOutbound = serviceMutation({
 export const claimNextOutbound = serviceMutation({
   args: {
     processorId: v.string(),
-    channel: v.union(v.literal("web"), v.literal("whatsapp")),
+    channel: v.union(v.literal("web"), v.literal("whatsapp"), v.literal("telegram")),
     accountId: v.optional(v.string()),
     lockMs: v.optional(v.number()),
   },

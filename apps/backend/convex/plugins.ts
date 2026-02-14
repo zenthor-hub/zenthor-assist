@@ -4,7 +4,7 @@ import type { Id } from "./_generated/dataModel";
 import type { QueryCtx } from "./_generated/server";
 import { adminMutation, adminQuery, serviceMutation, serviceQuery } from "./auth";
 
-const channelValidator = v.union(v.literal("web"), v.literal("whatsapp"));
+const channelValidator = v.union(v.literal("web"), v.literal("whatsapp"), v.literal("telegram"));
 
 const diagnosticStatusValidator = v.union(
   v.literal("activated"),
@@ -57,7 +57,7 @@ async function getScopedInstalls(
   ctx: QueryCtx,
   workspaceScope: string,
   agentId: Id<"agents"> | undefined,
-  channel: "web" | "whatsapp" | undefined,
+  channel: "web" | "whatsapp" | "telegram" | undefined,
 ) {
   return await ctx.db
     .query("pluginInstalls")
@@ -71,7 +71,7 @@ async function getScopedPolicies(
   ctx: QueryCtx,
   workspaceScope: string,
   agentId: Id<"agents"> | undefined,
-  channel: "web" | "whatsapp" | undefined,
+  channel: "web" | "whatsapp" | "telegram" | undefined,
 ) {
   return await ctx.db
     .query("pluginPolicies")

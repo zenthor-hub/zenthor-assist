@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 
+import type { Id } from "./_generated/dataModel";
 import { internalMutation } from "./_generated/server";
 import { resolveRoleForEmail } from "./auth";
 
@@ -85,5 +86,58 @@ export const backfillSkillOwners = internalMutation({
     }
 
     return { updated, total: skills.length };
+  },
+});
+
+/**
+ * Backfill onboarding rows for users linked to existing WhatsApp contacts.
+ * Safe to run multiple times.
+ */
+export const backfillWhatsAppOnboarding = internalMutation({
+  args: {},
+  returns: v.object({
+    processedUsers: v.number(),
+    createdOnboarding: v.number(),
+    alreadyHadOnboarding: v.number(),
+  }),
+  handler: async (ctx) => {
+    const contacts = await ctx.db.query("contacts").collect();
+    const linkedUserIds = new Set<Id<"users">>();
+
+    for (const contact of contacts) {
+      if (contact.userId) {
+        linkedUserIds.add(contact.userId);
+      }
+    }
+
+    let createdOnboarding = 0;
+    let alreadyHadOnboarding = 0;
+    const now = Date.now();
+
+    for (const userId of linkedUserIds) {
+      const existing = await ctx.db
+        .query("userOnboarding")
+        .withIndex("by_userId", (q) => q.eq("userId", userId))
+        .unique();
+
+      if (existing) {
+        alreadyHadOnboarding += 1;
+        continue;
+      }
+
+      await ctx.db.insert("userOnboarding", {
+        userId,
+        status: "pending",
+        currentStep: "preferredName",
+        updatedAt: now,
+      });
+      createdOnboarding += 1;
+    }
+
+    return {
+      processedUsers: linkedUserIds.size,
+      createdOnboarding,
+      alreadyHadOnboarding,
+    };
   },
 });

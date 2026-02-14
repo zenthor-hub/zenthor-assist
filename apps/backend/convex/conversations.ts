@@ -6,7 +6,7 @@ import { getConversationIfOwnedByUser } from "./lib/auth";
 const conversationDoc = v.object({
   _id: v.id("conversations"),
   _creationTime: v.number(),
-  channel: v.union(v.literal("whatsapp"), v.literal("web")),
+  channel: v.union(v.literal("whatsapp"), v.literal("web"), v.literal("telegram")),
   userId: v.optional(v.id("users")),
   contactId: v.optional(v.id("contacts")),
   agentId: v.optional(v.id("agents")),
@@ -19,7 +19,7 @@ export const getOrCreate = serviceMutation({
   args: {
     userId: v.optional(v.id("users")),
     contactId: v.optional(v.id("contacts")),
-    channel: v.union(v.literal("whatsapp"), v.literal("web")),
+    channel: v.union(v.literal("whatsapp"), v.literal("web"), v.literal("telegram")),
     agentId: v.optional(v.id("agents")),
     accountId: v.optional(v.string()),
   },
@@ -43,13 +43,13 @@ export const getOrCreate = serviceMutation({
       });
     }
 
-    if (args.channel === "whatsapp" && args.contactId) {
+    if ((args.channel === "whatsapp" || args.channel === "telegram") && args.contactId) {
       const accountId = args.accountId ?? "default";
 
       const existing = await ctx.db
         .query("conversations")
         .withIndex("by_contactId", (q) => q.eq("contactId", args.contactId))
-        .filter((q) => q.eq(q.field("channel"), "whatsapp"))
+        .filter((q) => q.eq(q.field("channel"), args.channel))
         .filter((q) => q.eq(q.field("status"), "active"))
         .filter((q) => q.eq(q.field("accountId"), accountId))
         .first();
@@ -58,14 +58,14 @@ export const getOrCreate = serviceMutation({
 
       return await ctx.db.insert("conversations", {
         contactId: args.contactId,
-        channel: "whatsapp",
+        channel: args.channel,
         accountId,
         status: "active",
         ...(args.agentId && { agentId: args.agentId }),
       });
     }
 
-    throw new ConvexError("Must provide userId for web or contactId for whatsapp");
+    throw new ConvexError("Must provide userId for web or contactId for whatsapp/telegram");
   },
 });
 
@@ -132,7 +132,7 @@ export const listRecentWithLastMessage = authQuery({
     v.object({
       _id: v.id("conversations"),
       _creationTime: v.number(),
-      channel: v.union(v.literal("whatsapp"), v.literal("web")),
+      channel: v.union(v.literal("whatsapp"), v.literal("web"), v.literal("telegram")),
       userId: v.optional(v.id("users")),
       contactId: v.optional(v.id("contacts")),
       agentId: v.optional(v.id("agents")),
@@ -176,9 +176,26 @@ export const listRecentWithLastMessage = authQuery({
       )
     ).flat();
 
+    const telegramConversations = (
+      await Promise.all(
+        linkedContacts.map((contact) =>
+          ctx.db
+            .query("conversations")
+            .withIndex("by_contactId", (q) => q.eq("contactId", contact._id))
+            .filter((q) => q.eq(q.field("channel"), "telegram"))
+            .filter((q) => q.eq(q.field("status"), "active"))
+            .collect(),
+        ),
+      )
+    ).flat();
+
     // 3. Deduplicate by _id
     const seen = new Set<string>();
-    const allConversations = [...webConversations, ...whatsappConversations].filter((conv) => {
+    const allConversations = [
+      ...webConversations,
+      ...whatsappConversations,
+      ...telegramConversations,
+    ].filter((conv) => {
       if (seen.has(conv._id)) return false;
       seen.add(conv._id);
       return true;

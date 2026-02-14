@@ -16,7 +16,7 @@ const toolApprovalDoc = v.object({
   toolName: v.string(),
   toolInput: v.any(),
   status: v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected")),
-  channel: v.union(v.literal("web"), v.literal("whatsapp")),
+  channel: v.union(v.literal("web"), v.literal("whatsapp"), v.literal("telegram")),
   createdAt: v.number(),
   resolvedAt: v.optional(v.number()),
 });
@@ -27,7 +27,7 @@ export const create = serviceMutation({
     jobId: v.id("agentQueue"),
     toolName: v.string(),
     toolInput: v.any(),
-    channel: v.union(v.literal("web"), v.literal("whatsapp")),
+    channel: v.union(v.literal("web"), v.literal("whatsapp"), v.literal("telegram")),
   },
   returns: v.id("toolApprovals"),
   handler: async (ctx, args) => {

@@ -29,6 +29,7 @@ import type * as lib_auth from "../lib/auth.js";
 import type * as memories from "../memories.js";
 import type * as messages from "../messages.js";
 import type * as migrations from "../migrations.js";
+import type * as onboarding from "../onboarding.js";
 import type * as phoneVerification from "../phoneVerification.js";
 import type * as plugins from "../plugins.js";
 import type * as privateData from "../privateData.js";
@@ -74,6 +75,7 @@ declare const fullApi: ApiFromModules<{
   memories: typeof memories;
   messages: typeof messages;
   migrations: typeof migrations;
+  onboarding: typeof onboarding;
   phoneVerification: typeof phoneVerification;
   plugins: typeof plugins;
   privateData: typeof privateData;

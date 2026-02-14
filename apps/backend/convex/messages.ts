@@ -34,7 +34,7 @@ const messageDoc = v.object({
   conversationId: v.id("conversations"),
   role: v.union(v.literal("user"), v.literal("assistant"), v.literal("system")),
   content: v.string(),
-  channel: v.union(v.literal("whatsapp"), v.literal("web")),
+  channel: v.union(v.literal("whatsapp"), v.literal("web"), v.literal("telegram")),
   toolCalls: toolCallValidator,
   media: mediaValidator,
   modelUsed: v.optional(v.string()),
@@ -51,7 +51,7 @@ export const send = authMutation({
   args: {
     conversationId: v.id("conversations"),
     content: v.string(),
-    channel: v.optional(v.union(v.literal("whatsapp"), v.literal("web"))),
+    channel: v.optional(v.union(v.literal("whatsapp"), v.literal("web"), v.literal("telegram"))),
   },
   returns: v.union(v.id("messages"), v.null()),
   handler: async (ctx, args) => {
@@ -85,7 +85,7 @@ export const sendService = serviceMutation({
   args: {
     conversationId: v.id("conversations"),
     content: v.string(),
-    channel: v.optional(v.union(v.literal("whatsapp"), v.literal("web"))),
+    channel: v.optional(v.union(v.literal("whatsapp"), v.literal("web"), v.literal("telegram"))),
   },
   returns: v.id("messages"),
   handler: async (ctx, args) => {
@@ -121,7 +121,7 @@ export const addAssistantMessage = serviceMutation({
   args: {
     conversationId: v.id("conversations"),
     content: v.string(),
-    channel: v.optional(v.union(v.literal("whatsapp"), v.literal("web"))),
+    channel: v.optional(v.union(v.literal("whatsapp"), v.literal("web"), v.literal("telegram"))),
     toolCalls: toolCallValidator,
     modelUsed: v.optional(v.string()),
   },
@@ -148,7 +148,7 @@ export const addSummaryMessage = serviceMutation({
   args: {
     conversationId: v.id("conversations"),
     content: v.string(),
-    channel: v.optional(v.union(v.literal("whatsapp"), v.literal("web"))),
+    channel: v.optional(v.union(v.literal("whatsapp"), v.literal("web"), v.literal("telegram"))),
   },
   returns: v.id("messages"),
   handler: async (ctx, args) => {
