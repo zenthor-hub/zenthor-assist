@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { internalMutation } from "../_generated/server";
 import { classifyApprovalText } from "../lib/approvalKeywords";
@@ -31,16 +31,24 @@ function phoneVariants(phone: string): string[] {
 
 /**
  * Look up a contact by phone, trying normalized variants.
+ * Prefers contacts linked to a user account over unlinked ones.
  */
 async function findContactByPhone(ctx: MutationCtx, phone: string) {
-  for (const variant of phoneVariants(phone)) {
+  const variants = phoneVariants(phone);
+  let fallbackContact: Doc<"contacts"> | null = null;
+
+  for (const variant of variants) {
     const contact = await ctx.db
       .query("contacts")
       .withIndex("by_phone", (q) => q.eq("phone", variant))
       .first();
-    if (contact) return contact;
+    if (!contact) continue;
+    // Prefer authorized contacts (linked to a user or explicitly allowed)
+    if (contact.userId || contact.isAllowed) return contact;
+    // Keep first non-authorized match as fallback
+    if (!fallbackContact) fallbackContact = contact;
   }
-  return null;
+  return fallbackContact;
 }
 
 /**
