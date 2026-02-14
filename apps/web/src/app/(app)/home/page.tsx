@@ -34,6 +34,9 @@ export default function HomePage() {
   const t = useGT();
   const { user } = useUser();
   const conversations = useQuery(api.conversations.listRecentWithLastMessage, {});
+  const onboarding = useQuery(api.onboarding.getMyState, {});
+  const onboardingPending =
+    onboarding !== undefined && onboarding !== null && onboarding.status !== "completed";
 
   if (conversations === undefined) {
     return (
@@ -51,8 +54,8 @@ export default function HomePage() {
     <PageWrapper
       title={<T>Home</T>}
       actions={
-        <Button asChild size="sm">
-          <Link href="/chat/overview">
+        <Button asChild size="sm" disabled={onboardingPending}>
+          <Link href="/chat/overview" aria-disabled={onboardingPending}>
             <Plus className="size-4" />
             <T>New chat</T>
           </Link>

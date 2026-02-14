@@ -1,3 +1,5 @@
+import { ClerkProvider } from "@clerk/nextjs";
+import { dark } from "@clerk/themes";
 import { GTProvider } from "gt-next";
 import type { Metadata } from "next";
 import { Geist_Mono, Space_Grotesk } from "next/font/google";
@@ -76,11 +78,33 @@ export default function RootLayout({
   return (
     <html lang="en" className={spaceGrotesk.variable} suppressHydrationWarning>
       <body className={`${geistMono.variable} antialiased`}>
-        <GTProvider>
-          <Providers>
-            <div className="flex h-svh flex-col overflow-hidden">{children}</div>
-          </Providers>
-        </GTProvider>
+        <ClerkProvider
+          signInUrl="/sign-in"
+          signInForceRedirectUrl="/home"
+          signInFallbackRedirectUrl="/home"
+          signUpForceRedirectUrl="/chat"
+          signUpFallbackRedirectUrl="/chat"
+          appearance={{
+            baseTheme: dark,
+            variables: {
+              fontFamily: "var(--font-sans)",
+              borderRadius: "0.375rem",
+              colorPrimary: "var(--primary)",
+              colorBackground: "var(--card)",
+              colorInputBackground: "var(--input)",
+              colorInputText: "var(--foreground)",
+              colorText: "var(--foreground)",
+              colorTextSecondary: "var(--muted-foreground)",
+              colorDanger: "var(--destructive)",
+            },
+          }}
+        >
+          <GTProvider>
+            <Providers>
+              <div className="flex h-svh flex-col overflow-hidden">{children}</div>
+            </Providers>
+          </GTProvider>
+        </ClerkProvider>
       </body>
     </html>
   );

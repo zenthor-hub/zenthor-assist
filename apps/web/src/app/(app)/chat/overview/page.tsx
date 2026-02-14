@@ -27,8 +27,11 @@ function formatRelativeTime(t: (key: string) => string, timestamp: number) {
 export default function ChatOverviewPage() {
   const t = useGT();
   const conversations = useQuery(api.conversations.listRecentWithLastMessage, {});
+  const onboarding = useQuery(api.onboarding.getMyState, {});
   const createConversation = useMutation(api.conversations.create);
   const router = useRouter();
+  const onboardingPending =
+    onboarding !== undefined && onboarding !== null && onboarding.status !== "completed";
 
   if (conversations === undefined) {
     return (
@@ -39,6 +42,10 @@ export default function ChatOverviewPage() {
   }
 
   async function handleNewChat() {
+    if (onboardingPending) {
+      toast.error(t("Complete onboarding with Guilb before starting a new chat"));
+      return;
+    }
     try {
       const id = await createConversation({});
       router.push(`/chat/${id}`);
@@ -58,7 +65,7 @@ export default function ChatOverviewPage() {
     <PageWrapper
       title={<T>Overview</T>}
       actions={
-        <Button onClick={handleNewChat} size="sm" className="gap-1.5">
+        <Button onClick={handleNewChat} size="sm" className="gap-1.5" disabled={onboardingPending}>
           <Plus className="size-3.5" />
           <T>New chat</T>
         </Button>
@@ -120,7 +127,13 @@ export default function ChatOverviewPage() {
                   <T>Start your first chat to see it here.</T>
                 </p>
               </div>
-              <Button onClick={handleNewChat} variant="outline" size="sm" className="mt-1">
+              <Button
+                onClick={handleNewChat}
+                variant="outline"
+                size="sm"
+                className="mt-1"
+                disabled={onboardingPending}
+              >
                 <T>Start a conversation</T>
               </Button>
             </div>
