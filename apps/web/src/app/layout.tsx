@@ -1,3 +1,4 @@
+import { GTProvider } from "gt-next";
 import type { Metadata } from "next";
 import { Geist_Mono, Space_Grotesk } from "next/font/google";
 
@@ -75,9 +76,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={spaceGrotesk.variable} suppressHydrationWarning>
       <body className={`${geistMono.variable} antialiased`}>
-        <Providers>
-          <div className="flex h-svh flex-col overflow-hidden">{children}</div>
-        </Providers>
+        <GTProvider>
+          <Providers>
+            <div className="flex h-svh flex-col overflow-hidden">{children}</div>
+          </Providers>
+        </GTProvider>
       </body>
     </html>
   );
