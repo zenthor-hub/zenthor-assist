@@ -74,7 +74,7 @@ export const handleIncoming = internalMutation({
       .first();
 
     if (!contact) {
-      // Auto-create contact as not-allowed
+      // Auto-create contact as not-allowed (no linked user account yet)
       await ctx.db.insert("contacts", {
         phone: args.from,
         name: args.from,
@@ -84,7 +84,8 @@ export const handleIncoming = internalMutation({
       return null;
     }
 
-    if (!contact.isAllowed) {
+    // A contact is authorized if explicitly allowed OR linked to a user account
+    if (!contact.isAllowed && !contact.userId) {
       console.info(`[whatsapp-cloud] Ignoring message from non-allowed contact: ${args.from}`);
       return null;
     }
@@ -197,7 +198,8 @@ export const handleIncomingMedia = internalMutation({
       return null;
     }
 
-    if (!contact.isAllowed) {
+    // A contact is authorized if explicitly allowed OR linked to a user account
+    if (!contact.isAllowed && !contact.userId) {
       console.info(`[whatsapp-cloud] Ignoring media from non-allowed contact: ${args.from}`);
       return null;
     }

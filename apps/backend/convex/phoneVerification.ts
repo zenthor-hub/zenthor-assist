@@ -67,6 +67,9 @@ export const requestVerification = authMutation({
         isAllowed: true,
       });
       contact = await ctx.db.get(contactId);
+    } else if (!contact.isAllowed) {
+      // Contact may have been auto-created by webhook with isAllowed: false
+      await ctx.db.patch(contact._id, { isAllowed: true });
     }
 
     if (!contact) {
@@ -169,7 +172,7 @@ export const confirmVerification = authMutation({
       .first();
 
     if (contact) {
-      await ctx.db.patch(contact._id, { userId: user._id });
+      await ctx.db.patch(contact._id, { userId: user._id, isAllowed: true });
     }
 
     return { success: true, phone: pending.phone };
