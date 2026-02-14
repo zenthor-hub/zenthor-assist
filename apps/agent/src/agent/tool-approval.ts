@@ -13,7 +13,7 @@ const APPROVAL_TIMEOUT_MS = 5 * 60 * 1_000;
 interface ApprovalContext {
   jobId: string;
   conversationId: string;
-  channel: "web" | "whatsapp";
+  channel: "web" | "whatsapp" | "telegram";
   phone?: string;
   accountId?: string;
 }

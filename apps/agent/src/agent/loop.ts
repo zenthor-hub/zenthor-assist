@@ -10,7 +10,7 @@ import { buildConversationMessages, processAudioTrigger } from "./audio-processi
 import { compactMessages } from "./compact";
 import { evaluateContext } from "./context-guard";
 import { classifyError, isRetryable } from "./errors";
-import type { AgentConfig } from "./generate";
+import type { AgentConfig, UserProfile } from "./generate";
 import { generateResponse, generateResponseStreaming } from "./generate";
 import { friendlyModelName } from "./model-names";
 import {
@@ -148,6 +148,74 @@ export function startAgentLoop() {
           continue;
         }
 
+        // Onboarding short-circuit: route through progression instead of LLM generation
+        if (context.onboarding && context.onboarding.status !== "completed") {
+          const triggerMessage = context.messages.find((m) => m._id === job.messageId);
+          const userInput = triggerMessage?.content ?? "";
+
+          const ownerUserId = context.conversation.userId ?? context.contact?.userId;
+          if (ownerUserId) {
+            const progressResult = await client.mutation(api.onboarding.progressFromMessage, {
+              serviceKey,
+              userId: ownerUserId,
+              input: userInput,
+            });
+
+            if (progressResult) {
+              const channel = context.conversation.channel as "web" | "whatsapp" | "telegram";
+
+              const assistantMessageId = await client.mutation(api.messages.addAssistantMessage, {
+                serviceKey,
+                conversationId: job.conversationId,
+                content: progressResult.content,
+                channel: context.conversation.channel,
+              });
+
+              // Deliver via WhatsApp if applicable
+              if (channel === "whatsapp" && context.contact?.phone && assistantMessageId) {
+                const accountId =
+                  context.conversation.accountId ?? env.WHATSAPP_ACCOUNT_ID ?? "default";
+
+                if (progressResult.buttons && progressResult.buttons.length > 0) {
+                  await client.mutation(api.delivery.enqueueOutbound, {
+                    serviceKey,
+                    channel: "whatsapp",
+                    accountId,
+                    conversationId: job.conversationId,
+                    messageId: assistantMessageId,
+                    to: context.contact.phone,
+                    content: progressResult.content,
+                    metadata: {
+                      kind: "onboarding_buttons",
+                      buttons: progressResult.buttons,
+                    },
+                  });
+                } else {
+                  await client.mutation(api.delivery.enqueueOutbound, {
+                    serviceKey,
+                    channel: "whatsapp",
+                    accountId,
+                    conversationId: job.conversationId,
+                    messageId: assistantMessageId,
+                    to: context.contact.phone,
+                    content: progressResult.content,
+                    metadata: { kind: "assistant_message" },
+                  });
+                }
+              }
+            }
+          }
+
+          await client.mutation(api.agent.completeJob, { serviceKey, jobId: job._id });
+          void logger.info("agent.job.onboarding_completed", {
+            jobId: job._id,
+            conversationId: job.conversationId,
+            workerId,
+            durationMs: Date.now() - startedAt,
+          });
+          continue;
+        }
+
         const agentConfig: AgentConfig | undefined = context.agent
           ? {
               systemPrompt: context.agent.systemPrompt,
@@ -237,7 +305,7 @@ export function startAgentLoop() {
           continue;
         }
 
-        const channel = context.conversation.channel as "web" | "whatsapp";
+        const channel = context.conversation.channel as "web" | "whatsapp" | "telegram";
 
         // Enqueue typing indicator for WhatsApp (processed by agent-whatsapp-cloud)
         if (channel === "whatsapp" && context.contact?.phone) {
@@ -327,6 +395,21 @@ export function startAgentLoop() {
           accountId: context.conversation.accountId ?? undefined,
         });
 
+        // Extract user profile from completed onboarding for system prompt personalization
+        const userProfile: UserProfile | undefined =
+          context.onboarding?.status === "completed" && context.onboarding.answers
+            ? {
+                preferredName: context.onboarding.answers.preferredName ?? undefined,
+                agentName: context.onboarding.answers.agentName ?? undefined,
+                timezone: context.onboarding.answers.timezone ?? undefined,
+                communicationStyle:
+                  (context.onboarding.answers
+                    .communicationStyle as UserProfile["communicationStyle"]) ?? undefined,
+                focusArea: context.onboarding.answers.focusArea ?? undefined,
+                boundaries: context.onboarding.answers.boundaries ?? undefined,
+              }
+            : undefined;
+
         const isWeb = context.conversation.channel === "web";
         let modelUsed: string | undefined;
 
@@ -377,6 +460,7 @@ export function startAgentLoop() {
               channel,
               toolCount: 0,
               messageCount: compactedMessages.length,
+              userProfile,
             },
           );
 
@@ -432,6 +516,7 @@ export function startAgentLoop() {
             channel,
             toolCount: 0,
             messageCount: compactedMessages.length,
+            userProfile,
           });
           modelUsed = response.modelUsed;
 

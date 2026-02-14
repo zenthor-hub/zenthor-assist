@@ -2,7 +2,7 @@ import type { Tool } from "ai";
 
 export type PluginRiskLevel = "low" | "medium" | "high";
 export type PluginSource = "builtin" | "workspace" | "remote";
-export type PluginChannel = "web" | "whatsapp";
+export type PluginChannel = "web" | "whatsapp" | "telegram";
 
 /** Validated and normalized plugin manifest. */
 export interface PluginManifest {

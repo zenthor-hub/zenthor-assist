@@ -60,4 +60,11 @@ describe("getDefaultPolicy", () => {
     expect(policy.allow).toContain("schedule_task");
     expect(policy.allow).toContain("browse_url");
   });
+
+  it("returns an explicit telegram allowlist", () => {
+    const policy = getDefaultPolicy("telegram");
+    expect(policy.allow).toBeDefined();
+    expect(policy.allow).toContain("schedule_task");
+    expect(policy.allow).toContain("browse_url");
+  });
 });

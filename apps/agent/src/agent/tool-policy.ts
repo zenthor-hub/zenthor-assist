@@ -37,8 +37,8 @@ const PROFESSIONAL_WHATSAPP_ALLOWLIST = [
   "task_delete",
 ];
 
-export function getDefaultPolicy(channel: "web" | "whatsapp"): ToolPolicy {
-  if (channel === "whatsapp") {
+export function getDefaultPolicy(channel: "web" | "whatsapp" | "telegram"): ToolPolicy {
+  if (channel === "whatsapp" || channel === "telegram") {
     return { allow: PROFESSIONAL_WHATSAPP_ALLOWLIST };
   }
   return { allow: PROFESSIONAL_WEB_ALLOWLIST };

@@ -91,7 +91,7 @@ export async function syncBuiltinPluginDefinitions(client: ConvexClient): Promis
 
 export async function resolvePluginTools(params: {
   client: ConvexClient;
-  channel: "web" | "whatsapp";
+  channel: "web" | "whatsapp" | "telegram";
   agentId?: Id<"agents">;
   modelName: string;
 }): Promise<ResolvedPluginTools> {

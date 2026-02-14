@@ -24,7 +24,7 @@ describe("validateManifest", () => {
       tools: ["tool_a", "tool_b"],
       riskLevel: "high",
       source: "remote",
-      channels: ["web", "whatsapp"],
+      channels: ["web", "whatsapp", "telegram"],
       configSchema: { apiKey: { type: "string" } },
       requiredPermissions: ["network"],
       description: "A full plugin",
@@ -32,7 +32,7 @@ describe("validateManifest", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.riskLevel).toBe("high");
-      expect(result.data.channels).toEqual(["web", "whatsapp"]);
+      expect(result.data.channels).toEqual(["web", "whatsapp", "telegram"]);
       expect(result.data.requiredPermissions).toEqual(["network"]);
     }
   });
@@ -84,7 +84,7 @@ describe("validateManifest", () => {
       id: "bad-channel",
       version: "1.0.0",
       tools: ["tool"],
-      channels: ["telegram"],
+      channels: ["signal"],
     });
     expect(result.success).toBe(false);
   });

@@ -73,7 +73,7 @@ describe("wrapToolsWithApproval", () => {
     expect(wrapped["passive"]).toBe(toolNoExec);
   });
 
-  it("accepts both web and whatsapp channels", () => {
+  it("accepts web, whatsapp, and telegram channels", () => {
     const tools: Record<string, Tool> = { t: makeTool("t") };
 
     const webWrapped = wrapToolsWithApproval(tools, { ...baseContext, channel: "web" });
@@ -81,6 +81,9 @@ describe("wrapToolsWithApproval", () => {
 
     const waWrapped = wrapToolsWithApproval(tools, { ...baseContext, channel: "whatsapp" });
     expect(Object.keys(waWrapped)).toEqual(["t"]);
+
+    const tgWrapped = wrapToolsWithApproval(tools, { ...baseContext, channel: "telegram" });
+    expect(Object.keys(tgWrapped)).toEqual(["t"]);
   });
 
   it("accepts optional phone in context", () => {

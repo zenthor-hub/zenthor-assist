@@ -3,7 +3,7 @@ import { env } from "@zenthor-assist/env/agent";
 import { logger } from "../observability/logger";
 
 interface RouteContext {
-  channel: "web" | "whatsapp";
+  channel: "web" | "whatsapp" | "telegram";
   toolCount: number;
   messageCount: number;
 }

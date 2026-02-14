@@ -69,6 +69,13 @@ describe("selectModel", () => {
     expect(result.fallbacks).toContain("anthropic/claude-sonnet-4-5-20250929");
   });
 
+  it("treats telegram like web complexity rules", () => {
+    const result = selectModel({ channel: "telegram", toolCount: 2, messageCount: 3 });
+    expect(result.primary).toBe("xai/grok-4.1-fast-reasoning");
+    expect(result.tier).toBe("lite");
+    expect(result.fallbacks).toContain("anthropic/claude-sonnet-4-5-20250929");
+  });
+
   it("escalates complex web to sonnet (standard)", () => {
     const result = selectModel({ channel: "web", toolCount: 2, messageCount: 20 });
     expect(result.primary).toBe("anthropic/claude-sonnet-4-5-20250929");
@@ -88,6 +95,7 @@ describe("selectModel", () => {
       { channel: "web" as const, toolCount: 10, messageCount: 30 },
       { channel: "whatsapp" as const, toolCount: 0, messageCount: 1 },
       { channel: "whatsapp" as const, toolCount: 10, messageCount: 30 },
+      { channel: "telegram" as const, toolCount: 10, messageCount: 30 },
     ];
     for (const ctx of scenarios) {
       const result = selectModel(ctx);

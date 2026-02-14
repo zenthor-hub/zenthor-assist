@@ -2,7 +2,7 @@ export type PluginRiskLevel = "low" | "medium" | "high";
 
 export interface PluginContext {
   workspaceScope: string;
-  channel: "web" | "whatsapp";
+  channel: "web" | "whatsapp" | "telegram";
   conversationId: string;
   userId?: string;
   contactId?: string;

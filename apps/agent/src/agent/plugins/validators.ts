@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const pluginRiskLevelSchema = z.enum(["low", "medium", "high"]);
 const pluginSourceSchema = z.enum(["builtin", "workspace", "remote"]);
-const pluginChannelSchema = z.enum(["web", "whatsapp"]);
+const pluginChannelSchema = z.enum(["web", "whatsapp", "telegram"]);
 
 const pluginManifestSchema = z.object({
   id: z
