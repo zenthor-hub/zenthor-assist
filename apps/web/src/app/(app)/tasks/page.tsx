@@ -115,24 +115,20 @@ export default function TasksPage() {
   const [editingTask, setEditingTask] = useState<TaskData | undefined>();
   const [quickAddTitle, setQuickAddTitle] = useState("");
 
-  const statusFilter =
-    filter === "active" ? undefined : filter === "done" ? ("done" as const) : undefined;
-
-  const tasks = useQuery(api.tasks.list, statusFilter ? { status: statusFilter } : {});
+  const allTasks = useQuery(api.tasks.list, {});
+  const doneTasks = useQuery(api.tasks.list, { status: "done" });
   const createTask = useMutation(api.tasks.create);
   const toggleComplete = useMutation(api.tasks.toggleComplete);
   const removeTask = useMutation(api.tasks.remove);
 
-  if (tasks === undefined) {
-    return (
-      <div className="flex flex-1 items-center justify-center">
-        <Loader />
-      </div>
-    );
-  }
+  const visibleTasks = filter === "done" ? doneTasks : allTasks;
+  const isTabLoading = visibleTasks === undefined;
 
   // Client-side filter for "active" (exclude done)
-  const filteredTasks = filter === "active" ? tasks.filter((t) => t.status !== "done") : tasks;
+  const filteredTasks =
+    filter === "active"
+      ? (visibleTasks ?? []).filter((task) => task.status !== "done")
+      : (visibleTasks ?? []);
 
   function handleEdit(task: TaskData) {
     setEditingTask(task);
@@ -226,7 +222,11 @@ export default function TasksPage() {
         </form>
 
         {/* Task list */}
-        {filteredTasks.length === 0 ? (
+        {isTabLoading ? (
+          <div className="flex items-center justify-center rounded-lg border py-12">
+            <Loader />
+          </div>
+        ) : filteredTasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 rounded-lg border py-12">
             <CheckSquare className="text-muted-foreground size-8" />
             <p className="text-sm font-medium">
