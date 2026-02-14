@@ -144,6 +144,39 @@ export async function handleIncomingWebhook(
           continue;
         }
 
+        if (message.type === "button") {
+          const buttonText = message.button?.payload ?? message.button?.text;
+          if (buttonText) {
+            mutations.push(
+              ctx.runMutation(internal.whatsappCloud.mutations.handleIncoming, {
+                from,
+                messageId,
+                text: buttonText,
+                timestamp,
+                messageType: message.type,
+              }),
+            );
+          }
+          continue;
+        }
+
+        if (message.type === "interactive") {
+          const interactiveText =
+            message.interactive?.button_reply?.id ?? message.interactive?.button_reply?.title;
+          if (interactiveText) {
+            mutations.push(
+              ctx.runMutation(internal.whatsappCloud.mutations.handleIncoming, {
+                from,
+                messageId,
+                text: interactiveText,
+                timestamp,
+                messageType: message.type,
+              }),
+            );
+          }
+          continue;
+        }
+
         // Handle audio messages (voice notes)
         if (message.type === "audio" && message.audio?.id) {
           mutations.push(
@@ -224,6 +257,8 @@ interface WebhookMessage {
   type: string;
   text?: { body: string };
   audio?: { id: string; mime_type: string };
+  button?: { text?: string; payload?: string };
+  interactive?: { button_reply?: { id?: string; title?: string } };
 }
 
 interface WebhookStatus {
