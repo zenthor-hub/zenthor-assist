@@ -139,11 +139,12 @@ describe("createNoteTools", () => {
     })) as string;
 
     expect(result).toBe("Applied transform for note-transform-save.");
-    expect(mockMutation).toHaveBeenCalledWith(api.notes.applyAiPatchForConversation, {
+    const [, mutationArgs] = mockMutation.mock.calls[0] ?? [];
+    expect(mutationArgs).toMatchObject({
       serviceKey: "agent-secret",
       conversationId,
       id: "note-transform-save",
-      content: "# Updated content",
+      content: "<h1>Updated content</h1>",
       operations: "rewrite:tone",
       model: "agent-notes-tools",
     });
@@ -160,11 +161,12 @@ describe("createNoteTools", () => {
     })) as string;
 
     expect(result).toBe("Applied AI update for note-update-ai.");
-    expect(mockMutation).toHaveBeenCalledWith(api.notes.applyAiPatchForConversation, {
+    const [, mutationArgs] = mockMutation.mock.calls[0] ?? [];
+    expect(mutationArgs).toMatchObject({
       serviceKey: "agent-secret",
       conversationId,
       id: "note-update-ai",
-      content: "## AI rewritten text",
+      content: "<h2>AI rewritten text</h2>",
       operations: "apply-override",
       model: "agent-notes-tools",
     });

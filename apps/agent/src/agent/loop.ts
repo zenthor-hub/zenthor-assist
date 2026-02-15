@@ -73,6 +73,8 @@ const NOTE_TOOL_NAMES = [
   "note_update_from_ai",
 ] as const;
 
+const NOTE_TOOL_NAME_SET = new Set<string>(NOTE_TOOL_NAMES);
+
 const NOTE_CREATION_TOOL_NAMES = ["note_create", "note_generate_from_conversation"] as const;
 const NOTE_CREATION_TOOL_SET = new Set<string>(NOTE_CREATION_TOOL_NAMES);
 
@@ -244,6 +246,30 @@ export function buildNoteCreationReply(
 
   const links = summaries.map(({ noteId, title }) => `[${title}](/notes/${noteId})`).join("\n");
   return `Created note(s):\n${links}`;
+}
+
+function buildNoteToolFallbackReply(toolCalls: ToolCallRecord[] | undefined): string | undefined {
+  if (!toolCalls || toolCalls.length === 0) return undefined;
+
+  const hasNoteTransform = toolCalls.some((toolCall) => toolCall.name === "note_transform");
+  const hasNoteApply = toolCalls.some(
+    (toolCall) =>
+      toolCall.name === "note_apply_transform" || toolCall.name === "note_update_from_ai",
+  );
+
+  if (!toolCalls.some((toolCall) => NOTE_TOOL_NAME_SET.has(toolCall.name))) {
+    return undefined;
+  }
+
+  if (hasNoteApply) {
+    return "I applied an AI note update. Check tool details for what changed.";
+  }
+
+  if (hasNoteTransform) {
+    return "I prepared a note transformation. Open Tool call details and apply the suggestion when you’re ready.";
+  }
+
+  return "I completed a note action. Open Tool call details for the results.";
 }
 
 export function startAgentLoop() {
@@ -598,6 +624,7 @@ export function startAgentLoop() {
               channel,
               noteContext: context.noteContext
                 ? {
+                    noteId: context.noteContext.noteId,
                     title: context.noteContext.title,
                     preview: context.noteContext.contentPreview,
                   }
@@ -614,7 +641,12 @@ export function startAgentLoop() {
             channel,
             noteCreationOutcomes,
           );
-          const finalContent = noteCreationMessage ?? response.content;
+          const assistantContent = response.content ?? "";
+          const toolFallback =
+            assistantContent.trim() === ""
+              ? buildNoteToolFallbackReply(response.toolCalls)
+              : undefined;
+          const finalContent = noteCreationMessage ?? toolFallback ?? assistantContent;
 
           if (checkLease("post_generate")) {
             await client
@@ -666,6 +698,7 @@ export function startAgentLoop() {
             channel,
             noteContext: context.noteContext
               ? {
+                  noteId: context.noteContext.noteId,
                   title: context.noteContext.title,
                   preview: context.noteContext.contentPreview,
                 }
@@ -681,11 +714,17 @@ export function startAgentLoop() {
             noteCreationOutcomes,
           );
 
+          const assistantContent = response.content ?? "";
+          const toolFallback =
+            assistantContent.trim() === ""
+              ? buildNoteToolFallbackReply(response.toolCalls)
+              : undefined;
+
           let content = noteCreationMessage
             ? noteCreationMessage
             : channel === "whatsapp"
-              ? sanitizeForWhatsApp(response.content)
-              : response.content;
+              ? sanitizeForWhatsApp(toolFallback ?? assistantContent)
+              : (toolFallback ?? assistantContent);
 
           if (checkLease("post_generate")) {
             continue;

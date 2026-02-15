@@ -162,7 +162,7 @@ function formatMessagesForNote(
 }
 
 function applyIntentTransform(content: string, intent: NoteIntent, tone = "", language = "") {
-  const normalized = cleanText(content);
+  const normalized = cleanText(stripHtmlTags(content));
   if (intent === "summarize") {
     const lines = normalized.split("\n").filter(Boolean);
     return {
@@ -216,6 +216,88 @@ function applyIntentTransform(content: string, intent: NoteIntent, tone = "", la
     resultText: normalized,
     operations: `apply-${intent}`,
   };
+}
+
+function stripHtmlTags(value: string) {
+  return value.replace(/<[^>]+>/g, "");
+}
+
+function escapeNoteHtml(value: string) {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function closeList(listType: "ol" | "ul", items: string[]) {
+  if (!items.length) return "";
+  const tag = listType === "ol" ? "ol" : "ul";
+  return `<${tag}>${items.map((item) => `<li>${item}</li>`).join("")}</${tag}>`;
+}
+
+function toHtmlFromPlainText(value: string) {
+  const normalized = cleanText(value).trim();
+  if (!normalized) return "<p></p>";
+
+  const lines = normalized.split(/\r?\n/);
+  const output: string[] = [];
+  const paragraphLines: string[] = [];
+  let currentListType: "ol" | "ul" | undefined;
+  let listItems: string[] = [];
+
+  const flushParagraph = () => {
+    if (!paragraphLines.length) return;
+    const text = escapeNoteHtml(paragraphLines.join("\n")).replace(/\n/g, "<br />");
+    output.push(`<p>${text}</p>`);
+    paragraphLines.length = 0;
+  };
+
+  const flushList = () => {
+    if (!currentListType) return;
+    const closed = closeList(currentListType, listItems);
+    if (closed) output.push(closed);
+    currentListType = undefined;
+    listItems = [];
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trimEnd();
+    const headingMatch = /^(#{1,6})\s+(.+)$/.exec(line);
+    const bulletMatch = /^[-*+]\s+(.+)$/.exec(line);
+    const orderedMatch = /^(\d+)\.\s+(.+)$/.exec(line);
+
+    if (!line.trim()) {
+      flushParagraph();
+      flushList();
+      continue;
+    }
+
+    if (headingMatch) {
+      flushParagraph();
+      flushList();
+      const headingText = headingMatch[2] ?? "";
+      const level = Math.min(headingMatch[1]!.length, 6);
+      output.push(`<h${level}>${escapeNoteHtml(headingText)}</h${level}>`);
+      continue;
+    }
+
+    if (bulletMatch || orderedMatch) {
+      const markerType = orderedMatch ? "ol" : "ul";
+      const text = escapeNoteHtml((orderedMatch ?? bulletMatch)?.[2] ?? "");
+
+      if (currentListType && currentListType !== markerType) {
+        flushList();
+      }
+      if (!currentListType) currentListType = markerType;
+      listItems.push(text);
+      continue;
+    }
+
+    flushList();
+    paragraphLines.push(line);
+  }
+
+  flushParagraph();
+  flushList();
+
+  return output.join("");
 }
 
 function getServiceError(message: string): string {
@@ -424,10 +506,11 @@ export function createNoteTools(conversationId: Id<"conversations">) {
           if (!note) return "Note not found.";
 
           const result = applyIntentTransform(note.content, intent, tone, language);
+          const htmlResult = toHtmlFromPlainText(result.resultText);
           return JSON.stringify({
             noteId,
             intent,
-            resultText: result.resultText,
+            resultText: htmlResult,
             operations: result.operations,
           });
         } catch (error) {
@@ -442,11 +525,12 @@ export function createNoteTools(conversationId: Id<"conversations">) {
       execute: async ({ noteId, resultText, operations }) => {
         try {
           const client = getConvexClient();
+          const content = toHtmlFromPlainText(resultText);
           await client.mutation(api.notes.applyAiPatchForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
             id: noteId as Id<"notes">,
-            content: resultText,
+            content,
             operations,
             model: "agent-notes-tools",
           });
@@ -463,11 +547,12 @@ export function createNoteTools(conversationId: Id<"conversations">) {
       execute: async ({ noteId, resultText, operations }) => {
         try {
           const client = getConvexClient();
+          const content = toHtmlFromPlainText(stripHtmlTags(resultText));
           await client.mutation(api.notes.applyAiPatchForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
             id: noteId as Id<"notes">,
-            content: resultText,
+            content,
             operations,
             model: "agent-notes-tools",
           });

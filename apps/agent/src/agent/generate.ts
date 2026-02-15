@@ -109,7 +109,7 @@ function buildSystemPrompt(
   skills?: Skill[],
   agentConfig?: AgentConfig,
   channel?: "web" | "whatsapp" | "telegram",
-  noteContext?: { title: string; preview?: string },
+  noteContext?: { noteId?: string; title: string; preview?: string },
 ): string {
   const basePrompt = agentConfig?.systemPrompt ?? BASE_SYSTEM_PROMPT;
 
@@ -137,7 +137,9 @@ function buildSystemPrompt(
 
   const commandHints = [
     "/organize — restructure sections",
-    "/rewrite — apply a stronger structure",
+    "/rewrite — rewrite the current note",
+    "/rewrite this whole note — rewrite the entire note",
+    "/rewrite this note — rewrite the entire note",
     "/expand — enrich the current draft",
     "/summarize — condense with headings",
     "/extract — produce key list",
@@ -145,7 +147,22 @@ function buildSystemPrompt(
     "/ask — keep discussion context but stay note-aware",
   ].join("\n");
 
-  return `${prompt}${NOTE_TOOL_CONFIRMATION_PROMPT}\n\n## Note-editor mode\nYou are operating as an AI note editor for "${noteContext.title}". Provide concise edit-focused responses and prefer machine-readable change suggestions.\nWhen the user asks for an edit command, first return a structured proposal with fields resultText and operations.\nAvailable commands:\n${commandHints}\n\nCurrent note preview:\n${noteContext.preview ?? "(empty)"}`;
+  const noteIdLine = noteContext.noteId ? `Current note ID: ${noteContext.noteId}\n` : "";
+  const commandPolicy =
+    "When the latest user message is about editing text in the current note, treat it as an edit intent.\n" +
+    "When slash commands are used, treat them as explicit edit intents:\n" +
+    "- /rewrite ... or /rewrite whole note ... → intent: rewrite (full note)\n" +
+    "- /rewrite this note ... or /rewrite entire note ... → intent: rewrite (full note)\n" +
+    "- /summarize ... → intent: summarize\n" +
+    "- /extract ... → intent: extract\n" +
+    "- /expand ... → intent: expand\n" +
+    "- /organize ... → intent: organize\n" +
+    "- /clean-style ... → intent: clean-style\n" +
+    "When intent is not explicit, infer the most likely command from the request intent and call note_transform.\n" +
+    "Use note_transform for direct full-note rewrites such as: rewrite this note, rewrite this entire note, rewrite the note, clean-up the note.\n" +
+    "For full-note rewrite or clean-up, call note_transform first with the current noteId.\n" +
+    "Only call note_apply_transform/note_update_from_ai after the user explicitly approves or requested a direct update.";
+  return `${prompt}${NOTE_TOOL_CONFIRMATION_PROMPT}\n\n## Note-editor mode\nYou are operating as an AI note editor for "${noteContext.title}". Provide concise edit-focused responses and prefer machine-readable change suggestions.\nWhen the user asks for an edit command, first return a structured proposal with fields resultText and operations.\nIf the request is a full-note rewrite, clean-up, structure change, or reformat, call note_transform for the current note first.\nAvoid sending an empty final response after note tool calls.\nAvailable commands:\n${commandHints}\n\nCurrent note preview:\n${noteContext.preview ?? "(empty)"}\n${noteIdLine}\n\n${commandPolicy}`;
 }
 
 function getDefaultTools(modelName: string): Record<string, Tool> {
@@ -212,6 +229,7 @@ interface GenerateOptions {
   toolCount?: number;
   messageCount?: number;
   noteContext?: {
+    noteId?: string;
     title: string;
     preview?: string;
   };
