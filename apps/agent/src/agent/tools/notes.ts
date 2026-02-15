@@ -83,6 +83,15 @@ function cleanText(value: unknown): string {
   return String(value ?? "").trim();
 }
 
+const noteFolderIdPattern = /^[a-z0-9]{32}$/i;
+
+function normalizeNoteFolderId(folderId?: string): Id<"noteFolders"> | undefined {
+  const normalized = cleanText(folderId);
+  if (!normalized) return undefined;
+  if (!noteFolderIdPattern.test(normalized)) return undefined;
+  return normalized as Id<"noteFolders">;
+}
+
 function summarizeText(content: string, maxChars = 500) {
   return content.length <= maxChars ? content : `${content.slice(0, maxChars)}…`;
 }
@@ -180,7 +189,7 @@ export function createNoteTools(conversationId: Id<"conversations">) {
           const notes = await client.query(api.notes.listForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
-            folderId: folderId as Id<"noteFolders"> | undefined,
+            folderId: normalizeNoteFolderId(folderId),
             isArchived,
             limit,
           });
@@ -222,7 +231,7 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             conversationId,
             title: normalizedTitle,
             content,
-            folderId: folderId as Id<"noteFolders"> | undefined,
+            folderId: normalizeNoteFolderId(folderId),
             source: source ?? "chat-generated",
           });
           return noteCreatedResult(id, normalizedTitle, source ?? "chat-generated");
@@ -243,7 +252,7 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             id: noteId as Id<"notes">,
             title,
             content,
-            folderId: folderId as Id<"noteFolders"> | undefined,
+            folderId: normalizeNoteFolderId(folderId),
             isArchived,
             metadata,
           });
@@ -263,7 +272,7 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             serviceKey: env.AGENT_SECRET,
             conversationId,
             id: noteId as Id<"notes">,
-            folderId: folderId as Id<"noteFolders"> | undefined,
+            folderId: normalizeNoteFolderId(folderId),
           });
           return `Moved note ${noteId}.`;
         } catch (error) {
@@ -318,7 +327,7 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             conversationId,
             title: normalizedTitle,
             content: `## Source conversation\n${body || "(No messages)"}`,
-            folderId: folderId as Id<"noteFolders"> | undefined,
+            folderId: normalizeNoteFolderId(folderId),
             source: source ?? "chat-generated",
           });
           return noteCreatedResult(id, normalizedTitle, source ?? "chat-generated");
