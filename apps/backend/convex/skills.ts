@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 
-import { adminMutation, adminQuery } from "./auth";
+import { adminMutation, adminQuery, serviceMutation } from "./auth";
 
 const skillConfigValidator = v.optional(
   v.object({
@@ -58,6 +58,30 @@ const recommendedSkills: Array<{
         "When given notes, return: Summary, Key Decisions, Action Items (owner + due date if available), and Open Questions.",
       toolPolicy: {
         allow: ["memory_store", "memory_search", "date_calc", "get_current_time"],
+      },
+    },
+  },
+  {
+    name: "AI Note Editor",
+    description:
+      "Create, update, and transform notes directly from conversation context for fast note writing workflows.",
+    enabled: true,
+    config: {
+      systemPrompt:
+        "Prioritize note workflows in chat. When the user asks to create, update, move, archive, or transform notes, choose the matching note tool and confirm success.",
+      toolPolicy: {
+        allow: [
+          "note_list",
+          "note_get",
+          "note_create",
+          "note_update",
+          "note_move",
+          "note_archive",
+          "note_generate_from_conversation",
+          "note_transform",
+          "note_apply_transform",
+          "note_update_from_ai",
+        ],
       },
     },
   },
@@ -383,6 +407,104 @@ export const seedRecommended = adminMutation({
     }
 
     return { created, existing: alreadyExists, total: recommendedSkills.length };
+  },
+});
+
+export const seedRecommendedForAllUsers = adminMutation({
+  args: {},
+  returns: v.object({
+    processedUsers: v.number(),
+    created: v.number(),
+    existing: v.number(),
+    totalUsers: v.number(),
+    totalSkills: v.number(),
+  }),
+  handler: async (ctx) => {
+    const users = await ctx.db.query("users").collect();
+
+    let processedUsers = 0;
+    let created = 0;
+    let existing = 0;
+
+    for (const user of users) {
+      const userSkills = await ctx.db
+        .query("skills")
+        .withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", user._id))
+        .collect();
+      const existingNames = new Set(userSkills.map((skill) => skill.name.toLowerCase()));
+
+      for (const skill of recommendedSkills) {
+        if (existingNames.has(skill.name.toLowerCase())) {
+          existing += 1;
+          continue;
+        }
+
+        await ctx.db.insert("skills", {
+          ownerUserId: user._id,
+          ...skill,
+        });
+        created += 1;
+      }
+
+      processedUsers += 1;
+    }
+
+    return {
+      processedUsers,
+      created,
+      existing,
+      totalUsers: users.length,
+      totalSkills: recommendedSkills.length,
+    };
+  },
+});
+
+export const seedRecommendedForAllUsersService = serviceMutation({
+  args: {},
+  returns: v.object({
+    processedUsers: v.number(),
+    created: v.number(),
+    existing: v.number(),
+    totalUsers: v.number(),
+    totalSkills: v.number(),
+  }),
+  handler: async (ctx) => {
+    const users = await ctx.db.query("users").collect();
+
+    let processedUsers = 0;
+    let created = 0;
+    let existing = 0;
+
+    for (const user of users) {
+      const userSkills = await ctx.db
+        .query("skills")
+        .withIndex("by_ownerUserId", (q) => q.eq("ownerUserId", user._id))
+        .collect();
+      const existingNames = new Set(userSkills.map((skill) => skill.name.toLowerCase()));
+
+      for (const skill of recommendedSkills) {
+        if (existingNames.has(skill.name.toLowerCase())) {
+          existing += 1;
+          continue;
+        }
+
+        await ctx.db.insert("skills", {
+          ownerUserId: user._id,
+          ...skill,
+        });
+        created += 1;
+      }
+
+      processedUsers += 1;
+    }
+
+    return {
+      processedUsers,
+      created,
+      existing,
+      totalUsers: users.length,
+      totalSkills: recommendedSkills.length,
+    };
   },
 });
 

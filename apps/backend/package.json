@@ -33,7 +33,9 @@
     ],
     "ignore": [
       "convex/agent_queue_helpers.ts",
-      "convex/**/*.test.ts"
+      "convex/**/*.test.ts",
+      "tests/_test-fakes.ts",
+      "tests/_test-run.ts"
     ]
   }
 }

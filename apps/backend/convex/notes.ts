@@ -279,6 +279,31 @@ export const moveToFolder = authMutation({
   },
 });
 
+export const move = authMutation({
+  args: {
+    id: v.id("notes"),
+    folderId: v.optional(v.id("noteFolders")),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const note = await ctx.db.get(args.id);
+    if (!note || note.userId !== ctx.auth.user._id) return null;
+
+    if (args.folderId) {
+      const folderOwnerId = await getFolderOwnerId(ctx, args.folderId);
+      if (folderOwnerId !== ctx.auth.user._id) {
+        throw new ConvexError("Folder not found");
+      }
+    }
+
+    await ctx.db.patch(note._id, {
+      folderId: args.folderId,
+      updatedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
 export const attachConversation = authMutation({
   args: {
     id: v.id("notes"),
@@ -322,22 +347,13 @@ export const ensureThread = authMutation({
       }
     }
 
-    const conversationId = await (async (): Promise<Id<"conversations">> => {
-      const conversation = await ctx.db
-        .query("conversations")
-        .withIndex("by_userId", (q) => q.eq("userId", ctx.auth.user._id))
-        .filter((q) => q.eq(q.field("channel"), "web"))
-        .filter((q) => q.eq(q.field("status"), "active"))
-        .first();
+    const conversationId = await ctx.db.insert("conversations", {
+      userId: ctx.auth.user._id,
+      channel: "web",
+      status: "active",
+      title: note.title,
+    });
 
-      if (conversation) return conversation._id;
-
-      return ctx.db.insert("conversations", {
-        userId: ctx.auth.user._id,
-        channel: "web",
-        status: "active",
-      });
-    })();
     await ctx.db.patch(note._id, { conversationId });
     return conversationId;
   },
