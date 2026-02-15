@@ -22,6 +22,7 @@ const PROFESSIONAL_WEB_ALLOWLIST = [
   "note_generate_from_conversation",
   "note_transform",
   "note_apply_transform",
+  "note_update_from_ai",
   "task_create",
   "task_list",
   "task_update",

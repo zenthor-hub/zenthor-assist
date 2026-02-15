@@ -9,6 +9,16 @@ import { selectModel } from "./model-router";
 import { tools } from "./tools";
 import { getWebSearchTool } from "./tools/web-search";
 
+const NOTE_TOOL_CONFIRMATION_PROMPT = `
+
+## Note generation confirmation policy
+- When a user asks for a note created from chat history or asks an AI to shape notes, ask clarifying questions first when intent is unclear.
+- Confirm at least: target outcome, included scope, depth, and preferred structure (summary, checklist, itinerary, draft, etc.).
+- Ask for folder/title only when not explicitly provided.
+- Ask one concise clarification question at a time and wait for the user's answer before calling note tools.
+- Apply this broadly to note workflows whenever likely ambiguity could change the output.
+`;
+
 /**
  * The Codex endpoint requires system instructions via the `instructions`
  * field in the request body. The AI SDK normally maps `system` into the
@@ -33,6 +43,7 @@ const BASE_SYSTEM_PROMPT = `You are a helpful personal AI assistant for Guilherm
 - Use web search tools (\`web_search\` when available, otherwise \`internet_search\`) when the user asks for current events, latest information, or anything that requires searching the web.
 - Use \`browse_url\` to read web pages, articles, or documentation when the user shares a URL or you need to look up page content.
 - Use \`memory_search\` and \`memory_store\` to recall and save important facts across conversations.
+- Use \`note_list\`, \`note_get\`, \`note_create\`, \`note_update\`, \`note_move\`, \`note_archive\`, \`note_generate_from_conversation\`, \`note_transform\`, \`note_apply_transform\`, and \`note_update_from_ai\` for note authoring and maintenance workflows.
 - Use \`schedule_task\` to set up recurring reminders or tasks.
 - Use task tools (\`task_create\`, \`task_list\`, \`task_update\`, \`task_complete\`, \`task_delete\`) for actionable personal planning and task management.
 - Use \`get_current_time\` when you need the current date or time.
@@ -109,7 +120,7 @@ function buildSystemPrompt(
   }
 
   if (!skills || skills.length === 0) {
-    if (!noteContext) return prompt;
+    if (!noteContext) return `${prompt}${NOTE_TOOL_CONFIRMATION_PROMPT}`;
   } else {
     const skillsSection = skills
       .map((s) => {
@@ -122,7 +133,7 @@ function buildSystemPrompt(
     prompt = `${prompt}\n\n## Active Skills\n\n${skillsSection}`;
   }
 
-  if (!noteContext) return prompt;
+  if (!noteContext) return `${prompt}${NOTE_TOOL_CONFIRMATION_PROMPT}`;
 
   const commandHints = [
     "/organize — restructure sections",
@@ -134,7 +145,7 @@ function buildSystemPrompt(
     "/ask — keep discussion context but stay note-aware",
   ].join("\n");
 
-  return `${prompt}\n\n## Note-editor mode\nYou are operating as an AI note editor for "${noteContext.title}". Provide concise edit-focused responses and prefer machine-readable change suggestions.\nWhen the user asks for an edit command, first return a structured proposal with fields resultText and operations.\nAvailable commands:\n${commandHints}\n\nCurrent note preview:\n${noteContext.preview ?? "(empty)"}`;
+  return `${prompt}${NOTE_TOOL_CONFIRMATION_PROMPT}\n\n## Note-editor mode\nYou are operating as an AI note editor for "${noteContext.title}". Provide concise edit-focused responses and prefer machine-readable change suggestions.\nWhen the user asks for an edit command, first return a structured proposal with fields resultText and operations.\nAvailable commands:\n${commandHints}\n\nCurrent note preview:\n${noteContext.preview ?? "(empty)"}`;
 }
 
 function getDefaultTools(modelName: string): Record<string, Tool> {

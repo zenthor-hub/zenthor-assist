@@ -66,6 +66,19 @@ const applyTransformInput = z.object({
   operations: z.string().optional().describe("Optional serialized operation summary"),
 });
 
+function noteCreatedResult(noteId: string, title: string, source: string) {
+  return JSON.stringify({
+    action: "note_created",
+    noteId,
+    title,
+    source,
+  });
+}
+
+function sanitizeNoteToolOutput(message: string) {
+  return message.replace(/\n+/g, " ").trim();
+}
+
 function cleanText(value: unknown): string {
   return String(value ?? "").trim();
 }
@@ -202,16 +215,17 @@ export function createNoteTools(conversationId: Id<"conversations">) {
       inputSchema: createNoteInput,
       execute: async ({ title, content, folderId, source }) => {
         try {
+          const normalizedTitle = sanitizeNoteToolOutput(title);
           const client = getConvexClient();
           const id = await client.mutation(api.notes.createForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
-            title,
+            title: normalizedTitle,
             content,
             folderId: folderId as Id<"noteFolders"> | undefined,
             source: source ?? "chat-generated",
           });
-          return `Created note ${id}.`;
+          return noteCreatedResult(id, normalizedTitle, source ?? "chat-generated");
         } catch (error) {
           return getServiceError(error instanceof Error ? error.message : String(error));
         }
@@ -280,6 +294,7 @@ export function createNoteTools(conversationId: Id<"conversations">) {
       inputSchema: generateFromConversationInput,
       execute: async ({ title, folderId, source, messageLimit }) => {
         try {
+          const normalizedTitle = sanitizeNoteToolOutput(title);
           const client = getConvexClient();
           const messages = await client.query(
             api.messages.listByConversationWindowForConversation,
@@ -301,12 +316,12 @@ export function createNoteTools(conversationId: Id<"conversations">) {
           const id = await client.mutation(api.notes.createForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
-            title,
+            title: normalizedTitle,
             content: `## Source conversation\n${body || "(No messages)"}`,
             folderId: folderId as Id<"noteFolders"> | undefined,
             source: source ?? "chat-generated",
           });
-          return `Created note ${id} from conversation history.`;
+          return noteCreatedResult(id, normalizedTitle, source ?? "chat-generated");
         } catch (error) {
           return getServiceError(error instanceof Error ? error.message : String(error));
         }
@@ -354,6 +369,27 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             model: "agent-notes-tools",
           });
           return `Applied transform for ${noteId}.`;
+        } catch (error) {
+          return getServiceError(error instanceof Error ? error.message : String(error));
+        }
+      },
+    }),
+    note_update_from_ai: tool({
+      description:
+        "Apply an AI-generated note update payload, intended for explicit AI confirmation flows.",
+      inputSchema: applyTransformInput,
+      execute: async ({ noteId, resultText, operations }) => {
+        try {
+          const client = getConvexClient();
+          await client.mutation(api.notes.applyAiPatchForConversation, {
+            serviceKey: env.AGENT_SECRET,
+            conversationId,
+            id: noteId as Id<"notes">,
+            content: resultText,
+            operations,
+            model: "agent-notes-tools",
+          });
+          return `Applied AI update for ${noteId}.`;
         } catch (error) {
           return getServiceError(error instanceof Error ? error.message : String(error));
         }

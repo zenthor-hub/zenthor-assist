@@ -32,6 +32,18 @@ interface ConversationAudioMessage {
   media?: AudioTriggerMessage["media"];
 }
 
+interface ToolCallRecord {
+  name: string;
+  input: unknown;
+  output?: unknown;
+}
+
+interface NoteCreationSummary {
+  noteId: string;
+  title: string;
+  source: string;
+}
+
 /** Convert any remaining markdown syntax to WhatsApp-compatible formatting */
 function sanitizeForWhatsApp(text: string): string {
   return (
@@ -52,6 +64,56 @@ function sanitizeForWhatsApp(text: string): string {
       .replace(/\n{3,}/g, "\n\n")
       .trim()
   );
+}
+
+function parseNoteCreationFromToolOutput(output: unknown): NoteCreationSummary | undefined {
+  if (typeof output !== "string") return undefined;
+
+  try {
+    const parsed = JSON.parse(output) as Partial<{
+      action: string;
+      noteId: string;
+      title: string;
+      source: string;
+    }>;
+    if (parsed.action !== "note_created") return undefined;
+    if (!parsed.noteId || !parsed.title) return undefined;
+
+    return {
+      noteId: parsed.noteId,
+      title: parsed.title,
+      source: parsed.source ?? "chat-generated",
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveNoteCreationSummaries(
+  toolCalls: ToolCallRecord[] | undefined,
+): NoteCreationSummary[] {
+  if (!toolCalls || toolCalls.length === 0) return [];
+  const entries: NoteCreationSummary[] = [];
+  for (const toolCall of toolCalls) {
+    const summary = parseNoteCreationFromToolOutput(toolCall.output);
+    if (summary) entries.push(summary);
+  }
+  return entries;
+}
+
+function buildNoteCreationReply(
+  toolCalls: ToolCallRecord[] | undefined,
+  channel: "web" | "whatsapp" | "telegram",
+): string | undefined {
+  const summaries = resolveNoteCreationSummaries(toolCalls);
+  if (summaries.length === 0) return undefined;
+
+  if (channel === "whatsapp") {
+    return "Done.";
+  }
+
+  const links = summaries.map(({ noteId, title }) => `[${title}](/notes/${noteId})`).join("\n");
+  return `Created note(s):\n${links}`;
 }
 
 export function startAgentLoop() {
@@ -401,6 +463,8 @@ export function startAgentLoop() {
           );
 
           modelUsed = response.modelUsed;
+          const noteCreationMessage = buildNoteCreationReply(response.toolCalls, channel);
+          const finalContent = noteCreationMessage ?? response.content;
 
           if (checkLease("post_generate")) {
             await client
@@ -418,7 +482,7 @@ export function startAgentLoop() {
             .mutation(api.messages.updateStreamingContent, {
               serviceKey,
               messageId: activeMessageId,
-              content: response.content,
+              content: finalContent,
             })
             .catch((err) => {
               void logger.warn("agent.stream.final_update_failed", {
@@ -441,7 +505,7 @@ export function startAgentLoop() {
           await client.mutation(api.messages.finalizeMessage, {
             serviceKey,
             messageId: activeMessageId,
-            content: response.content,
+            content: finalContent,
             toolCalls: response.toolCalls,
             modelUsed,
           });
@@ -460,15 +524,19 @@ export function startAgentLoop() {
             messageCount: compactedMessages.length,
           });
           modelUsed = response.modelUsed;
+          const noteCreationMessage = buildNoteCreationReply(response.toolCalls, channel);
+
+          let content = noteCreationMessage
+            ? noteCreationMessage
+            : channel === "whatsapp"
+              ? sanitizeForWhatsApp(response.content)
+              : response.content;
 
           if (checkLease("post_generate")) {
             continue;
           }
 
-          let content =
-            channel === "whatsapp" ? sanitizeForWhatsApp(response.content) : response.content;
-
-          if (channel === "whatsapp" && context.preferences) {
+          if (!noteCreationMessage && channel === "whatsapp" && context.preferences) {
             const parts: string[] = [];
             if (context.preferences.showModelInfo && modelUsed)
               parts.push(`Model: ${friendlyModelName(modelUsed)}`);
