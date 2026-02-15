@@ -73,6 +73,9 @@ const NOTE_TOOL_NAMES = [
   "note_update_from_ai",
 ] as const;
 
+const NOTE_CREATION_TOOL_NAMES = ["note_create", "note_generate_from_conversation"] as const;
+const NOTE_CREATION_TOOL_SET = new Set<string>(NOTE_CREATION_TOOL_NAMES);
+
 /** Convert any remaining markdown syntax to WhatsApp-compatible formatting */
 function sanitizeForWhatsApp(text: string): string {
   return (
@@ -133,7 +136,10 @@ export function parseNoteCreationFromToolOutput(output: unknown): NoteCreationSu
   };
 }
 
-export function parseNoteCreationFailure(output: unknown): NoteCreationFailure | undefined {
+export function parseNoteCreationFailure(
+  output: unknown,
+  toolName = "note_create",
+): NoteCreationFailure | undefined {
   const asRecord = parseNoteCreateOutputRecord(output);
   if (asRecord) {
     const reason =
@@ -147,7 +153,7 @@ export function parseNoteCreationFailure(output: unknown): NoteCreationFailure |
 
     if (reason) {
       return {
-        toolName: "note_create",
+        toolName,
         reason: reason.trim(),
       };
     }
@@ -161,7 +167,7 @@ export function parseNoteCreationFailure(output: unknown): NoteCreationFailure |
   if (!reasonMatch) return undefined;
 
   return {
-    toolName: "note_create",
+    toolName,
     reason: reasonMatch[1]?.trim() ?? "Unknown error",
   };
 }
@@ -175,16 +181,16 @@ export function resolveNoteCreationOutcomes(toolCalls: ToolCallRecord[] | undefi
   const failures: NoteCreationFailure[] = [];
 
   for (const toolCall of toolCalls) {
-    if (toolCall.name !== "note_create") continue;
+    if (!NOTE_CREATION_TOOL_SET.has(toolCall.name)) continue;
     const success = parseNoteCreationFromToolOutput(toolCall.output);
     if (success) {
       successes.push(success);
       continue;
     }
-    const failure = parseNoteCreationFailure(toolCall.output);
+    const failure = parseNoteCreationFailure(toolCall.output, toolCall.name);
     failures.push(
       failure ?? {
-        toolName: "note_create",
+        toolName: toolCall.name,
         reason: "Tool output did not confirm note creation.",
       },
     );
@@ -199,6 +205,7 @@ function resolveNoteCreationSummaries(
   if (!toolCalls || toolCalls.length === 0) return [];
   const entries: NoteCreationSummary[] = [];
   for (const toolCall of toolCalls) {
+    if (!NOTE_CREATION_TOOL_SET.has(toolCall.name)) continue;
     const summary = parseNoteCreationFromToolOutput(toolCall.output);
     if (summary) entries.push(summary);
   }
@@ -216,7 +223,9 @@ export function buildNoteCreationReply(
   };
   const summaries = summaryFromOutcomes.successes;
 
-  const hasCreateAttempt = (toolCalls ?? []).some((toolCall) => toolCall.name === "note_create");
+  const hasCreateAttempt = (toolCalls ?? []).some((toolCall) =>
+    NOTE_CREATION_TOOL_SET.has(toolCall.name),
+  );
   if (!summaries.length && !hasCreateAttempt) {
     return undefined;
   }
