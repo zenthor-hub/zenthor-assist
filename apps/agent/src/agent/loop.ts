@@ -44,6 +44,22 @@ interface NoteCreationSummary {
   source: string;
 }
 
+interface NoteCreationFailure {
+  toolName: string;
+  reason: string;
+}
+
+function stripCodeFences(raw: string): string {
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (!fenced || !fenced[1]) return raw;
+  return fenced[1]!;
+}
+
+function parseNoteCreateOutputRecord(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  return value as Record<string, unknown>;
+}
+
 const NOTE_TOOL_NAMES = [
   "note_list",
   "note_get",
@@ -79,27 +95,102 @@ function sanitizeForWhatsApp(text: string): string {
   );
 }
 
-function parseNoteCreationFromToolOutput(output: unknown): NoteCreationSummary | undefined {
-  if (typeof output !== "string") return undefined;
+export function parseNoteCreationFromToolOutput(output: unknown): NoteCreationSummary | undefined {
+  let parsed: Record<string, unknown> | undefined;
 
-  try {
-    const parsed = JSON.parse(output) as Partial<{
-      action: string;
-      noteId: string;
-      title: string;
-      source: string;
-    }>;
-    if (parsed.action !== "note_created") return undefined;
-    if (!parsed.noteId || !parsed.title) return undefined;
-
-    return {
-      noteId: parsed.noteId,
-      title: parsed.title,
-      source: parsed.source ?? "chat-generated",
+  if (typeof output === "string") {
+    const cleaned = stripCodeFences(output).trim();
+    const parseCandidate = (candidate: string): Record<string, unknown> | undefined => {
+      const trimmed = candidate.trim();
+      if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return undefined;
+      try {
+        return JSON.parse(trimmed) as unknown as Record<string, unknown>;
+      } catch {
+        return undefined;
+      }
     };
-  } catch {
-    return undefined;
+
+    const firstBrace = cleaned.indexOf("{");
+    const lastBrace = cleaned.lastIndexOf("}");
+    const fallbackPayload =
+      firstBrace >= 0 && lastBrace > firstBrace ? cleaned.slice(firstBrace, lastBrace + 1) : "";
+    parsed = parseCandidate(cleaned) ?? parseCandidate(fallbackPayload);
+    if (!parsed) return undefined;
+  } else {
+    parsed = parseNoteCreateOutputRecord(output);
   }
+
+  if (!parsed) return undefined;
+  const action = typeof parsed.action === "string" ? parsed.action : "";
+  const noteId = typeof parsed.noteId === "string" ? parsed.noteId.trim() : "";
+  const title = typeof parsed.title === "string" ? parsed.title.trim() : "";
+  if (action !== "note_created" || !noteId || !title) return undefined;
+
+  return {
+    noteId,
+    title,
+    source: typeof parsed.source === "string" ? parsed.source : "chat-generated",
+  };
+}
+
+export function parseNoteCreationFailure(output: unknown): NoteCreationFailure | undefined {
+  const asRecord = parseNoteCreateOutputRecord(output);
+  if (asRecord) {
+    const reason =
+      typeof asRecord.error === "string"
+        ? asRecord.error
+        : typeof asRecord.reason === "string"
+          ? asRecord.reason
+          : typeof asRecord.message === "string"
+            ? asRecord.message
+            : undefined;
+
+    if (reason) {
+      return {
+        toolName: "note_create",
+        reason: reason.trim(),
+      };
+    }
+  }
+
+  if (typeof output !== "string") return undefined;
+  const reasonMatch =
+    output.match(
+      /(?:Could not complete note action|Could not create note|Failed to create note)[:\s-]+(.+)$/i,
+    ) ?? output.match(/error[:\s]+(.+)$/i);
+  if (!reasonMatch) return undefined;
+
+  return {
+    toolName: "note_create",
+    reason: reasonMatch[1]?.trim() ?? "Unknown error",
+  };
+}
+
+export function resolveNoteCreationOutcomes(toolCalls: ToolCallRecord[] | undefined) {
+  if (!toolCalls || toolCalls.length === 0) {
+    return { successes: [] as NoteCreationSummary[], failures: [] as NoteCreationFailure[] };
+  }
+
+  const successes: NoteCreationSummary[] = [];
+  const failures: NoteCreationFailure[] = [];
+
+  for (const toolCall of toolCalls) {
+    if (toolCall.name !== "note_create") continue;
+    const success = parseNoteCreationFromToolOutput(toolCall.output);
+    if (success) {
+      successes.push(success);
+      continue;
+    }
+    const failure = parseNoteCreationFailure(toolCall.output);
+    failures.push(
+      failure ?? {
+        toolName: "note_create",
+        reason: "Tool output did not confirm note creation.",
+      },
+    );
+  }
+
+  return { successes, failures };
 }
 
 function resolveNoteCreationSummaries(
@@ -114,15 +205,32 @@ function resolveNoteCreationSummaries(
   return entries;
 }
 
-function buildNoteCreationReply(
+export function buildNoteCreationReply(
   toolCalls: ToolCallRecord[] | undefined,
   channel: "web" | "whatsapp" | "telegram",
+  explicitOutcomes?: { successes: NoteCreationSummary[]; failures: NoteCreationFailure[] },
 ): string | undefined {
-  const summaries = resolveNoteCreationSummaries(toolCalls);
-  if (summaries.length === 0) return undefined;
+  const summaryFromOutcomes = explicitOutcomes ?? {
+    successes: resolveNoteCreationSummaries(toolCalls),
+    failures: [],
+  };
+  const summaries = summaryFromOutcomes.successes;
+
+  const hasCreateAttempt = (toolCalls ?? []).some((toolCall) => toolCall.name === "note_create");
+  if (!summaries.length && !hasCreateAttempt) {
+    return undefined;
+  }
+  if (!summaries.length) {
+    const reasons = summaryFromOutcomes.failures.map((failure) => failure.reason).join(" | ");
+    const fallbackReason =
+      reasons.length > 0 ? reasons : "Tool output did not confirm note creation.";
+    return channel === "whatsapp"
+      ? `Could not create note: ${fallbackReason}`
+      : `Could not create note: ${fallbackReason}`;
+  }
 
   if (channel === "whatsapp") {
-    return "Done.";
+    return `Created note${summaries.length > 1 ? "s" : ""}: ${summaries.map(({ title }) => title).join(", ")}.`;
   }
 
   const links = summaries.map(({ noteId, title }) => `[${title}](/notes/${noteId})`).join("\n");
@@ -491,7 +599,12 @@ export function startAgentLoop() {
           );
 
           modelUsed = response.modelUsed;
-          const noteCreationMessage = buildNoteCreationReply(response.toolCalls, channel);
+          const noteCreationOutcomes = resolveNoteCreationOutcomes(response.toolCalls);
+          const noteCreationMessage = buildNoteCreationReply(
+            response.toolCalls,
+            channel,
+            noteCreationOutcomes,
+          );
           const finalContent = noteCreationMessage ?? response.content;
 
           if (checkLease("post_generate")) {
@@ -552,7 +665,12 @@ export function startAgentLoop() {
             messageCount: compactedMessages.length,
           });
           modelUsed = response.modelUsed;
-          const noteCreationMessage = buildNoteCreationReply(response.toolCalls, channel);
+          const noteCreationOutcomes = resolveNoteCreationOutcomes(response.toolCalls);
+          const noteCreationMessage = buildNoteCreationReply(
+            response.toolCalls,
+            channel,
+            noteCreationOutcomes,
+          );
 
           let content = noteCreationMessage
             ? noteCreationMessage
