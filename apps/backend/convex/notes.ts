@@ -279,31 +279,6 @@ export const moveToFolder = authMutation({
   },
 });
 
-export const move = authMutation({
-  args: {
-    id: v.id("notes"),
-    folderId: v.optional(v.id("noteFolders")),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const note = await ctx.db.get(args.id);
-    if (!note || note.userId !== ctx.auth.user._id) return null;
-
-    if (args.folderId) {
-      const folderOwnerId = await getFolderOwnerId(ctx, args.folderId);
-      if (folderOwnerId !== ctx.auth.user._id) {
-        throw new ConvexError("Folder not found");
-      }
-    }
-
-    await ctx.db.patch(note._id, {
-      folderId: args.folderId,
-      updatedAt: Date.now(),
-    });
-    return null;
-  },
-});
-
 export const attachConversation = authMutation({
   args: {
     id: v.id("notes"),
@@ -376,14 +351,14 @@ export const applyAiPatch = authMutation({
     const nextMetadata = note.metadata
       ? {
           ...note.metadata,
-          lastAiActionAt: now,
-          lastAiModel: args.model,
-          lastAiTransform: args.operations,
+          lastAiPatchAppliedAt: now,
+          lastAiPatchModel: args.model,
+          lastAiPatchOperations: args.operations,
         }
       : {
-          lastAiActionAt: now,
-          lastAiModel: args.model,
-          lastAiTransform: args.operations,
+          lastAiPatchAppliedAt: now,
+          lastAiPatchModel: args.model,
+          lastAiPatchOperations: args.operations,
         };
 
     await ctx.db.patch(note._id, {
