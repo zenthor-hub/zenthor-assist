@@ -14,6 +14,13 @@ import { PageWrapper } from "@/components/page-wrapper";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 type NoteItem = {
@@ -26,6 +33,8 @@ type NoteItem = {
   conversationId?: Id<"conversations">;
   updatedAt: number;
   source?: string;
+  lastAiActionAt?: number;
+  lastAiModel?: string;
 };
 
 type FolderItem = {
@@ -56,6 +65,8 @@ export default function NoteWorkspacePage({ params }: { params: Promise<{ noteId
 
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
+  const [selectedFolderId, setSelectedFolderId] = useState<"none" | Id<"noteFolders">>("none");
+  const [isPinned, setIsPinned] = useState(false);
   const [conversationId, setConversationId] = useState<Id<"conversations"> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isInitializingThread, setIsInitializingThread] = useState(false);
@@ -65,6 +76,8 @@ export default function NoteWorkspacePage({ params }: { params: Promise<{ noteId
     if (!note) return;
     setTitle(note.title);
     setContent(note.content);
+    setSelectedFolderId(note.folderId ?? "none");
+    setIsPinned(note.isPinned === true);
     hasHydrated.current = false;
     if (note.conversationId) setConversationId(note.conversationId);
   }, [note]);
@@ -129,9 +142,41 @@ export default function NoteWorkspacePage({ params }: { params: Promise<{ noteId
     }
   }
 
+  async function updateFolder(folderId: "none" | Id<"noteFolders">) {
+    if (!note) return;
+    const nextFolderId = folderId === "none" ? undefined : folderId;
+    try {
+      await updateNote({ id: note._id, folderId: nextFolderId });
+      setSelectedFolderId(folderId);
+      toast.success(t("Note folder updated"));
+    } catch {
+      toast.error(t("Failed to update note folder"));
+    }
+  }
+
+  async function togglePin() {
+    if (!note) return;
+    const nextPinned = !isPinned;
+    try {
+      await updateNote({ id: note._id, isPinned: nextPinned });
+      setIsPinned(nextPinned);
+      toast.success(nextPinned ? t("Note pinned") : t("Note unpinned"));
+    } catch {
+      toast.error(t("Failed to update note"));
+    }
+  }
+
   function formatLastUpdated(timestamp: number) {
     const ago = Math.max(1, Math.floor((Date.now() - timestamp) / 60000));
     return ago < 60 ? `${ago}m ago` : `${Math.floor(ago / 60)}h ago`;
+  }
+
+  function formatAiActionAt(timestamp?: number) {
+    if (!timestamp) return null;
+    const delta = Math.max(1, Math.floor((Date.now() - timestamp) / 60000));
+    return delta < 60
+      ? t("AI updated {{mins}}m ago", { mins: `${delta}` })
+      : t("AI updated {{hours}}h ago", { hours: `${Math.floor(delta / 60)}` });
   }
 
   if (note === undefined) {
@@ -161,12 +206,24 @@ export default function NoteWorkspacePage({ params }: { params: Promise<{ noteId
           <div className="mb-3 flex items-center justify-between gap-2">
             <Input value={title} onChange={(event) => setTitle(event.target.value)} />
             <div className="flex items-center gap-2">
-              {note.isPinned ? (
-                <Badge variant="outline" className="text-[10px]">
-                  <Pin className="size-3" />
-                  <T>Pinned</T>
-                </Badge>
-              ) : null}
+              <Select
+                value={selectedFolderId}
+                onValueChange={(value) => updateFolder(value as "none" | Id<"noteFolders">)}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder={t("Folder")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">
+                    <T>Unfiled</T>
+                  </SelectItem>
+                  {folders.map((folder) => (
+                    <SelectItem key={folder._id} value={folder._id}>
+                      {folder.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Badge
                 variant="outline"
                 className="max-w-40 gap-1 text-[10px] text-nowrap"
@@ -178,9 +235,28 @@ export default function NoteWorkspacePage({ params }: { params: Promise<{ noteId
                 />
                 {getFolderName(folders, note.folderId)}
               </Badge>
+              {note.source ? (
+                <Badge variant="outline" className="text-[10px] text-nowrap">
+                  {note.source}
+                </Badge>
+              ) : null}
+              {isPinned ? (
+                <Badge variant="outline" className="text-[10px]">
+                  <Pin className="size-3" />
+                  <T>Pinned</T>
+                </Badge>
+              ) : null}
+              {note.lastAiModel ? (
+                <Badge variant="outline" className="text-[10px] text-nowrap">
+                  {note.lastAiModel}
+                </Badge>
+              ) : null}
               <Badge variant="secondary" className="text-[10px]">
                 {formatLastUpdated(note.updatedAt)}
               </Badge>
+              <span className="text-muted-foreground text-[10px]">
+                {formatAiActionAt(note.lastAiActionAt)}
+              </span>
             </div>
           </div>
 
@@ -208,6 +284,10 @@ export default function NoteWorkspacePage({ params }: { params: Promise<{ noteId
                   <T>Archive</T>
                 </>
               )}
+            </Button>
+            <Button size="xs" variant="outline" onClick={togglePin}>
+              <Pin className="size-3.5" />
+              {isPinned ? <T>Unpin</T> : <T>Pin</T>}
             </Button>
             <Button
               size="xs"

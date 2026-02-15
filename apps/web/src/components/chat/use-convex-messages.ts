@@ -4,12 +4,13 @@ import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import type { Id } from "@zenthor-assist/backend/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import { useGT } from "gt-next";
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { logWebClientEvent } from "@/lib/observability/client";
 
 const GROUP_THRESHOLD_MS = 120_000;
+const MESSAGE_WINDOW_LIMIT = 120;
 
 type MessagePosition = "first" | "middle" | "last" | "single";
 
@@ -115,19 +116,89 @@ export function useConvexMessages(
   options?: UseConvexMessagesOptions,
 ) {
   const t = useGT();
-  const rawMessages = useQuery(api.messages.listByConversationWindow, {
-    conversationId,
-    ...(options?.noteId ? { noteId: options.noteId } : {}),
-  });
+  const [latestMessages, setLatestMessages] = useState<RawMessage[]>([]);
+  const [historicalMessages, setHistoricalMessages] = useState<RawMessage[]>([]);
+  const [fetchMode, setFetchMode] = useState<"latest" | "older">("latest");
+  const [historicalCursor, setHistoricalCursor] = useState<Id<"messages"> | null>(null);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+
+  useEffect(() => {
+    setLatestMessages([]);
+    setHistoricalMessages([]);
+    setFetchMode("latest");
+    setHistoricalCursor(null);
+    setIsLoadingHistory(false);
+    setHasMoreMessages(false);
+  }, [conversationId, options?.noteId]);
+
+  const messageQueryArgs = useMemo(() => {
+    return {
+      conversationId,
+      ...(options?.noteId ? { noteId: options.noteId } : {}),
+      limit: MESSAGE_WINDOW_LIMIT,
+      ...(fetchMode === "older" && historicalCursor ? { beforeMessageId: historicalCursor } : {}),
+    };
+  }, [conversationId, fetchMode, historicalCursor, options?.noteId]);
+
+  const rawMessages = useQuery(api.messages.listByConversationWindow, messageQueryArgs);
   const isProcessing = useQuery(api.agent.isProcessing, { conversationId });
   const rawApprovals = useQuery(api.toolApprovals.getPendingByConversation, { conversationId });
   const rawPreferences = useQuery(api.userPreferences.get);
   const sendMutation = useMutation(api.messages.send);
 
+  useEffect(() => {
+    if (!rawMessages) return;
+    const page = rawMessages as RawMessage[];
+
+    if (fetchMode === "older" && historicalCursor) {
+      setHistoricalMessages((previous) => {
+        const mergedMessages = new Map<string, RawMessage>();
+
+        for (const message of [...page, ...previous]) {
+          mergedMessages.set(message._id, message);
+        }
+
+        return [...mergedMessages.values()].sort((a, b) => a._creationTime - b._creationTime);
+      });
+      setHasMoreMessages(page.length === MESSAGE_WINDOW_LIMIT);
+      setFetchMode("latest");
+      setHistoricalCursor(null);
+      setIsLoadingHistory(false);
+      return;
+    }
+
+    setLatestMessages(page);
+    setHasMoreMessages(page.length === MESSAGE_WINDOW_LIMIT);
+  }, [fetchMode, historicalCursor, rawMessages]);
+
+  const messagesSource = useMemo(() => {
+    const mergedMessages = new Map<string, RawMessage>();
+
+    for (const message of [...historicalMessages, ...latestMessages]) {
+      mergedMessages.set(message._id, message);
+    }
+
+    return [...mergedMessages.values()].sort((a, b) => a._creationTime - b._creationTime);
+  }, [historicalMessages, latestMessages]);
+
+  const canLoadOlderMessages =
+    hasMoreMessages && messagesSource.length > 0 && !isLoadingHistory && fetchMode !== "older";
+
+  const loadOlderMessages = useCallback(() => {
+    if (!canLoadOlderMessages) return;
+    const oldestMessage = messagesSource.at(0);
+    if (!oldestMessage) return;
+
+    setIsLoadingHistory(true);
+    setFetchMode("older");
+    setHistoricalCursor(oldestMessage._id as Id<"messages">);
+  }, [canLoadOlderMessages, messagesSource]);
+
   const messages = useMemo(() => {
-    if (!rawMessages) return null;
+    if (messagesSource.length === 0) return null;
     return computePositions(
-      (rawMessages as RawMessage[]).map(
+      messagesSource.map(
         (msg): RawMessage => ({
           ...msg,
           role: msg.role,
@@ -136,7 +207,7 @@ export function useConvexMessages(
         }),
       ),
     );
-  }, [rawMessages]);
+  }, [messagesSource]);
 
   const preferences = useMemo(
     () =>
@@ -150,8 +221,8 @@ export function useConvexMessages(
   );
 
   const hasStreamingMessage = useMemo(
-    () => (rawMessages as RawMessage[] | undefined)?.some((msg) => msg.streaming) ?? false,
-    [rawMessages],
+    () => messagesSource.some((msg) => msg.streaming),
+    [messagesSource],
   );
 
   const pendingApprovals: PendingApproval[] = useMemo(
@@ -210,6 +281,9 @@ export function useConvexMessages(
     pendingApprovals,
     preferences,
     noteContext,
+    hasMoreMessages,
+    isLoadingHistory,
+    loadOlderMessages,
     sendMessage,
   };
 }

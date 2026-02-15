@@ -4,7 +4,18 @@ import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import type { Id } from "@zenthor-assist/backend/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import { T, useGT } from "gt-next";
-import { Archive, FolderKanban, ListFilter, Pin, Plus, Sparkles } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Archive,
+  CircleX,
+  FolderKanban,
+  ListFilter,
+  Pin,
+  Plus,
+  Sparkles,
+  Trash2,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -28,6 +39,7 @@ type NoteFolder = {
   _id: Id<"noteFolders">;
   name: string;
   color: string;
+  position: number;
 };
 
 type NoteItem = {
@@ -49,6 +61,19 @@ const NOTE_SORT_OPTIONS: Array<{ value: NoteSort; label: string }> = [
   { value: "updated_desc", label: "Recently updated" },
   { value: "updated_asc", label: "Oldest updated" },
   { value: "title", label: "Title (A-Z)" },
+];
+
+const PRESET_FOLDER_COLORS = [
+  "#60a5fa",
+  "#38bdf8",
+  "#34d399",
+  "#f472b6",
+  "#facc15",
+  "#fb923c",
+  "#c084fc",
+  "#f87171",
+  "#a78bfa",
+  "#22c55e",
 ];
 
 function normalizeFolderId(value: string): "none" | Id<"noteFolders"> {
@@ -75,9 +100,15 @@ export default function NotesPage() {
   const [composerTitle, setComposerTitle] = useState("");
   const [composerContent, setComposerContent] = useState("");
   const [composerFolderId, setComposerFolderId] = useState<"none" | Id<"noteFolders">>("none");
+  const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderColor, setNewFolderColor] = useState(PRESET_FOLDER_COLORS[0]);
+  const [editingFolderId, setEditingFolderId] = useState<Id<"noteFolders"> | null>(null);
+  const [editingFolderName, setEditingFolderName] = useState("");
+  const [editingFolderColor, setEditingFolderColor] = useState(PRESET_FOLDER_COLORS[0]);
 
   const rawFolders = useQuery(api.noteFolders.list, {});
   const folders = (rawFolders ?? []) as NoteFolder[];
+  const orderedFolders = [...folders].sort((a, b) => a.position - b.position);
   const queryArgs = useMemo(
     () => ({
       ...(selectedFolderId === "all" ? {} : { folderId: selectedFolderId }),
@@ -91,9 +122,13 @@ export default function NotesPage() {
   const createNote = useMutation(api.notes.create);
   const moveNote = useMutation(api.notes.moveToFolder);
   const archiveNote = useMutation(api.notes.archive);
+  const createFolder = useMutation(api.noteFolders.create);
+  const updateFolder = useMutation(api.noteFolders.update);
+  const removeFolder = useMutation(api.noteFolders.remove);
+  const reorderFolders = useMutation(api.noteFolders.reorder);
   const folderFilters: FolderFilterOption[] = [
     { id: "all", name: t("All folders") },
-    ...folders.map((folder) => ({ id: folder._id, name: folder.name })),
+    ...orderedFolders.map((folder) => ({ id: folder._id, name: folder.name })),
   ];
 
   const visibleNotes = useMemo(() => {
@@ -133,15 +168,116 @@ export default function NotesPage() {
     }
   }
 
-  async function handleMoveNote(noteId: Id<"notes">, folderId: "none" | Id<"noteFolders">) {
+  async function handleMoveNote(
+    noteId: Id<"notes">,
+    folderId: "none" | Id<"noteFolders">,
+    source: "row" | "filter" = "row",
+  ) {
     try {
       await moveNote({
         id: noteId,
         folderId: folderId === "none" ? undefined : folderId,
       });
+      if (source === "filter") {
+        setSelectedFolderId("all");
+        setComposerFolderId("none");
+      }
       toast.success(t("Note moved"));
     } catch {
       toast.error(t("Failed to move note"));
+    }
+  }
+
+  async function handleCreateFolder() {
+    const name = newFolderName.trim();
+    if (!name) {
+      toast.error(t("Folder name is required"));
+      return;
+    }
+
+    try {
+      await createFolder({
+        name,
+        color: newFolderColor,
+      });
+      setNewFolderName("");
+      toast.success(t("Folder created"));
+    } catch {
+      toast.error(t("Failed to create folder"));
+    }
+  }
+
+  function startEditingFolder(folder: NoteFolder) {
+    setEditingFolderId(folder._id);
+    setEditingFolderName(folder.name);
+    setEditingFolderColor(folder.color);
+  }
+
+  function cancelFolderEdit() {
+    setEditingFolderId(null);
+    setEditingFolderName("");
+    setEditingFolderColor(PRESET_FOLDER_COLORS[0]);
+  }
+
+  async function handleUpdateFolder() {
+    if (!editingFolderId) return;
+
+    const name = editingFolderName.trim();
+    if (!name) {
+      toast.error(t("Folder name is required"));
+      return;
+    }
+
+    try {
+      await updateFolder({
+        id: editingFolderId,
+        name,
+        color: editingFolderColor,
+      });
+      setEditingFolderId(null);
+      toast.success(t("Folder updated"));
+    } catch {
+      toast.error(t("Failed to update folder"));
+    }
+  }
+
+  async function handleDeleteFolder(folderId: Id<"noteFolders">) {
+    if (!confirm(t("Delete this folder and unfile its notes?"))) {
+      return;
+    }
+
+    try {
+      await removeFolder({ id: folderId });
+      if (composerFolderId === folderId) {
+        setComposerFolderId("none");
+      }
+      if (selectedFolderId === folderId) {
+        setSelectedFolderId("all");
+      }
+      toast.success(t("Folder removed"));
+    } catch {
+      toast.error(t("Failed to remove folder"));
+    }
+  }
+
+  async function handleReorderFolder(folderId: Id<"noteFolders">, direction: "up" | "down") {
+    if (orderedFolders.length < 2) return;
+
+    const currentIndex = orderedFolders.findIndex((folder) => folder._id === folderId);
+    const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    if (currentIndex === -1 || targetIndex < 0 || targetIndex >= orderedFolders.length) return;
+
+    const nextOrder = [...orderedFolders];
+    [nextOrder[currentIndex], nextOrder[targetIndex]] = [
+      nextOrder[targetIndex],
+      nextOrder[currentIndex],
+    ];
+
+    try {
+      await reorderFolders({ orderedFolderIds: nextOrder.map((folder) => folder._id) });
+      toast.success(t("Folders reordered"));
+    } catch {
+      toast.error(t("Failed to reorder folders"));
     }
   }
 
@@ -221,7 +357,7 @@ export default function NotesPage() {
                 <SelectItem value="none">
                   <T>Unfiled</T>
                 </SelectItem>
-                {folders.map((folder) => (
+                {orderedFolders.map((folder) => (
                   <SelectItem key={folder._id} value={folder._id}>
                     {folder.name}
                   </SelectItem>
@@ -234,6 +370,133 @@ export default function NotesPage() {
               placeholder={t("Start writing your note...")}
               rows={6}
             />
+          </div>
+        </div>
+
+        <div className="rounded-lg border p-4">
+          <h2 className="text-muted-foreground mb-3 text-sm font-medium">
+            <T>Manage folders</T>
+          </h2>
+
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-[1fr_auto_auto_auto]">
+              <Input
+                value={newFolderName}
+                onChange={(event) => setNewFolderName(event.target.value)}
+                placeholder={t("New folder name")}
+              />
+              <Input
+                type="color"
+                value={newFolderColor}
+                onChange={(event) => setNewFolderColor(event.target.value)}
+                className="h-9 w-12 cursor-pointer p-1"
+              />
+              <div className="flex flex-wrap gap-1">
+                {PRESET_FOLDER_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setNewFolderColor(color)}
+                    className={`h-5 w-5 rounded-full border transition ${
+                      newFolderColor === color ? "ring-foreground/50 ring-1" : ""
+                    }`}
+                    style={{ backgroundColor: color }}
+                    aria-label={color}
+                  />
+                ))}
+              </div>
+              <Button onClick={() => void handleCreateFolder()} size="sm" className="gap-1.5">
+                <Plus className="size-3.5" />
+                <T>Create</T>
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              {orderedFolders.length === 0 ? (
+                <p className="text-muted-foreground text-xs">
+                  <T>No folders yet. Create one to organize notes.</T>
+                </p>
+              ) : (
+                orderedFolders.map((folder, index) => (
+                  <div
+                    key={folder._id}
+                    className="border-border bg-muted/30 flex flex-wrap items-center gap-2 rounded border px-2 py-2"
+                  >
+                    {editingFolderId === folder._id ? (
+                      <>
+                        <Input
+                          value={editingFolderName}
+                          onChange={(event) => setEditingFolderName(event.target.value)}
+                          className="h-8 w-48"
+                        />
+                        <Input
+                          type="color"
+                          value={editingFolderColor}
+                          onChange={(event) => setEditingFolderColor(event.target.value)}
+                          className="h-8 w-12 cursor-pointer p-1"
+                        />
+                        <Button size="xs" onClick={() => void handleUpdateFolder()}>
+                          <T>Save</T>
+                        </Button>
+                        <Button size="xs" variant="ghost" onClick={cancelFolderEdit}>
+                          <CircleX className="size-3.5" />
+                          <T>Cancel</T>
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Badge variant="outline" className="px-1.5 py-0.5 text-[11px]">
+                          <span
+                            className="mr-1 inline-block h-2 w-2 shrink-0 rounded-full"
+                            style={{ backgroundColor: folder.color }}
+                          />
+                          {folder.name}
+                        </Badge>
+
+                        <div className="ml-auto flex items-center gap-1">
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            onClick={() => handleReorderFolder(folder._id, "up")}
+                            disabled={index === 0}
+                          >
+                            <ArrowUp className="size-3.5" />
+                            <span className="sr-only">
+                              <T>Move folder up</T>
+                            </span>
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            onClick={() => handleReorderFolder(folder._id, "down")}
+                            disabled={index === orderedFolders.length - 1}
+                          >
+                            <ArrowDown className="size-3.5" />
+                            <span className="sr-only">
+                              <T>Move folder down</T>
+                            </span>
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant="ghost"
+                            onClick={() => startEditingFolder(folder)}
+                          >
+                            <T>Edit</T>
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant="outline"
+                            onClick={() => void handleDeleteFolder(folder._id)}
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
 
@@ -358,7 +621,7 @@ export default function NotesPage() {
                       <SelectItem value="none">
                         <T>Unfiled</T>
                       </SelectItem>
-                      {folders.map((folder) => (
+                      {orderedFolders.map((folder) => (
                         <SelectItem key={folder._id} value={folder._id}>
                           {folder.name}
                         </SelectItem>

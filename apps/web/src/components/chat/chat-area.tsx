@@ -60,6 +60,7 @@ interface ChatAreaProps {
 }
 
 const TOOL_SUMMARY_MAX_LENGTH = 96;
+const TRANSFORM_MODEL = "agent-notes-tools";
 
 type ToolCallSummary = {
   name: string;
@@ -113,6 +114,42 @@ const toolCallSummary = ({ output, input }: ToolCallSummary): string =>
   output === undefined
     ? `Input: ${summarizeToolValue(input)}`
     : `Result: ${summarizeToolValue(output)}`;
+
+type NoteTransformResult = {
+  noteId: string;
+  intent: string;
+  resultText: string;
+  operations?: string;
+};
+
+const parseNoteTransformOutput = (value: unknown): NoteTransformResult | null => {
+  if (value === undefined || value === null) return null;
+
+  let parsed: unknown = value;
+  if (typeof value === "string") {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+
+  if (typeof parsed !== "object") return null;
+  const candidate = parsed as Record<string, unknown>;
+  if (candidate.name !== "note_transform") {
+    // output payloads for tool calls are passed as `output`, not a top-level object with `name`.
+    if (candidate.noteId === undefined || candidate.resultText === undefined) return null;
+  }
+
+  const noteId = typeof candidate.noteId === "string" ? candidate.noteId : null;
+  const resultText = typeof candidate.resultText === "string" ? candidate.resultText : null;
+  if (!noteId || !resultText) return null;
+
+  const intent = typeof candidate.intent === "string" ? candidate.intent : "";
+  const operations = typeof candidate.operations === "string" ? candidate.operations : undefined;
+
+  return { noteId, intent, resultText, operations };
+};
 
 const formatToolJson = (value: unknown): string => {
   if (value === undefined) return "No details";
@@ -226,12 +263,16 @@ function ApprovalCard({
 
 export function ChatArea({ conversationId, noteContext }: ChatAreaProps) {
   const t = useGT();
+  const [applyingTransforms, setApplyingTransforms] = useState<Set<string>>(new Set());
   const {
     messages,
     isProcessing,
     hasStreamingMessage,
     pendingApprovals,
     preferences,
+    hasMoreMessages,
+    isLoadingHistory,
+    loadOlderMessages,
     sendMessage,
     noteContext: resolvedNoteContext,
   } = useConvexMessages(
@@ -244,6 +285,7 @@ export function ChatArea({ conversationId, noteContext }: ChatAreaProps) {
       : undefined,
   );
 
+  const applyNoteTransform = useMutation(api.notes.applyAiPatch);
   const hasActiveNoteContext = !!resolvedNoteContext;
 
   const noteActions = hasActiveNoteContext
@@ -274,6 +316,31 @@ export function ChatArea({ conversationId, noteContext }: ChatAreaProps) {
       await sendMessage(command);
     },
     [sendMessage],
+  );
+
+  const handleApplyTransform = useCallback(
+    async (toolKey: string, payload: NoteTransformResult) => {
+      if (applyingTransforms.has(toolKey)) return;
+      setApplyingTransforms((current) => new Set(current).add(toolKey));
+      try {
+        await applyNoteTransform({
+          id: payload.noteId as Id<"notes">,
+          content: payload.resultText,
+          operations: payload.operations,
+          model: TRANSFORM_MODEL,
+        });
+        toast.success(t("Applied transform to note"));
+      } catch {
+        toast.error(t("Failed to apply note transform"));
+      } finally {
+        setApplyingTransforms((current) => {
+          const next = new Set(current);
+          next.delete(toolKey);
+          return next;
+        });
+      }
+    },
+    [applyingTransforms, applyNoteTransform, t],
   );
 
   const renderNoteReference = useCallback(
@@ -323,6 +390,26 @@ export function ChatArea({ conversationId, noteContext }: ChatAreaProps) {
       )}
       <Conversation>
         <ConversationContent className="gap-0 p-4">
+          {messages !== null && hasMoreMessages ? (
+            <div className="mb-3">
+              <Button
+                size="xs"
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  void loadOlderMessages();
+                }}
+                disabled={isLoadingHistory}
+              >
+                <Sparkles className="size-3" />
+                {isLoadingHistory ? (
+                  <T>Loading earlier messages...</T>
+                ) : (
+                  <T>Load earlier messages</T>
+                )}
+              </Button>
+            </div>
+          ) : null}
           {messages === null ? null : messages.length === 0 ? (
             <ConversationEmptyState
               title={<T>Start a conversation</T>}
@@ -375,15 +462,32 @@ export function ChatArea({ conversationId, noteContext }: ChatAreaProps) {
                               <div className="border-border rounded-lg border">
                                 {shouldShowToolSummary && (
                                   <div className="space-y-1 p-2 text-xs">
-                                    {msg.toolCalls.map((tc, i) => (
-                                      <p key={`${tc.name}-${i}`} className="truncate text-[11px]">
-                                        <span className="text-muted-foreground mr-2">#{i + 1}</span>
-                                        <span className="font-medium">{tc.name}</span>
-                                        <span className="text-muted-foreground ml-1">
-                                          — {toolCallSummary(tc)}
-                                        </span>
-                                      </p>
-                                    ))}
+                                    {msg.toolCalls.map((tc, i) => {
+                                      const transformResult =
+                                        tc.name === "note_transform"
+                                          ? parseNoteTransformOutput(tc.output)
+                                          : null;
+                                      const summary = toolCallSummary(tc);
+                                      return (
+                                        <div key={`${tc.name}-${i}`} className="space-y-1">
+                                          <p className="truncate text-[11px]">
+                                            <span className="text-muted-foreground mr-2">
+                                              #{i + 1}
+                                            </span>
+                                            <span className="font-medium">{tc.name}</span>
+                                            <span className="text-muted-foreground ml-1">
+                                              — {summary}
+                                            </span>
+                                          </p>
+                                          {transformResult ? (
+                                            <p className="text-muted-foreground truncate text-[10px]">
+                                              <T>Preview:</T>{" "}
+                                              {truncate(transformResult.resultText, 120)}
+                                            </p>
+                                          ) : null}
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 )}
                                 <Dialog>
@@ -405,40 +509,75 @@ export function ChatArea({ conversationId, noteContext }: ChatAreaProps) {
                                       </DialogDescription>
                                     </DialogHeader>
                                     <div className="max-h-[65vh] space-y-3 overflow-y-auto pr-2">
-                                      {msg.toolCalls.map((tc, i) => (
-                                        <div
-                                          key={`${tc.name}-dialog-${i}`}
-                                          className="border-border rounded-lg border"
-                                        >
-                                          <div className="border-b px-3 py-2 text-sm">
-                                            <p className="font-medium">
-                                              #{i + 1} {tc.name}
-                                            </p>
-                                          </div>
-                                          <div className="space-y-3 p-3">
-                                            <div>
-                                              <p className="text-muted-foreground mb-1 text-xs uppercase">
-                                                <T>Input</T>
+                                      {msg.toolCalls.map((tc, i) => {
+                                        const transformResult =
+                                          tc.name === "note_transform"
+                                            ? parseNoteTransformOutput(tc.output)
+                                            : null;
+                                        const applyKey = `${msg._id}-${tc.name}-${i}`;
+                                        const isApplying = applyingTransforms.has(applyKey);
+
+                                        return (
+                                          <div
+                                            key={`${tc.name}-dialog-${i}`}
+                                            className="border-border rounded-lg border"
+                                          >
+                                            <div className="border-b px-3 py-2 text-sm">
+                                              <p className="font-medium">
+                                                #{i + 1} {tc.name}
                                               </p>
-                                              <CodeBlock
-                                                code={formatToolJson(tc.input)}
-                                                language="json"
-                                              />
+                                              {transformResult?.intent ? (
+                                                <p className="text-muted-foreground mt-1 text-xs">
+                                                  <T>Intent:</T> {transformResult.intent}
+                                                </p>
+                                              ) : null}
                                             </div>
-                                            {tc.output !== undefined && (
+                                            <div className="space-y-3 p-3">
                                               <div>
                                                 <p className="text-muted-foreground mb-1 text-xs uppercase">
-                                                  <T>Output</T>
+                                                  <T>Input</T>
                                                 </p>
                                                 <CodeBlock
-                                                  code={formatToolJson(tc.output)}
+                                                  code={formatToolJson(tc.input)}
                                                   language="json"
                                                 />
                                               </div>
-                                            )}
+                                              {tc.output !== undefined && (
+                                                <div>
+                                                  <p className="text-muted-foreground mb-1 text-xs uppercase">
+                                                    <T>Output</T>
+                                                  </p>
+                                                  <CodeBlock
+                                                    code={formatToolJson(tc.output)}
+                                                    language="json"
+                                                  />
+                                                  {transformResult ? (
+                                                    <Button
+                                                      size="xs"
+                                                      variant="outline"
+                                                      className="mt-2"
+                                                      disabled={isApplying}
+                                                      onClick={() =>
+                                                        void handleApplyTransform(
+                                                          applyKey,
+                                                          transformResult,
+                                                        )
+                                                      }
+                                                    >
+                                                      <Sparkles className="size-3" />
+                                                      {isApplying ? (
+                                                        <T>Applying...</T>
+                                                      ) : (
+                                                        <T>Apply to note</T>
+                                                      )}
+                                                    </Button>
+                                                  ) : null}
+                                                </div>
+                                              )}
+                                            </div>
                                           </div>
-                                        </div>
-                                      ))}
+                                        );
+                                      })}
                                     </div>
                                   </DialogContent>
                                 </Dialog>
