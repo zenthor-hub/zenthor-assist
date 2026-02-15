@@ -115,8 +115,8 @@ export default function TasksPage() {
   const [editingTask, setEditingTask] = useState<TaskData | undefined>();
   const [quickAddTitle, setQuickAddTitle] = useState("");
 
-  const allTasks = useQuery(api.tasks.list, {});
-  const doneTasks = useQuery(api.tasks.list, { status: "done" });
+  const allTasks = (useQuery(api.tasks.list, {}) as TaskData[] | undefined) ?? [];
+  const doneTasks = (useQuery(api.tasks.list, { status: "done" }) as TaskData[] | undefined) ?? [];
   const createTask = useMutation(api.tasks.create);
   const toggleComplete = useMutation(api.tasks.toggleComplete);
   const removeTask = useMutation(api.tasks.remove);

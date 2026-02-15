@@ -4,7 +4,17 @@ import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import type { Id } from "@zenthor-assist/backend/convex/_generated/dataModel";
 import { useMutation } from "convex/react";
 import { T, useGT } from "gt-next";
-import { AlertCircle, Check, MessageSquare, ShieldAlert, X } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  ListChecks,
+  MessageSquare,
+  PenSquare,
+  ShieldAlert,
+  Sparkles,
+  X,
+} from "lucide-react";
+import Link from "next/link";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
@@ -23,6 +33,7 @@ import {
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -42,6 +53,10 @@ import { useConvexMessages } from "./use-convex-messages";
 
 interface ChatAreaProps {
   conversationId: Id<"conversations">;
+  noteContext?: {
+    noteId: Id<"notes">;
+    title: string;
+  };
 }
 
 const TOOL_SUMMARY_MAX_LENGTH = 96;
@@ -209,7 +224,7 @@ function ApprovalCard({
   );
 }
 
-export function ChatArea({ conversationId }: ChatAreaProps) {
+export function ChatArea({ conversationId, noteContext }: ChatAreaProps) {
   const t = useGT();
   const {
     messages,
@@ -218,7 +233,72 @@ export function ChatArea({ conversationId }: ChatAreaProps) {
     pendingApprovals,
     preferences,
     sendMessage,
-  } = useConvexMessages(conversationId);
+    noteContext: resolvedNoteContext,
+  } = useConvexMessages(
+    conversationId,
+    noteContext
+      ? {
+          noteId: noteContext.noteId,
+          noteTitle: noteContext.title,
+        }
+      : undefined,
+  );
+
+  const hasActiveNoteContext = !!resolvedNoteContext;
+
+  const noteActions = hasActiveNoteContext
+    ? [
+        {
+          icon: Sparkles,
+          id: "summarize",
+          label: <T>Generate summary</T>,
+          command: "/summarize this note",
+        },
+        {
+          icon: ListChecks,
+          id: "task-list",
+          label: <T>Turn into task list</T>,
+          command: "/extract actions",
+        },
+        {
+          icon: PenSquare,
+          id: "rewrite",
+          label: <T>Rewrite in tone…</T>,
+          command: "/rewrite in a clear, concise tone",
+        },
+      ]
+    : null;
+
+  const handleQuickAction = useCallback(
+    async (command: string) => {
+      await sendMessage(command);
+    },
+    [sendMessage],
+  );
+
+  const renderNoteReference = useCallback(
+    (noteId: string) => {
+      const label = noteId.length > 18 ? `${noteId.slice(0, 8)}…${noteId.slice(-6)}` : noteId;
+      const isCurrentNote = noteId === resolvedNoteContext?.noteId;
+
+      return (
+        <div className="mt-1">
+          <Badge variant="outline" className="bg-muted/40">
+            {isCurrentNote ? (
+              <span className="text-muted-foreground text-[11px]">
+                <T>Current note:</T> {resolvedNoteContext?.title}
+              </span>
+            ) : (
+              <Link className="hover:underline" href={`/notes/${noteId}`}>
+                <T>Note:</T> {label}
+              </Link>
+            )}
+          </Badge>
+        </div>
+      );
+    },
+    [resolvedNoteContext?.noteId, resolvedNoteContext?.title],
+  );
 
   const handleSend = useCallback(
     async (message: { text: string }) => {
@@ -231,6 +311,16 @@ export function ChatArea({ conversationId }: ChatAreaProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      {hasActiveNoteContext && (
+        <div className="border-border border-b p-3">
+          <p className="text-sm font-medium">
+            <T>Editing note:</T> {resolvedNoteContext?.title}
+          </p>
+          <p className="text-muted-foreground mt-1 text-xs">
+            <T>Use quick actions or ask the assistant for a specific edit.</T>
+          </p>
+        </div>
+      )}
       <Conversation>
         <ConversationContent className="gap-0 p-4">
           {messages === null ? null : messages.length === 0 ? (
@@ -355,6 +445,7 @@ export function ChatArea({ conversationId }: ChatAreaProps) {
                               </div>
                             </div>
                           )}
+                          {msg.noteId ? renderNoteReference(msg.noteId) : null}
                         </>
                       )}
                     </MessageContent>
@@ -383,6 +474,22 @@ export function ChatArea({ conversationId }: ChatAreaProps) {
       </Conversation>
 
       <div className="border-t p-4">
+        {noteActions ? (
+          <div className="mb-3 flex flex-wrap gap-2">
+            {noteActions.map((action) => (
+              <Button
+                key={action.id}
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={() => handleQuickAction(action.command)}
+              >
+                <action.icon className="size-3" />
+                {action.label}
+              </Button>
+            ))}
+          </div>
+        ) : null}
         <PromptInput onSubmit={handleSend}>
           <PromptInputTextarea placeholder={t("Type a message...")} />
           <PromptInputFooter>

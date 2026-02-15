@@ -12,6 +12,18 @@ import Loader from "@/components/loader";
 import { PageWrapper } from "@/components/page-wrapper";
 import { Button } from "@/components/ui/button";
 
+interface ConversationListItem {
+  _id: string;
+  _creationTime: number;
+  channel: "whatsapp" | "web" | "telegram";
+  title?: string;
+  lastMessage: {
+    content: string;
+    role: "user" | "assistant" | "system";
+    createdAt: number;
+  } | null;
+}
+
 function formatRelativeTime(t: (key: string) => string, timestamp: number) {
   const diff = Date.now() - timestamp;
   const minutes = Math.floor(diff / 60_000);
@@ -26,14 +38,15 @@ function formatRelativeTime(t: (key: string) => string, timestamp: number) {
 
 export default function ChatOverviewPage() {
   const t = useGT();
-  const conversations = useQuery(api.conversations.listRecentWithLastMessage, {});
+  const rawConversations = useQuery(api.conversations.listRecentWithLastMessage, {});
+  const conversations = (rawConversations ?? []) as ConversationListItem[];
   const onboarding = useQuery(api.onboarding.getMyState, {});
   const createConversation = useMutation(api.conversations.create);
   const router = useRouter();
   const onboardingPending =
     onboarding !== undefined && onboarding !== null && onboarding.status !== "completed";
 
-  if (conversations === undefined) {
+  if (rawConversations === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <Loader />

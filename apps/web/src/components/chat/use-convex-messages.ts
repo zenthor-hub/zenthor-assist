@@ -18,6 +18,7 @@ interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
   _creationTime: number;
+  noteId?: string;
   toolCalls?: { name: string; input: unknown; output?: unknown }[];
   modelUsed?: string;
   streaming?: boolean;
@@ -32,12 +33,42 @@ export interface PendingApproval {
   status: "pending" | "approved" | "rejected";
 }
 
+interface NoteThreadContext {
+  noteId: Id<"notes">;
+  title: string;
+}
+
+interface UseConvexMessagesOptions {
+  noteId?: Id<"notes">;
+  noteTitle?: string;
+}
+
+interface RawMessage {
+  _id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  _creationTime: number;
+  noteId?: Id<"notes">;
+  toolCalls?: { name: string; input: unknown; output?: unknown }[];
+  modelUsed?: string;
+  streaming?: boolean;
+  status?: "pending" | "sent" | "delivered" | "failed";
+}
+
+interface RawApproval {
+  _id: string;
+  toolName: string;
+  toolInput: unknown;
+  status: "pending" | "approved" | "rejected";
+}
+
 function computePositions(
   messages: {
     _id: string;
     role: string;
     content: string;
     _creationTime: number;
+    noteId?: string;
     toolCalls?: { name: string; input: unknown; output?: unknown }[];
     modelUsed?: string;
     streaming?: boolean;
@@ -79,10 +110,14 @@ function computePositions(
   });
 }
 
-export function useConvexMessages(conversationId: Id<"conversations">) {
+export function useConvexMessages(
+  conversationId: Id<"conversations">,
+  options?: UseConvexMessagesOptions,
+) {
   const t = useGT();
-  const rawMessages = useQuery(api.messages.listByConversation, {
+  const rawMessages = useQuery(api.messages.listByConversationWindow, {
     conversationId,
+    ...(options?.noteId ? { noteId: options.noteId } : {}),
   });
   const isProcessing = useQuery(api.agent.isProcessing, { conversationId });
   const rawApprovals = useQuery(api.toolApprovals.getPendingByConversation, { conversationId });
@@ -92,16 +127,14 @@ export function useConvexMessages(conversationId: Id<"conversations">) {
   const messages = useMemo(() => {
     if (!rawMessages) return null;
     return computePositions(
-      rawMessages as {
-        _id: string;
-        role: string;
-        content: string;
-        _creationTime: number;
-        toolCalls?: { name: string; input: unknown; output?: unknown }[];
-        modelUsed?: string;
-        streaming?: boolean;
-        status?: "pending" | "sent" | "delivered" | "failed";
-      }[],
+      (rawMessages as RawMessage[]).map(
+        (msg): RawMessage => ({
+          ...msg,
+          role: msg.role,
+          _id: msg._id,
+          content: msg.content,
+        }),
+      ),
     );
   }, [rawMessages]);
 
@@ -117,20 +150,28 @@ export function useConvexMessages(conversationId: Id<"conversations">) {
   );
 
   const hasStreamingMessage = useMemo(
-    () => rawMessages?.some((msg) => msg.streaming) ?? false,
+    () => (rawMessages as RawMessage[] | undefined)?.some((msg) => msg.streaming) ?? false,
     [rawMessages],
   );
 
   const pendingApprovals: PendingApproval[] = useMemo(
     () =>
-      (rawApprovals ?? []).map((a) => ({
+      (rawApprovals ?? []).map((a: RawApproval) => ({
         _id: a._id,
         toolName: a.toolName,
         toolInput: a.toolInput,
-        status: a.status as PendingApproval["status"],
+        status: a.status,
       })),
     [rawApprovals],
   );
+
+  const noteContext: NoteThreadContext | null = useMemo(() => {
+    if (!options?.noteId) return null;
+    return {
+      noteId: options.noteId,
+      title: options.noteTitle ?? "Note",
+    };
+  }, [options?.noteId, options?.noteTitle]);
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -139,6 +180,7 @@ export function useConvexMessages(conversationId: Id<"conversations">) {
           conversationId,
           content,
           channel: "web",
+          ...(noteContext ? { noteId: noteContext.noteId } : {}),
         });
       } catch (error) {
         toast.error(t("Failed to send message"));
@@ -158,7 +200,7 @@ export function useConvexMessages(conversationId: Id<"conversations">) {
         });
       }
     },
-    [conversationId, sendMutation, t],
+    [conversationId, noteContext, sendMutation, t],
   );
 
   return {
@@ -167,6 +209,7 @@ export function useConvexMessages(conversationId: Id<"conversations">) {
     hasStreamingMessage,
     pendingApprovals,
     preferences,
+    noteContext,
     sendMessage,
   };
 }

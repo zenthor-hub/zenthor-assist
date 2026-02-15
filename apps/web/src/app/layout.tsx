@@ -77,7 +77,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={geistSans.variable} suppressHydrationWarning>
-      <body className={`${geistMono.variable} antialiased`}>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <ClerkProvider
           signInUrl="/sign-in"
           signInForceRedirectUrl="/home"
@@ -87,7 +87,7 @@ export default function RootLayout({
           appearance={{
             baseTheme: dark,
             variables: {
-              fontFamily: "var(--font-sans)",
+              fontFamily: "var(--font-geist-sans)",
               borderRadius: "0.375rem",
               colorPrimary: "var(--primary)",
               colorBackground: "var(--card)",

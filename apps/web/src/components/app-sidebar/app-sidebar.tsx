@@ -13,6 +13,7 @@ import {
   LayoutGrid,
   MessageCircle,
   MessageSquare,
+  NotebookText,
   Settings,
   Sparkles,
   SlidersHorizontal,
@@ -44,8 +45,16 @@ import { ThemeSwitcher } from "./theme-switcher";
 
 type SidebarMode = "nav" | "chats" | "settings";
 
+interface SidebarConversation {
+  _id: string;
+  _creationTime: number;
+  channel: "web" | "whatsapp" | "telegram";
+  title?: string;
+}
+
 function getSidebarModeFromPath(pathname: string): SidebarMode {
   if (pathname.startsWith("/chat")) return "chats";
+  if (pathname.startsWith("/notes")) return "chats";
   if (pathname.startsWith("/settings")) return "settings";
   return "nav";
 }
@@ -74,7 +83,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     setMode("nav");
   }
 
-  const conversations = useQuery(api.conversations.listRecentWithLastMessage, {});
+  const conversations = (useQuery(api.conversations.listRecentWithLastMessage, {}) ??
+    []) as SidebarConversation[];
   const archiveConversation = useMutation(api.conversations.archive);
 
   useEffect(() => {
@@ -102,7 +112,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       {/* ── Header: logo text ── */}
       <SidebarHeader className="px-3 pt-4 pb-6">
         <Link
-          href={"/chat/overview" as "/"}
+          href="/chat/overview"
           className="flex items-center group-data-[collapsible=icon]:justify-center"
         >
           <Image
@@ -139,7 +149,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === "/home"} tooltip={t("Home")}>
-                  <Link href={"/home" as "/"}>
+                  <Link href="/home">
                     <House className="size-4" />
                     <span>
                       <T>Home</T>
@@ -162,7 +172,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === "/tasks"} tooltip={t("Tasks")}>
-                  <Link href={"/tasks" as "/"}>
+                  <Link href="/tasks">
                     <CheckSquare className="size-4" />
                     <span>
                       <T>Tasks</T>
@@ -172,10 +182,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={pathname === "/skills"} tooltip={t("Skills")}>
-                  <Link href={"/skills" as "/"}>
+                  <Link href="/skills">
                     <Sparkles className="size-4" />
                     <span>
                       <T>Skills</T>
+                    </span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={pathname.startsWith("/notes")}
+                  tooltip={t("Notes")}
+                >
+                  <Link href="/notes">
+                    <NotebookText className="size-4" />
+                    <span>
+                      <T>Notes</T>
                     </span>
                   </Link>
                 </SidebarMenuButton>
@@ -220,7 +244,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     isActive={pathname === "/chat/overview"}
                     tooltip={t("Overview")}
                   >
-                    <Link href={"/chat/overview" as "/"}>
+                    <Link href="/chat/overview">
                       <LayoutGrid className="size-4" />
                       <span>
                         <T>Overview</T>
@@ -245,7 +269,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
                         return (
                           <SidebarMenuButton asChild isActive={isActive} tooltip={tooltip}>
-                            <Link href={`/chat/${conv._id}` as "/"}>
+                            <Link href={`/chat/${conv._id}`}>
                               {isWhatsAppConversation && (
                                 <MessageCircle className="size-4 text-emerald-600 dark:text-emerald-400" />
                               )}
@@ -300,7 +324,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     isActive={pathname === "/settings/general"}
                     tooltip={t("General")}
                   >
-                    <Link href={"/settings/general" as "/"}>
+                    <Link href="/settings/general">
                       <SlidersHorizontal className="size-4" />
                       <span>
                         <T>General</T>
@@ -314,7 +338,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     isActive={pathname === "/settings/profile"}
                     tooltip={t("Profile")}
                   >
-                    <Link href={"/settings/profile" as "/"}>
+                    <Link href="/settings/profile">
                       <UserCircle className="size-4" />
                       <span>
                         <T>Profile</T>
@@ -328,7 +352,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     isActive={pathname === "/settings/integrations"}
                     tooltip={t("Integrations")}
                   >
-                    <Link href={"/settings/integrations" as "/"}>
+                    <Link href="/settings/integrations">
                       <Blocks className="size-4" />
                       <span>
                         <T>Integrations</T>

@@ -11,6 +11,18 @@ import Loader from "@/components/loader";
 import { PageWrapper } from "@/components/page-wrapper";
 import { Button } from "@/components/ui/button";
 
+interface ConversationListItem {
+  _id: string;
+  _creationTime: number;
+  channel: "whatsapp" | "web" | "telegram";
+  title?: string;
+  lastMessage: {
+    content: string;
+    role: "user" | "assistant" | "system";
+    createdAt: number;
+  } | null;
+}
+
 function formatRelativeTime(t: (key: string) => string, timestamp: number) {
   const diff = Date.now() - timestamp;
   const minutes = Math.floor(diff / 60_000);
@@ -33,12 +45,13 @@ function getGreeting(t: (key: string) => string) {
 export default function HomePage() {
   const t = useGT();
   const { user } = useUser();
-  const conversations = useQuery(api.conversations.listRecentWithLastMessage, {});
+  const rawConversations = useQuery(api.conversations.listRecentWithLastMessage, {});
+  const conversations = (rawConversations ?? []) as ConversationListItem[];
   const onboarding = useQuery(api.onboarding.getMyState, {});
   const onboardingPending =
     onboarding !== undefined && onboarding !== null && onboarding.status !== "completed";
 
-  if (conversations === undefined) {
+  if (rawConversations === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <Loader />

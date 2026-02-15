@@ -53,6 +53,11 @@ interface TaskFormProps {
   task?: TaskData;
 }
 
+interface TaskProject {
+  _id: Id<"taskProjects">;
+  name: string;
+}
+
 function dueToDateInput(due?: DueObject): string {
   if (!due) return "";
   return due.date;
@@ -68,7 +73,7 @@ function dueToTimeInput(due?: DueObject): string {
 export function TaskForm({ open, onOpenChange, task }: TaskFormProps) {
   const createTask = useMutation(api.tasks.create);
   const updateTask = useMutation(api.tasks.update);
-  const projects = useQuery(api.taskProjects.list);
+  const projects = (useQuery(api.taskProjects.list) as TaskProject[] | undefined) ?? [];
   const t = useGT();
 
   const [title, setTitle] = useState(task?.title ?? "");

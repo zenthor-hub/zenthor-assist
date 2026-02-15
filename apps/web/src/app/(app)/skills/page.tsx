@@ -53,7 +53,7 @@ export default function SkillsPage() {
     );
   }
 
-  const adminSkills = skills ?? [];
+  const adminSkills = (skills as SkillData[] | undefined) ?? [];
 
   function handleEdit(skill: SkillData) {
     setEditingSkill(skill);
