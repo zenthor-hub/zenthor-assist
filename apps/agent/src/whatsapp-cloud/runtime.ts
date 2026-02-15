@@ -5,6 +5,39 @@ import { getConvexClient } from "../convex/client";
 import { logger, typedEvent } from "../observability/logger";
 import { sendCloudApiMessage, sendCloudApiQuickReplyButtons, sendTypingIndicator } from "./sender";
 
+type QuickReplyButton = {
+  id: string;
+  title: string;
+};
+
+type OutboundMetadata = {
+  kind: string;
+  toolName?: string;
+  buttons?: unknown;
+};
+
+function getQuickReplyButtons(
+  metadata: OutboundMetadata | undefined,
+): QuickReplyButton[] | undefined {
+  if (!metadata || !Array.isArray(metadata.buttons)) {
+    return undefined;
+  }
+
+  const validButtons = metadata.buttons.filter((button): button is QuickReplyButton => {
+    if (button === null || typeof button !== "object") return false;
+
+    const candidate = button as { id: unknown; title: unknown };
+    return (
+      typeof candidate.id === "string" &&
+      candidate.id.length > 0 &&
+      typeof candidate.title === "string" &&
+      candidate.title.length > 0
+    );
+  });
+
+  return validButtons.length > 0 ? validButtons : undefined;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -108,14 +141,13 @@ async function startOutboundLoop(accountId: string, ownerId: string): Promise<vo
       }
 
       try {
+        const metadata = job.payload.metadata as OutboundMetadata | undefined;
+        const buttons = getQuickReplyButtons(metadata);
+
         if (job.payload.metadata?.kind === "typing_indicator") {
           await sendTypingIndicator(job.to);
-        } else if (job.payload.metadata?.buttons && job.payload.metadata.buttons.length > 0) {
-          await sendCloudApiQuickReplyButtons(
-            job.to,
-            job.payload.content,
-            job.payload.metadata.buttons,
-          );
+        } else if (buttons !== undefined) {
+          await sendCloudApiQuickReplyButtons(job.to, job.payload.content, buttons);
         } else {
           await sendCloudApiMessage(job.to, job.payload.content);
         }
