@@ -119,6 +119,7 @@ const messageDoc = v.object({
   _id: v.id("messages"),
   _creationTime: v.number(),
   conversationId: v.id("conversations"),
+  noteId: v.optional(v.id("notes")),
   role: v.union(v.literal("user"), v.literal("assistant"), v.literal("system")),
   content: v.string(),
   channel: v.union(v.literal("whatsapp"), v.literal("web"), v.literal("telegram")),
