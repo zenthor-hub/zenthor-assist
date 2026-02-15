@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
 
+import {
+  buildNoteCreationReply,
+  parseNoteCreationFailure,
+  parseNoteCreationFromToolOutput,
+  resolveNoteCreationOutcomes,
+} from "./loop";
+
 // sanitizeForWhatsApp is not exported, so we re-implement the logic here for testing.
 // This validates the formatting rules match the implementation in loop.ts.
 function sanitizeForWhatsApp(text: string): string {
@@ -67,5 +74,96 @@ describe("sanitizeForWhatsApp", () => {
 
   it("leaves plain text unchanged", () => {
     expect(sanitizeForWhatsApp("Just plain text")).toBe("Just plain text");
+  });
+});
+
+describe("note creation tool parsing", () => {
+  it("parses note_created payloads from JSON objects", () => {
+    const summary = parseNoteCreationFromToolOutput({
+      action: "note_created",
+      noteId: "note_123",
+      title: "Travel Notes",
+      source: "chat-generated",
+    });
+
+    expect(summary).toEqual({
+      noteId: "note_123",
+      title: "Travel Notes",
+      source: "chat-generated",
+    });
+  });
+
+  it("parses note_created payloads from fenced JSON", () => {
+    const summary = parseNoteCreationFromToolOutput(
+      '```json\n{"action":"note_created","noteId":"note_456","title":"Rovaniemi","source":"chat-generated"}\n```',
+    );
+
+    expect(summary).toEqual({
+      noteId: "note_456",
+      title: "Rovaniemi",
+      source: "chat-generated",
+    });
+  });
+
+  it("extracts failures from error payloads", () => {
+    const failure = parseNoteCreationFailure({ error: "Could not create note: folder is private" });
+
+    expect(failure).toEqual({
+      toolName: "note_create",
+      reason: "Could not create note: folder is private",
+    });
+  });
+});
+
+describe("note creation reply composition", () => {
+  it("replaces message with success summary on web", () => {
+    const reply = buildNoteCreationReply(
+      [
+        {
+          name: "note_create",
+          input: {},
+          output: '{"action":"note_created","noteId":"note_1","title":"Trip Ideas"}',
+        },
+      ],
+      "web",
+    );
+    expect(reply).toBe("Created note(s):\n[Trip Ideas](/notes/note_1)");
+  });
+
+  it("replaces message with success summary on whatsapp", () => {
+    const reply = buildNoteCreationReply(
+      [
+        {
+          name: "note_create",
+          input: {},
+          output: '{"action":"note_created","noteId":"note_2","title":"Rovaniemi"}',
+        },
+      ],
+      "whatsapp",
+    );
+    expect(reply).toBe("Created note: Rovaniemi.");
+  });
+
+  it("returns an explicit failure when note_create has no verifiable output", () => {
+    const reply = buildNoteCreationReply([{ name: "note_create", input: {} }], "web");
+
+    expect(reply).toBe("Could not create note: Tool output did not confirm note creation.");
+  });
+
+  it("aggregates unresolved attempts and explicit errors", () => {
+    const outcomes = resolveNoteCreationOutcomes([
+      { name: "note_create", input: {}, output: "Could not create note: conversation not found" },
+      { name: "note_create", input: {}, output: "{not json" },
+    ]);
+
+    const reply = buildNoteCreationReply(
+      [{ name: "note_create", input: {}, output: "Could not create note: conversation not found" }],
+      "whatsapp",
+      outcomes,
+    );
+
+    expect(reply).toBe(
+      "Could not create note: conversation not found | Tool output did not confirm note creation.",
+    );
   });
 });
