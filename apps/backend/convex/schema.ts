@@ -52,6 +52,7 @@ export default defineSchema({
 
   messages: defineTable({
     conversationId: v.id("conversations"),
+    noteId: v.optional(v.id("notes")),
     role: v.union(v.literal("user"), v.literal("assistant"), v.literal("system")),
     content: v.string(),
     channel: v.union(v.literal("whatsapp"), v.literal("web"), v.literal("telegram")),
@@ -86,7 +87,42 @@ export default defineSchema({
       v.literal("delivered"),
       v.literal("failed"),
     ),
-  }).index("by_conversationId", ["conversationId"]),
+  })
+    .index("by_conversationId", ["conversationId"])
+    .index("by_noteId", ["noteId"]),
+
+  noteFolders: defineTable({
+    userId: v.id("users"),
+    name: v.string(),
+    color: v.string(),
+    position: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_userId_position", ["userId", "position"]),
+
+  notes: defineTable({
+    userId: v.id("users"),
+    folderId: v.optional(v.id("noteFolders")),
+    title: v.string(),
+    content: v.string(),
+    isArchived: v.boolean(),
+    isPinned: v.optional(v.boolean()),
+    source: v.union(v.literal("manual"), v.literal("chat-generated"), v.literal("imported")),
+    conversationId: v.optional(v.id("conversations")),
+    lastAiActionAt: v.optional(v.number()),
+    lastAiModel: v.optional(v.string()),
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_folderId", ["folderId"])
+    .index("by_userId_isArchived", ["userId", "isArchived"])
+    .index("by_userId_updatedAt", ["userId", "updatedAt"])
+    .index("by_updatedAt", ["updatedAt"])
+    .index("by_conversationId", ["conversationId"]),
 
   userPreferences: defineTable({
     userId: v.id("users"),

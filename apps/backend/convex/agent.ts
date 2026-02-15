@@ -109,6 +109,12 @@ const conversationDoc = v.object({
   status: v.union(v.literal("active"), v.literal("archived")),
 });
 
+const noteContextDoc = v.object({
+  noteId: v.id("notes"),
+  title: v.string(),
+  contentPreview: v.string(),
+});
+
 const messageDoc = v.object({
   _id: v.id("messages"),
   _creationTime: v.number(),
@@ -412,6 +418,7 @@ export const getConversationContext = serviceQuery({
       agent: v.union(agentDoc, v.null()),
       preferences: v.union(preferencesDoc, v.null()),
       onboarding: v.union(onboardingDoc, v.null()),
+      noteContext: v.union(noteContextDoc, v.null()),
     }),
     v.null(),
   ),
@@ -423,10 +430,30 @@ export const getConversationContext = serviceQuery({
     const contact = conversation.contactId ? await ctx.db.get(conversation.contactId) : null;
     const ownerUserId = conversation.userId ?? contact?.userId;
 
-    const messages = await ctx.db
-      .query("messages")
-      .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))
-      .collect();
+    const noteContext = ownerUserId
+      ? await ctx.db
+          .query("notes")
+          .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))
+          .filter((q) => q.eq(q.field("isArchived"), false))
+          .collect()
+          .then((noteList) => noteList.sort((a, b) => b.updatedAt - a.updatedAt)[0] ?? null)
+      : null;
+
+    const messageLimit = noteContext ? 180 : 360;
+    const messages = noteContext
+      ? await ctx.db
+          .query("messages")
+          .withIndex("by_noteId", (q) => q.eq("noteId", noteContext._id))
+          .filter((q) => q.eq(q.field("conversationId"), args.conversationId))
+          .order("desc")
+          .take(messageLimit)
+          .then((msgList) => msgList.reverse())
+      : await ctx.db
+          .query("messages")
+          .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))
+          .order("desc")
+          .take(messageLimit)
+          .then((msgList) => msgList.reverse());
 
     let skills = ownerUserId
       ? await ctx.db
@@ -463,6 +490,22 @@ export const getConversationContext = serviceQuery({
           .unique()
       : null;
 
-    return { conversation, user, contact, messages, skills, agent, preferences, onboarding };
+    return {
+      conversation,
+      user,
+      contact,
+      messages,
+      skills,
+      agent,
+      preferences,
+      onboarding,
+      noteContext: noteContext
+        ? {
+            noteId: noteContext._id,
+            title: noteContext.title,
+            contentPreview: noteContext.content.slice(0, 2_000),
+          }
+        : null,
+    };
   },
 });

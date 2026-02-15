@@ -92,12 +92,14 @@ export const search = action({
       ids: results.map((r) => r._id),
     });
 
-    return docs.map((doc, i) => ({
-      id: doc._id,
-      content: doc.content,
-      source: doc.source,
-      score: results[i]?._score ?? 0,
-    }));
+    return docs.map(
+      (doc: { _id: string; content: string; source: "conversation" | "manual" }, i) => ({
+        id: doc._id,
+        content: doc.content,
+        source: doc.source,
+        score: results[i]?._score ?? 0,
+      }),
+    );
   },
 });
 

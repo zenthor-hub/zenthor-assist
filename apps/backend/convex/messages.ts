@@ -1,6 +1,8 @@
 import { ConvexError, v } from "convex/values";
 
-import { authMutation, authQuery, serviceMutation } from "./auth";
+import type { Id } from "./_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { authMutation, authQuery, serviceMutation, serviceQuery } from "./auth";
 import { getConversationIfOwnedByUser } from "./lib/auth";
 
 const toolCallValidator = v.optional(
@@ -32,6 +34,7 @@ const messageDoc = v.object({
   _id: v.id("messages"),
   _creationTime: v.number(),
   conversationId: v.id("conversations"),
+  noteId: v.optional(v.id("notes")),
   role: v.union(v.literal("user"), v.literal("assistant"), v.literal("system")),
   content: v.string(),
   channel: v.union(v.literal("whatsapp"), v.literal("web"), v.literal("telegram")),
@@ -47,10 +50,42 @@ const messageDoc = v.object({
   ),
 });
 
+type DbCtx = Pick<QueryCtx | MutationCtx, "db">;
+type MessageNoteContext = Pick<QueryCtx | MutationCtx, "db">;
+
+async function getConversationOwnerUserId(ctx: DbCtx, conversationId: Id<"conversations">) {
+  const conversation = await ctx.db.get(conversationId);
+  if (!conversation) return null;
+  return conversation.userId ?? null;
+}
+
+async function getOwnedNote(ctx: MessageNoteContext, noteId: Id<"notes">, userId: Id<"users">) {
+  const note = await ctx.db.get(noteId);
+  if (!note || note.userId !== userId || note.isArchived) return null;
+  return note;
+}
+
+async function ensureNoteConversationMatch(
+  ctx: MessageNoteContext,
+  noteId: Id<"notes">,
+  conversationId: Id<"conversations">,
+  userId: Id<"users">,
+) {
+  const note = await getOwnedNote(ctx, noteId, userId);
+  if (!note) {
+    throw new ConvexError("Note not found");
+  }
+
+  if (note.conversationId && note.conversationId !== conversationId) {
+    throw new ConvexError("Conversation does not match note");
+  }
+}
+
 export const send = authMutation({
   args: {
     conversationId: v.id("conversations"),
     content: v.string(),
+    noteId: v.optional(v.id("notes")),
     channel: v.optional(v.union(v.literal("whatsapp"), v.literal("web"), v.literal("telegram"))),
   },
   returns: v.union(v.id("messages"), v.null()),
@@ -58,8 +93,13 @@ export const send = authMutation({
     const conv = await getConversationIfOwnedByUser(ctx, ctx.auth.user._id, args.conversationId);
     if (!conv) return null;
 
+    if (args.noteId) {
+      await ensureNoteConversationMatch(ctx, args.noteId, args.conversationId, ctx.auth.user._id);
+    }
+
     const messageId = await ctx.db.insert("messages", {
       conversationId: args.conversationId,
+      noteId: args.noteId,
       role: "user",
       content: args.content,
       channel: conv.channel,
@@ -85,6 +125,7 @@ export const sendService = serviceMutation({
   args: {
     conversationId: v.id("conversations"),
     content: v.string(),
+    noteId: v.optional(v.id("notes")),
     channel: v.optional(v.union(v.literal("whatsapp"), v.literal("web"), v.literal("telegram"))),
   },
   returns: v.id("messages"),
@@ -94,8 +135,15 @@ export const sendService = serviceMutation({
       throw new ConvexError("Conversation not found");
     }
 
+    if (args.noteId) {
+      const userId = conversation.userId;
+      if (!userId) throw new ConvexError("Conversation is not user-owned");
+      await ensureNoteConversationMatch(ctx, args.noteId, args.conversationId, userId);
+    }
+
     const messageId = await ctx.db.insert("messages", {
       conversationId: args.conversationId,
+      noteId: args.noteId,
       role: "user",
       content: args.content,
       channel: conversation.channel,
@@ -121,6 +169,7 @@ export const addAssistantMessage = serviceMutation({
   args: {
     conversationId: v.id("conversations"),
     content: v.string(),
+    noteId: v.optional(v.id("notes")),
     channel: v.optional(v.union(v.literal("whatsapp"), v.literal("web"), v.literal("telegram"))),
     toolCalls: toolCallValidator,
     modelUsed: v.optional(v.string()),
@@ -134,6 +183,7 @@ export const addAssistantMessage = serviceMutation({
 
     return await ctx.db.insert("messages", {
       conversationId: args.conversationId,
+      noteId: args.noteId,
       role: "assistant",
       content: args.content,
       channel: conversation.channel,
@@ -148,6 +198,7 @@ export const addSummaryMessage = serviceMutation({
   args: {
     conversationId: v.id("conversations"),
     content: v.string(),
+    noteId: v.optional(v.id("notes")),
     channel: v.optional(v.union(v.literal("whatsapp"), v.literal("web"), v.literal("telegram"))),
   },
   returns: v.id("messages"),
@@ -159,6 +210,7 @@ export const addSummaryMessage = serviceMutation({
 
     return await ctx.db.insert("messages", {
       conversationId: args.conversationId,
+      noteId: args.noteId,
       role: "system",
       content: args.content,
       channel: conversation.channel,
@@ -170,6 +222,7 @@ export const addSummaryMessage = serviceMutation({
 export const createPlaceholder = serviceMutation({
   args: {
     conversationId: v.id("conversations"),
+    noteId: v.optional(v.id("notes")),
     channel: v.optional(v.union(v.literal("whatsapp"), v.literal("web"))),
   },
   returns: v.id("messages"),
@@ -181,6 +234,7 @@ export const createPlaceholder = serviceMutation({
 
     return await ctx.db.insert("messages", {
       conversationId: args.conversationId,
+      noteId: args.noteId,
       role: "assistant",
       content: "",
       channel: conversation.channel,
@@ -287,6 +341,98 @@ export const listByConversation = authQuery({
       .query("messages")
       .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))
       .collect();
+  },
+});
+
+export const listByConversationWindow = authQuery({
+  args: {
+    conversationId: v.id("conversations"),
+    noteId: v.optional(v.id("notes")),
+    beforeMessageId: v.optional(v.id("messages")),
+    limit: v.optional(v.number()),
+  },
+  returns: v.array(messageDoc),
+  handler: async (ctx, args) => {
+    const conv = await getConversationIfOwnedByUser(ctx, ctx.auth.user._id, args.conversationId);
+    if (!conv) return [];
+
+    const limit = Math.min(args.limit ?? 180, 320);
+
+    let query = args.noteId
+      ? ctx.db
+          .query("messages")
+          .withIndex("by_noteId", (q) => q.eq("noteId", args.noteId))
+          .filter((q) => q.eq(q.field("conversationId"), args.conversationId))
+      : ctx.db
+          .query("messages")
+          .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId));
+
+    if (args.beforeMessageId) {
+      const beforeMessage = await ctx.db.get(args.beforeMessageId);
+      if (beforeMessage) {
+        query = query.filter((q) => q.lt(q.field("_creationTime"), beforeMessage._creationTime));
+      }
+    }
+
+    const messages = await query.order("desc").take(limit);
+    return messages.reverse();
+  },
+});
+
+export const listByConversationWindowForConversation = serviceQuery({
+  args: {
+    conversationId: v.id("conversations"),
+    noteId: v.optional(v.id("notes")),
+    beforeMessageId: v.optional(v.id("messages")),
+    limit: v.optional(v.number()),
+  },
+  returns: v.array(messageDoc),
+  handler: async (ctx, args) => {
+    const ownerId = await getConversationOwnerUserId(ctx, args.conversationId);
+    if (!ownerId) return [];
+
+    const limit = Math.min(args.limit ?? 180, 320);
+
+    let query = args.noteId
+      ? ctx.db
+          .query("messages")
+          .withIndex("by_noteId", (q) => q.eq("noteId", args.noteId))
+          .filter((q) => q.eq(q.field("conversationId"), args.conversationId))
+      : ctx.db
+          .query("messages")
+          .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId));
+
+    if (args.beforeMessageId) {
+      const beforeMessage = await ctx.db.get(args.beforeMessageId);
+      if (beforeMessage) {
+        query = query.filter((q) => q.lt(q.field("_creationTime"), beforeMessage._creationTime));
+      }
+    }
+
+    const messages = await query.order("desc").take(limit);
+    return messages.reverse();
+  },
+});
+
+export const listForNote = authQuery({
+  args: { noteId: v.id("notes"), limit: v.optional(v.number()) },
+  returns: v.array(messageDoc),
+  handler: async (ctx, args) => {
+    const note = await ctx.db.get(args.noteId);
+    if (!note || note.userId !== ctx.auth.user._id || !note.conversationId) return [];
+
+    const conv = await getConversationIfOwnedByUser(ctx, ctx.auth.user._id, note.conversationId);
+    if (!conv) return [];
+
+    const limit = Math.min(args.limit ?? 180, 320);
+    const messages = await ctx.db
+      .query("messages")
+      .withIndex("by_noteId", (q) => q.eq("noteId", args.noteId))
+      .filter((q) => q.eq(q.field("conversationId"), note.conversationId))
+      .order("desc")
+      .take(limit);
+
+    return messages.reverse();
   },
 });
 
