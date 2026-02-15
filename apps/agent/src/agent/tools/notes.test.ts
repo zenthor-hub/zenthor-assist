@@ -14,6 +14,7 @@ type SetupResult = {
   tools: ReturnType<typeof createNoteTools>;
   mockQuery: ReturnType<typeof vi.fn>;
   mockMutation: ReturnType<typeof vi.fn>;
+  mockLoggerWarn: ReturnType<typeof vi.fn>;
 };
 
 const conversationId = "conv-note-1" as Parameters<typeof createNoteTools>[0];
@@ -21,27 +22,42 @@ const conversationId = "conv-note-1" as Parameters<typeof createNoteTools>[0];
 function makeToolResultMock(overrides?: { serviceSecret?: string }) {
   const mockQuery = vi.fn();
   const mockMutation = vi.fn();
+  const mockLoggerWarn = vi.fn();
 
   vi.doMock("@zenthor-assist/env/agent", () => ({
     env: {
       AGENT_SECRET: overrides?.serviceSecret ?? "agent-secret",
     },
   }));
+  vi.doMock("../../observability/logger", () => ({
+    logger: {
+      warn: mockLoggerWarn,
+      info: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+      lineInfo: vi.fn(),
+      lineWarn: vi.fn(),
+      lineError: vi.fn(),
+      exception: vi.fn(),
+      flush: vi.fn(),
+    },
+  }));
   vi.doMock("../../convex/client", () => ({
     getConvexClient: () => ({ query: mockQuery, mutation: mockMutation }),
   }));
 
-  return { mockQuery, mockMutation };
+  return { mockQuery, mockMutation, mockLoggerWarn };
 }
 
 async function setupTools(overrides?: { serviceSecret?: string }): Promise<SetupResult> {
-  const { mockQuery, mockMutation } = makeToolResultMock(overrides);
+  const { mockQuery, mockMutation, mockLoggerWarn } = makeToolResultMock(overrides);
   const { createNoteTools } = await import("./notes");
 
   return {
     tools: createNoteTools(conversationId),
     mockQuery,
     mockMutation,
+    mockLoggerWarn,
   };
 }
 
@@ -195,10 +211,23 @@ describe("createNoteTools", () => {
     expect(parsed.source).toBe("chat-generated");
   });
 
-  it("sanitizes invalid folder IDs for create and update calls", async () => {
-    const { tools, mockQuery, mockMutation } = await setupTools();
+  it("sanitizes invalid folder IDs for note operations", async () => {
+    const { tools, mockQuery, mockMutation, mockLoggerWarn } = await setupTools();
     mockQuery.mockResolvedValue([]);
     mockMutation.mockResolvedValue("note-without-folder");
+
+    await toolExecute(tools.note_list, {
+      limit: 10,
+      folderId: "trips",
+    });
+    expect(mockQuery).toHaveBeenCalledWith(api.notes.listForConversation, {
+      serviceKey: "agent-secret",
+      conversationId,
+      folderId: undefined,
+      isArchived: undefined,
+      limit: 10,
+    });
+    expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
 
     const created = (await toolExecute(tools.note_create, {
       title: "Draft",
@@ -215,12 +244,21 @@ describe("createNoteTools", () => {
       }),
     );
     expect(created).toContain("noteId");
+    expect(mockLoggerWarn).toHaveBeenCalledTimes(2);
 
-    const generateCall = (await toolExecute(tools.note_generate_from_conversation, {
+    const generateWithUuid = (await toolExecute(tools.note_generate_from_conversation, {
       title: "Generated",
       folderId: "trips",
       messageLimit: 10,
     })) as string;
+    expect(mockLoggerWarn).toHaveBeenCalledTimes(3);
+    expect(mockLoggerWarn).toHaveBeenLastCalledWith(
+      "agent.notes.tool.folder_id_sanitized",
+      expect.objectContaining({
+        toolName: "note_generate_from_conversation",
+        reason: "invalid-format",
+      }),
+    );
 
     expect(mockQuery).toHaveBeenCalledWith(api.messages.listByConversationWindowForConversation, {
       serviceKey: "agent-secret",
@@ -235,7 +273,22 @@ describe("createNoteTools", () => {
         folderId: undefined,
       }),
     );
-    expect(generateCall).toContain("note_created");
+    expect(generateWithUuid).toContain("note_created");
+
+    const generateWithEmpty = (await toolExecute(tools.note_generate_from_conversation, {
+      title: "Generated",
+      folderId: "   ",
+      messageLimit: 10,
+    })) as string;
+    expect(mockLoggerWarn).toHaveBeenCalledTimes(4);
+    expect(mockLoggerWarn).toHaveBeenLastCalledWith(
+      "agent.notes.tool.folder_id_sanitized",
+      expect.objectContaining({
+        toolName: "note_generate_from_conversation",
+        reason: "empty",
+      }),
+    );
+    expect(generateWithEmpty).toContain("note_created");
 
     await toolExecute(tools.note_move, {
       noteId: "note-without-folder",
@@ -250,6 +303,7 @@ describe("createNoteTools", () => {
         folderId: undefined,
       }),
     );
+    expect(mockLoggerWarn).toHaveBeenCalledTimes(5);
 
     await toolExecute(tools.note_update, {
       noteId: "note-without-folder",
@@ -264,6 +318,7 @@ describe("createNoteTools", () => {
         folderId: undefined,
       }),
     );
+    expect(mockLoggerWarn).toHaveBeenCalledTimes(6);
   });
 
   it("passes through a valid folderId when it matches Convex ID shape", async () => {
