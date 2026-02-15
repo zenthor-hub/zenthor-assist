@@ -108,13 +108,18 @@ function normalizeNoteFolderId(folderId?: string): NoteFolderIdNormalization {
   return { value: normalized as Id<"noteFolders">, wasSanitized: false };
 }
 
+type FolderIdResolution = {
+  value: Id<"noteFolders"> | undefined;
+  warning?: string;
+};
+
 function resolveNoteFolderId(
   conversationId: Id<"conversations">,
   toolName: string,
   folderId?: string,
-): Id<"noteFolders"> | undefined {
+): FolderIdResolution {
   const normalized = normalizeNoteFolderId(folderId);
-  if (!normalized.wasSanitized) return normalized.value;
+  if (!normalized.wasSanitized) return { value: normalized.value };
 
   void logger.warn("agent.notes.tool.folder_id_sanitized", {
     toolName,
@@ -123,7 +128,12 @@ function resolveNoteFolderId(
     rawFolderId: normalized.rawValue ?? folderId,
   });
 
-  return undefined;
+  const warning =
+    normalized.reason === "empty"
+      ? "(Note: provided folder ID was empty and was ignored.)"
+      : `(Note: folder ID "${normalized.rawValue ?? folderId}" was not recognized; operation proceeded without a folder.)`;
+
+  return { value: undefined, warning };
 }
 
 function summarizeText(content: string, maxChars = 500) {
@@ -219,16 +229,21 @@ export function createNoteTools(conversationId: Id<"conversations">) {
       inputSchema: listNotesInput,
       execute: async ({ folderId, isArchived, limit }) => {
         try {
+          const { value: resolvedFolderId, warning } = resolveNoteFolderId(
+            conversationId,
+            "note_list",
+            folderId,
+          );
           const client = getConvexClient();
           const notes = await client.query(api.notes.listForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
-            folderId: resolveNoteFolderId(conversationId, "note_list", folderId),
+            folderId: resolvedFolderId,
             isArchived,
             limit,
           });
-          if (!notes.length) return "No notes found.";
-          return notes.map(toNoteResult).join("\n\n");
+          const result = notes.length ? notes.map(toNoteResult).join("\n\n") : "No notes found.";
+          return warning ? `${result}\n\n${warning}` : result;
         } catch (error) {
           return getServiceError(error instanceof Error ? error.message : String(error));
         }
@@ -258,6 +273,11 @@ export function createNoteTools(conversationId: Id<"conversations">) {
       inputSchema: createNoteInput,
       execute: async ({ title, content, folderId, source }) => {
         try {
+          const { value: resolvedFolderId, warning } = resolveNoteFolderId(
+            conversationId,
+            "note_create",
+            folderId,
+          );
           const normalizedTitle = sanitizeNoteToolOutput(title);
           const client = getConvexClient();
           const id = await client.mutation(api.notes.createForConversation, {
@@ -265,10 +285,11 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             conversationId,
             title: normalizedTitle,
             content,
-            folderId: resolveNoteFolderId(conversationId, "note_create", folderId),
+            folderId: resolvedFolderId,
             source: source ?? "chat-generated",
           });
-          return noteCreatedResult(id, normalizedTitle, source ?? "chat-generated");
+          const result = noteCreatedResult(id, normalizedTitle, source ?? "chat-generated");
+          return warning ? `${result}\n\n${warning}` : result;
         } catch (error) {
           return getServiceError(error instanceof Error ? error.message : String(error));
         }
@@ -279,6 +300,11 @@ export function createNoteTools(conversationId: Id<"conversations">) {
       inputSchema: updateNoteInput,
       execute: async ({ noteId, title, content, folderId, isArchived, metadata }) => {
         try {
+          const { value: resolvedFolderId, warning } = resolveNoteFolderId(
+            conversationId,
+            "note_update",
+            folderId,
+          );
           const client = getConvexClient();
           await client.mutation(api.notes.updateForConversation, {
             serviceKey: env.AGENT_SECRET,
@@ -286,11 +312,12 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             id: noteId as Id<"notes">,
             title,
             content,
-            folderId: resolveNoteFolderId(conversationId, "note_update", folderId),
+            folderId: resolvedFolderId,
             isArchived,
             metadata,
           });
-          return `Updated note ${noteId}.`;
+          const result = `Updated note ${noteId}.`;
+          return warning ? `${result}\n\n${warning}` : result;
         } catch (error) {
           return getServiceError(error instanceof Error ? error.message : String(error));
         }
@@ -301,14 +328,20 @@ export function createNoteTools(conversationId: Id<"conversations">) {
       inputSchema: moveNoteInput,
       execute: async ({ noteId, folderId }) => {
         try {
+          const { value: resolvedFolderId, warning } = resolveNoteFolderId(
+            conversationId,
+            "note_move",
+            folderId,
+          );
           const client = getConvexClient();
           await client.mutation(api.notes.moveToFolderForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
             id: noteId as Id<"notes">,
-            folderId: resolveNoteFolderId(conversationId, "note_move", folderId),
+            folderId: resolvedFolderId,
           });
-          return `Moved note ${noteId}.`;
+          const result = `Moved note ${noteId}.`;
+          return warning ? `${result}\n\n${warning}` : result;
         } catch (error) {
           return getServiceError(error instanceof Error ? error.message : String(error));
         }
@@ -337,6 +370,11 @@ export function createNoteTools(conversationId: Id<"conversations">) {
       inputSchema: generateFromConversationInput,
       execute: async ({ title, folderId, source, messageLimit }) => {
         try {
+          const { value: resolvedFolderId, warning } = resolveNoteFolderId(
+            conversationId,
+            "note_generate_from_conversation",
+            folderId,
+          );
           const normalizedTitle = sanitizeNoteToolOutput(title);
           const client = getConvexClient();
           const messages = await client.query(
@@ -361,14 +399,11 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             conversationId,
             title: normalizedTitle,
             content: `## Source conversation\n${body || "(No messages)"}`,
-            folderId: resolveNoteFolderId(
-              conversationId,
-              "note_generate_from_conversation",
-              folderId,
-            ),
+            folderId: resolvedFolderId,
             source: source ?? "chat-generated",
           });
-          return noteCreatedResult(id, normalizedTitle, source ?? "chat-generated");
+          const result = noteCreatedResult(id, normalizedTitle, source ?? "chat-generated");
+          return warning ? `${result}\n\n${warning}` : result;
         } catch (error) {
           return getServiceError(error instanceof Error ? error.message : String(error));
         }

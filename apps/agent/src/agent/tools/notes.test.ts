@@ -216,10 +216,10 @@ describe("createNoteTools", () => {
     mockQuery.mockResolvedValue([]);
     mockMutation.mockResolvedValue("note-without-folder");
 
-    await toolExecute(tools.note_list, {
+    const listResult = (await toolExecute(tools.note_list, {
       limit: 10,
       folderId: "trips",
-    });
+    })) as string;
     expect(mockQuery).toHaveBeenCalledWith(api.notes.listForConversation, {
       serviceKey: "agent-secret",
       conversationId,
@@ -228,6 +228,7 @@ describe("createNoteTools", () => {
       limit: 10,
     });
     expect(mockLoggerWarn).toHaveBeenCalledTimes(1);
+    expect(listResult).toContain("was not recognized");
 
     const created = (await toolExecute(tools.note_create, {
       title: "Draft",
@@ -244,6 +245,7 @@ describe("createNoteTools", () => {
       }),
     );
     expect(created).toContain("noteId");
+    expect(created).toContain("was not recognized");
     expect(mockLoggerWarn).toHaveBeenCalledTimes(2);
 
     const generateWithUuid = (await toolExecute(tools.note_generate_from_conversation, {
@@ -274,6 +276,7 @@ describe("createNoteTools", () => {
       }),
     );
     expect(generateWithUuid).toContain("note_created");
+    expect(generateWithUuid).toContain("was not recognized");
 
     const generateWithEmpty = (await toolExecute(tools.note_generate_from_conversation, {
       title: "Generated",
@@ -289,11 +292,12 @@ describe("createNoteTools", () => {
       }),
     );
     expect(generateWithEmpty).toContain("note_created");
+    expect(generateWithEmpty).toContain("was empty");
 
-    await toolExecute(tools.note_move, {
+    const moveResult = (await toolExecute(tools.note_move, {
       noteId: "note-without-folder",
       folderId: "abcde",
-    });
+    })) as string;
     expect(mockMutation).toHaveBeenCalledWith(
       api.notes.moveToFolderForConversation,
       expect.objectContaining({
@@ -304,11 +308,12 @@ describe("createNoteTools", () => {
       }),
     );
     expect(mockLoggerWarn).toHaveBeenCalledTimes(5);
+    expect(moveResult).toContain("was not recognized");
 
-    await toolExecute(tools.note_update, {
+    const updateResult = (await toolExecute(tools.note_update, {
       noteId: "note-without-folder",
       folderId: "00000000-0000-0000-0000-000000000000",
-    });
+    })) as string;
     expect(mockMutation).toHaveBeenCalledWith(
       api.notes.updateForConversation,
       expect.objectContaining({
@@ -319,6 +324,7 @@ describe("createNoteTools", () => {
       }),
     );
     expect(mockLoggerWarn).toHaveBeenCalledTimes(6);
+    expect(updateResult).toContain("was not recognized");
   });
 
   it("passes through a valid folderId when it matches Convex ID shape", async () => {
