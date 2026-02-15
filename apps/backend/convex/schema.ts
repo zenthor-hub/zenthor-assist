@@ -95,6 +95,44 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_userId", ["userId"]),
 
+  userOnboarding: defineTable({
+    userId: v.id("users"),
+    status: v.union(v.literal("pending"), v.literal("in_progress"), v.literal("completed")),
+    currentStep: v.union(
+      v.literal("preferredName"),
+      v.literal("agentName"),
+      v.literal("timezone"),
+      v.literal("communicationStyle"),
+      v.literal("focusArea"),
+      v.literal("boundaries"),
+    ),
+    lastPromptedStep: v.optional(
+      v.union(
+        v.literal("preferredName"),
+        v.literal("agentName"),
+        v.literal("timezone"),
+        v.literal("communicationStyle"),
+        v.literal("focusArea"),
+        v.literal("boundaries"),
+      ),
+    ),
+    onboardingConversationId: v.optional(v.id("conversations")),
+    answers: v.optional(
+      v.object({
+        preferredName: v.optional(v.string()),
+        agentName: v.optional(v.string()),
+        timezone: v.optional(v.string()),
+        communicationStyle: v.optional(
+          v.union(v.literal("concise"), v.literal("balanced"), v.literal("detailed")),
+        ),
+        focusArea: v.optional(v.string()),
+        boundaries: v.optional(v.string()),
+      }),
+    ),
+    completedAt: v.optional(v.number()),
+    updatedAt: v.number(),
+  }).index("by_userId", ["userId"]),
+
   skills: defineTable({
     ownerUserId: v.optional(v.id("users")),
     name: v.string(),
@@ -253,7 +291,6 @@ export default defineSchema({
         v.object({
           kind: v.string(),
           toolName: v.optional(v.string()),
-          buttons: v.optional(v.array(v.object({ id: v.string(), title: v.string() }))),
         }),
       ),
     }),
@@ -395,44 +432,6 @@ export default defineSchema({
   })
     .index("by_channel_messageId", ["channel", "channelMessageId"])
     .index("by_createdAt", ["createdAt"]),
-
-  userOnboarding: defineTable({
-    userId: v.id("users"),
-    status: v.union(v.literal("pending"), v.literal("in_progress"), v.literal("completed")),
-    currentStep: v.union(
-      v.literal("preferredName"),
-      v.literal("agentName"),
-      v.literal("timezone"),
-      v.literal("communicationStyle"),
-      v.literal("focusArea"),
-      v.literal("boundaries"),
-    ),
-    lastPromptedStep: v.optional(
-      v.union(
-        v.literal("preferredName"),
-        v.literal("agentName"),
-        v.literal("timezone"),
-        v.literal("communicationStyle"),
-        v.literal("focusArea"),
-        v.literal("boundaries"),
-      ),
-    ),
-    onboardingConversationId: v.optional(v.id("conversations")),
-    answers: v.optional(
-      v.object({
-        preferredName: v.optional(v.string()),
-        agentName: v.optional(v.string()),
-        timezone: v.optional(v.string()),
-        communicationStyle: v.optional(
-          v.union(v.literal("concise"), v.literal("balanced"), v.literal("detailed")),
-        ),
-        focusArea: v.optional(v.string()),
-        boundaries: v.optional(v.string()),
-      }),
-    ),
-    completedAt: v.optional(v.number()),
-    updatedAt: v.number(),
-  }).index("by_userId", ["userId"]),
 
   providerCredentials: defineTable({
     provider: v.string(),
