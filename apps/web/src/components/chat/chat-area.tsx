@@ -2,11 +2,13 @@
 
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import type { Id } from "@zenthor-assist/backend/convex/_generated/dataModel";
+import type { FileUIPart } from "ai";
 import { useMutation } from "convex/react";
 import { T, useGT } from "gt-next";
 import {
   AlertCircle,
   Check,
+  ImagePlus,
   ListChecks,
   MessageSquare,
   PenSquare,
@@ -29,6 +31,10 @@ import { Message, MessageContent, MessageResponse } from "@/components/ai-elemen
 import {
   PromptInput,
   PromptInputFooter,
+  PromptInputActionAddAttachments,
+  PromptInputActionMenu,
+  PromptInputActionMenuContent,
+  PromptInputActionMenuTrigger,
   PromptInputSubmit,
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input";
@@ -397,12 +403,36 @@ export function ChatArea({ conversationId, noteContext }: ChatAreaProps) {
   );
 
   const handleSend = useCallback(
-    async (message: { text: string }) => {
-      const trimmed = message.text.trim();
-      if (!trimmed) return;
-      await sendMessage(trimmed);
+    async (message: { text: string; files: FileUIPart[] }) => {
+      const caption = message.text.trim();
+      const imageFile = message.files.find((file) => file.mediaType?.startsWith("image/"));
+
+      if (message.files.length > 0 && !imageFile) {
+        toast.error(t("Please upload image files only."));
+        return;
+      }
+
+      if (!caption && !imageFile) {
+        return;
+      }
+
+      const media = imageFile
+        ? {
+            type: "image" as const,
+            sourceId: `web-${
+              imageFile.filename?.trim().replace(/[^a-zA-Z0-9._-]/g, "_") ?? "image"
+            }-${Date.now()}`,
+            mimetype: imageFile.mediaType ?? "image/png",
+            url: imageFile.url,
+          }
+        : undefined;
+
+      await sendMessage({
+        content: caption,
+        ...(media ? { media } : {}),
+      });
     },
-    [sendMessage],
+    [sendMessage, t],
   );
 
   return (
@@ -462,7 +492,27 @@ export function ChatArea({ conversationId, noteContext }: ChatAreaProps) {
                   <Message from={msg.role}>
                     <MessageContent>
                       {msg.role === "user" ? (
-                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                        <>
+                          {msg.content ? (
+                            <p className="whitespace-pre-wrap">{msg.content}</p>
+                          ) : null}
+                          {msg.media?.type === "image" && msg.media.url ? (
+                            <img
+                              alt="Image attachment"
+                              className="mt-2 max-w-full rounded-lg border shadow-sm"
+                              loading="lazy"
+                              src={msg.media.url}
+                            />
+                          ) : null}
+                          {msg.media?.type === "audio" && msg.media.url ? (
+                            <audio
+                              className="mt-2 max-w-full"
+                              controls
+                              preload="metadata"
+                              src={msg.media.url}
+                            />
+                          ) : null}
+                        </>
                       ) : msg.status === "failed" ? (
                         <div className="flex items-start gap-2 py-1">
                           <AlertCircle className="text-destructive mt-0.5 size-4 shrink-0" />
@@ -658,10 +708,28 @@ export function ChatArea({ conversationId, noteContext }: ChatAreaProps) {
             ))}
           </div>
         ) : null}
-        <PromptInput onSubmit={handleSend}>
+        <PromptInput
+          accept="image/*"
+          maxFiles={1}
+          maxFileSize={5 * 1024 * 1024}
+          multiple={false}
+          onSubmit={handleSend}
+        >
           <PromptInputTextarea placeholder={t("Type a message...")} />
           <PromptInputFooter>
-            <div />
+            <PromptInputActionMenu>
+              <PromptInputActionMenuTrigger
+                aria-label={t("Add attachments")}
+                variant="outline"
+                size="icon-sm"
+                tooltip={t("Add attachment")}
+              >
+                <ImagePlus className="size-4" />
+              </PromptInputActionMenuTrigger>
+              <PromptInputActionMenuContent>
+                <PromptInputActionAddAttachments />
+              </PromptInputActionMenuContent>
+            </PromptInputActionMenu>
             <PromptInputSubmit />
           </PromptInputFooter>
         </PromptInput>

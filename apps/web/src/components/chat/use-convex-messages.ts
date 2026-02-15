@@ -20,6 +20,13 @@ interface ChatMessage {
   content: string;
   _creationTime: number;
   noteId?: string;
+  media?: {
+    type: "audio" | "image" | "video" | "document";
+    sourceId: string;
+    mimetype: string;
+    url?: string;
+    transcript?: string;
+  };
   toolCalls?: { name: string; input: unknown; output?: unknown }[];
   modelUsed?: string;
   streaming?: boolean;
@@ -50,6 +57,13 @@ interface RawMessage {
   content: string;
   _creationTime: number;
   noteId?: Id<"notes">;
+  media?: {
+    type: "audio" | "image" | "video" | "document";
+    sourceId: string;
+    mimetype: string;
+    url?: string;
+    transcript?: string;
+  };
   toolCalls?: { name: string; input: unknown; output?: unknown }[];
   modelUsed?: string;
   streaming?: boolean;
@@ -62,6 +76,17 @@ interface RawApproval {
   toolInput: unknown;
   status: "pending" | "approved" | "rejected";
 }
+
+type SendPayload = {
+  content: string;
+  media?: {
+    type: "audio" | "image" | "video" | "document";
+    sourceId: string;
+    mimetype: string;
+    url?: string;
+    transcript?: string;
+  };
+};
 
 function computePositions(
   messages: {
@@ -204,6 +229,7 @@ export function useConvexMessages(
           role: msg.role,
           _id: msg._id,
           content: msg.content,
+          media: msg.media,
         }),
       ),
     );
@@ -245,12 +271,14 @@ export function useConvexMessages(
   }, [options?.noteId, options?.noteTitle]);
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (input: string | SendPayload) => {
+      const request = typeof input === "string" ? { content: input } : input;
       try {
         await sendMutation({
           conversationId,
-          content,
+          content: request.content,
           channel: "web",
+          ...(request.media ? { media: request.media } : {}),
           ...(noteContext ? { noteId: noteContext.noteId } : {}),
         });
       } catch (error) {
