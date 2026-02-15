@@ -90,6 +90,13 @@ function getFolderName(folders: readonly NoteFolder[], folderId?: Id<"noteFolder
   return folder?.name || "Unfiled";
 }
 
+function getNoteDisplayText(content: string) {
+  return content
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export default function NotesPage() {
   const t = useGT();
   const router = useRouter();
@@ -591,7 +598,7 @@ export default function NotesPage() {
                     {note.isArchived && <Archive className="text-muted-foreground size-3.5" />}
                   </div>
                   <p className="text-muted-foreground line-clamp-2 text-xs">
-                    {note.content || t("Empty note")}
+                    {getNoteDisplayText(note.content) || t("Empty note")}
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <Badge variant="outline" className="bg-muted/50 px-1.5 py-0.5 text-[11px]">

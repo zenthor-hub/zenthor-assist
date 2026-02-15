@@ -5,11 +5,12 @@ import type { Id } from "@zenthor-assist/backend/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import { T, useGT } from "gt-next";
 import { Archive, PenLine, Pin, PinOff, Save } from "lucide-react";
-import { use, useEffect, useRef, useState } from "react";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { ChatArea } from "@/components/chat/chat-area";
 import Loader from "@/components/loader";
+import { NoteEditor } from "@/components/notes/note-editor";
 import { PageWrapper } from "@/components/page-wrapper";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 
 type NoteItem = {
   _id: Id<"notes">;
@@ -60,6 +60,7 @@ export default function NoteWorkspacePage({ params }: { params: Promise<{ noteId
     | undefined;
   const folders = useQuery(api.noteFolders.list, {}) ?? [];
   const ensureThread = useMutation(api.notes.ensureThread);
+  const sendToNoteChat = useMutation(api.messages.send);
   const updateNote = useMutation(api.notes.update);
   const archiveNote = useMutation(api.notes.archive);
 
@@ -71,6 +72,66 @@ export default function NoteWorkspacePage({ params }: { params: Promise<{ noteId
   const [isSaving, setIsSaving] = useState(false);
   const [isInitializingThread, setIsInitializingThread] = useState(false);
   const hasHydrated = useRef(false);
+
+  const chatQuickActionTemplate = useCallback(
+    (action: "summarize" | "rewrite" | "expand" | "extract", selectedText: string) => {
+      const snippet =
+        selectedText.length > 800 ? `${selectedText.slice(0, 800)}…` : selectedText.trim();
+      const titlePrefix = `Selected section in note “${title || note?.title || t("Untitled note")}”:`;
+
+      if (action === "summarize") {
+        return `${titlePrefix}
+
+Please summarize this section for quick reading:
+
+${snippet}
+
+Reply with concise bullets and practical next actions.`;
+      }
+      if (action === "rewrite") {
+        return `${titlePrefix}
+
+Please rewrite this section to make it clearer and more concise:
+
+${snippet}`;
+      }
+      if (action === "expand") {
+        return `${titlePrefix}
+
+Please expand this section with concrete examples and structure:
+
+${snippet}`;
+      }
+      return `${titlePrefix}
+
+Please extract concrete action items and tasks from this section:
+
+${snippet}`;
+    },
+    [note?.title, t, title],
+  );
+
+  const handleSectionAiAction = useCallback(
+    async (action: "summarize" | "rewrite" | "expand" | "extract", selectedText: string) => {
+      if (!note || !conversationId) {
+        toast.error(t("Conversation is not ready yet"));
+        return;
+      }
+
+      try {
+        await sendToNoteChat({
+          conversationId,
+          channel: "web",
+          content: chatQuickActionTemplate(action, selectedText),
+          noteId: note._id,
+        });
+        toast.success(t("Sent to note AI assistant"));
+      } catch {
+        toast.error(t("Failed to send note section to AI"));
+      }
+    },
+    [conversationId, note, sendToNoteChat, chatQuickActionTemplate, t],
+  );
 
   useEffect(() => {
     if (!note) return;
@@ -260,10 +321,11 @@ export default function NoteWorkspacePage({ params }: { params: Promise<{ noteId
             </div>
           </div>
 
-          <Textarea
+          <NoteEditor
             className="h-[45vh] lg:h-[calc(100%-5.5rem)]"
             value={content}
-            onChange={(event) => setContent(event.target.value)}
+            onChange={setContent}
+            onAiAction={handleSectionAiAction}
             placeholder={t("Write your note")}
           />
 

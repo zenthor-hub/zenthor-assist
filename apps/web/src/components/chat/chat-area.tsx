@@ -127,10 +127,33 @@ const parseNoteTransformOutput = (value: unknown): NoteTransformResult | null =>
 
   let parsed: unknown = value;
   if (typeof value === "string") {
-    try {
-      parsed = JSON.parse(value);
-    } catch {
-      return null;
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+
+    const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+    const parseCandidate = (candidate: string) => {
+      try {
+        return JSON.parse(candidate) as unknown;
+      } catch {
+        return null;
+      }
+    };
+
+    const fencedCandidate = fenced && fenced[1] ? parseCandidate(fenced[1]!.trim()) : null;
+    if (fencedCandidate !== null) {
+      parsed = fencedCandidate;
+    } else {
+      parsed = parseCandidate(trimmed);
+      if (parsed === null) {
+        const firstBrace = trimmed.indexOf("{");
+        const lastBrace = trimmed.lastIndexOf("}");
+        const fallback =
+          firstBrace >= 0 && lastBrace > firstBrace
+            ? parseCandidate(trimmed.slice(firstBrace, lastBrace + 1))
+            : null;
+        if (fallback === null) return null;
+        parsed = fallback;
+      }
     }
   }
 
@@ -307,6 +330,12 @@ export function ChatArea({ conversationId, noteContext }: ChatAreaProps) {
           id: "rewrite",
           label: <T>Rewrite in tone…</T>,
           command: "/rewrite in a clear, concise tone",
+        },
+        {
+          icon: PenSquare,
+          id: "rewrite-whole",
+          label: <T>Rewrite whole note</T>,
+          command: "/rewrite this whole note",
         },
       ]
     : null;
