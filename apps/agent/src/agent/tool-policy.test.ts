@@ -60,6 +60,8 @@ describe("getDefaultPolicy", () => {
     expect(policy.allow).toBeDefined();
     expect(policy.allow).toContain("schedule_task");
     expect(policy.allow).toContain("browse_url");
+    expect(policy.allow).toContain("note_create");
+    expect(policy.allow).toContain("note_update_from_ai");
   });
 
   it("returns an explicit telegram allowlist", () => {
