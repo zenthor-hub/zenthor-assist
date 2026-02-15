@@ -8,6 +8,7 @@ import { AlertCircle, Check, MessageSquare, ShieldAlert, X } from "lucide-react"
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
+import { CodeBlock } from "@/components/ai-elements/code-block";
 import {
   Conversation,
   ConversationContent,
@@ -21,15 +22,16 @@ import {
   PromptInputSubmit,
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input";
-import {
-  Tool,
-  ToolContent,
-  ToolHeader,
-  ToolInput,
-  ToolOutput,
-} from "@/components/ai-elements/tool";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { friendlyModelName } from "@/lib/model-names";
 import { logWebClientEvent } from "@/lib/observability/client";
 import { cn } from "@/lib/utils";
@@ -41,6 +43,71 @@ import { useConvexMessages } from "./use-convex-messages";
 interface ChatAreaProps {
   conversationId: Id<"conversations">;
 }
+
+const TOOL_SUMMARY_MAX_LENGTH = 96;
+
+type ToolCallSummary = {
+  name: string;
+  input: unknown;
+  output?: unknown;
+};
+
+const truncate = (value: string, maxLength: number): string =>
+  value.length <= maxLength ? value : `${value.slice(0, maxLength)}…`;
+
+const summarizeToolValue = (value: unknown): string => {
+  if (value === undefined) return "No details";
+  if (value === null) return "null";
+  if (typeof value === "string") return truncate(value || "(empty string)", 54);
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return `${value.length} item${value.length === 1 ? "" : "s"}`;
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) {
+      return "Empty object";
+    }
+
+    const compactEntries = entries.slice(0, 2).map(([key, nestedValue]) => {
+      if (Array.isArray(nestedValue)) {
+        return `${key}: ${nestedValue.length} item${nestedValue.length === 1 ? "" : "s"}`;
+      }
+      if (nestedValue === undefined || nestedValue === null) {
+        return `${key}: ${String(nestedValue)}`;
+      }
+      if (typeof nestedValue === "object") {
+        return `${key}: object`;
+      }
+      return `${key}: ${String(nestedValue)}`;
+    });
+
+    const suffix = entries.length > 2 ? ", ..." : "";
+    return truncate(`${compactEntries.join(", ")}${suffix}`, 54);
+  }
+
+  try {
+    const serialized = JSON.stringify(value);
+    return serialized === undefined
+      ? "Complex value"
+      : truncate(serialized, TOOL_SUMMARY_MAX_LENGTH);
+  } catch {
+    return "Complex value";
+  }
+};
+
+const toolCallSummary = ({ output, input }: ToolCallSummary): string =>
+  output === undefined
+    ? `Input: ${summarizeToolValue(input)}`
+    : `Result: ${summarizeToolValue(output)}`;
+
+const formatToolJson = (value: unknown): string => {
+  if (value === undefined) return "No details";
+
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+};
 
 function ApprovalCard({
   approval,
@@ -175,6 +242,7 @@ export function ChatArea({ conversationId }: ChatAreaProps) {
           ) : (
             messages.map((msg) => {
               if (msg.role === "system") return null;
+              const shouldShowToolSummary = preferences?.showToolDetails ?? false;
 
               return (
                 <div
@@ -209,26 +277,84 @@ export function ChatArea({ conversationId }: ChatAreaProps) {
                               <span className="bg-foreground/40 size-1.5 animate-bounce rounded-full [animation-delay:300ms]" />
                             </div>
                           ) : null}
-                          {msg.toolCalls &&
-                            msg.toolCalls.length > 0 &&
-                            msg.toolCalls.map((tc, i) => (
-                              <Tool key={`${tc.name}-${i}`}>
-                                <ToolHeader
-                                  title={tc.name}
-                                  type="dynamic-tool"
-                                  toolName={tc.name}
-                                  state={
-                                    tc.output !== undefined ? "output-available" : "input-available"
-                                  }
-                                />
-                                <ToolContent>
-                                  <ToolInput input={tc.input} />
-                                  {tc.output !== undefined && (
-                                    <ToolOutput output={tc.output} errorText={undefined} />
-                                  )}
-                                </ToolContent>
-                              </Tool>
-                            ))}
+                          {msg.toolCalls && msg.toolCalls.length > 0 && (
+                            <div className="mt-2 space-y-2">
+                              <p className="text-muted-foreground text-xs">
+                                <T>Tool calls</T>:
+                              </p>
+                              <div className="border-border rounded-lg border">
+                                {shouldShowToolSummary && (
+                                  <div className="space-y-1 p-2 text-xs">
+                                    {msg.toolCalls.map((tc, i) => (
+                                      <p key={`${tc.name}-${i}`} className="truncate text-[11px]">
+                                        <span className="text-muted-foreground mr-2">#{i + 1}</span>
+                                        <span className="font-medium">{tc.name}</span>
+                                        <span className="text-muted-foreground ml-1">
+                                          — {toolCallSummary(tc)}
+                                        </span>
+                                      </p>
+                                    ))}
+                                  </div>
+                                )}
+                                <Dialog>
+                                  <DialogTrigger asChild>
+                                    <Button className="mt-1 w-full" size="xs" variant="outline">
+                                      <T>View tool details</T>
+                                    </Button>
+                                  </DialogTrigger>
+                                  <DialogContent className="max-w-[min(1100px,95vw)] min-w-[min(820px,95vw)]">
+                                    <DialogHeader>
+                                      <DialogTitle>
+                                        <T>Tool call details</T>
+                                      </DialogTitle>
+                                      <DialogDescription>
+                                        <T>
+                                          Expand tool inputs and outputs from this assistant
+                                          response.
+                                        </T>
+                                      </DialogDescription>
+                                    </DialogHeader>
+                                    <div className="max-h-[65vh] space-y-3 overflow-y-auto pr-2">
+                                      {msg.toolCalls.map((tc, i) => (
+                                        <div
+                                          key={`${tc.name}-dialog-${i}`}
+                                          className="border-border rounded-lg border"
+                                        >
+                                          <div className="border-b px-3 py-2 text-sm">
+                                            <p className="font-medium">
+                                              #{i + 1} {tc.name}
+                                            </p>
+                                          </div>
+                                          <div className="space-y-3 p-3">
+                                            <div>
+                                              <p className="text-muted-foreground mb-1 text-xs uppercase">
+                                                <T>Input</T>
+                                              </p>
+                                              <CodeBlock
+                                                code={formatToolJson(tc.input)}
+                                                language="json"
+                                              />
+                                            </div>
+                                            {tc.output !== undefined && (
+                                              <div>
+                                                <p className="text-muted-foreground mb-1 text-xs uppercase">
+                                                  <T>Output</T>
+                                                </p>
+                                                <CodeBlock
+                                                  code={formatToolJson(tc.output)}
+                                                  language="json"
+                                                />
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </DialogContent>
+                                </Dialog>
+                              </div>
+                            </div>
+                          )}
                         </>
                       )}
                     </MessageContent>

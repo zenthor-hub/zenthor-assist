@@ -33,6 +33,7 @@ export type ToolPart = ToolUIPart | DynamicToolUIPart;
 export type ToolHeaderProps = {
   title?: string;
   className?: string;
+  summary?: string;
 } & (
   | { type: ToolUIPart["type"]; state: ToolUIPart["state"]; toolName?: never }
   | {
@@ -75,6 +76,7 @@ export const ToolHeader = ({
   type,
   state,
   toolName,
+  summary,
   ...props
 }: ToolHeaderProps) => {
   const t = useGT();
@@ -85,10 +87,15 @@ export const ToolHeader = ({
       className={cn("flex w-full items-center justify-between gap-4 p-3", className)}
       {...props}
     >
-      <div className="flex items-center gap-2">
-        <WrenchIcon className="text-muted-foreground size-4" />
-        <span className="text-base font-medium">{title ?? derivedName}</span>
-        {getStatusBadge(state, t)}
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex items-center gap-2">
+          <WrenchIcon className="text-muted-foreground size-4 shrink-0" />
+          <span className="text-base font-medium">{title ?? derivedName}</span>
+          {getStatusBadge(state, t)}
+        </div>
+        {summary && (
+          <span className="text-muted-foreground block w-full truncate text-xs">{summary}</span>
+        )}
       </div>
       <ChevronDownIcon className="text-muted-foreground size-4 transition-transform group-data-[state=open]:rotate-180" />
     </CollapsibleTrigger>
@@ -101,6 +108,7 @@ export const ToolContent = ({ className, ...props }: ToolContentProps) => (
   <CollapsibleContent
     className={cn(
       "data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 text-popover-foreground data-[state=closed]:animate-out data-[state=open]:animate-in space-y-4 p-4 outline-none",
+      "data-[state=closed]:hidden",
       className,
     )}
     {...props}
