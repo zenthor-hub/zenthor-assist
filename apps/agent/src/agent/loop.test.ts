@@ -150,6 +150,30 @@ describe("note creation reply composition", () => {
     expect(reply).toBe("Could not create note: Tool output did not confirm note creation.");
   });
 
+  it("tracks failures for note_generate_from_conversation as a creation attempt", () => {
+    const reply = buildNoteCreationReply(
+      [{ name: "note_generate_from_conversation", input: {}, output: undefined }],
+      "whatsapp",
+    );
+
+    expect(reply).toBe("Could not create note: Tool output did not confirm note creation.");
+  });
+
+  it("tracks success for note_generate_from_conversation output", () => {
+    const reply = buildNoteCreationReply(
+      [
+        {
+          name: "note_generate_from_conversation",
+          input: {},
+          output: '{"action":"note_created","noteId":"note_9","title":"Rovaniemi Tips"}',
+        },
+      ],
+      "whatsapp",
+    );
+
+    expect(reply).toBe("Created note: Rovaniemi Tips.");
+  });
+
   it("aggregates unresolved attempts and explicit errors", () => {
     const outcomes = resolveNoteCreationOutcomes([
       { name: "note_create", input: {}, output: "Could not create note: conversation not found" },
