@@ -195,6 +195,98 @@ describe("createNoteTools", () => {
     expect(parsed.source).toBe("chat-generated");
   });
 
+  it("sanitizes invalid folder IDs for create and update calls", async () => {
+    const { tools, mockQuery, mockMutation } = await setupTools();
+    mockQuery.mockResolvedValue([]);
+    mockMutation.mockResolvedValue("note-without-folder");
+
+    const created = (await toolExecute(tools.note_create, {
+      title: "Draft",
+      content: "Notes",
+      folderId: "trips",
+    })) as string;
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      api.notes.createForConversation,
+      expect.objectContaining({
+        serviceKey: "agent-secret",
+        conversationId,
+        folderId: undefined,
+      }),
+    );
+    expect(created).toContain("noteId");
+
+    const generateCall = (await toolExecute(tools.note_generate_from_conversation, {
+      title: "Generated",
+      folderId: "trips",
+      messageLimit: 10,
+    })) as string;
+
+    expect(mockQuery).toHaveBeenCalledWith(api.messages.listByConversationWindowForConversation, {
+      serviceKey: "agent-secret",
+      conversationId,
+      limit: 10,
+    });
+    expect(mockMutation).toHaveBeenCalledWith(
+      api.notes.createForConversation,
+      expect.objectContaining({
+        serviceKey: "agent-secret",
+        conversationId,
+        folderId: undefined,
+      }),
+    );
+    expect(generateCall).toContain("note_created");
+
+    await toolExecute(tools.note_move, {
+      noteId: "note-without-folder",
+      folderId: "abcde",
+    });
+    expect(mockMutation).toHaveBeenCalledWith(
+      api.notes.moveToFolderForConversation,
+      expect.objectContaining({
+        serviceKey: "agent-secret",
+        conversationId,
+        id: "note-without-folder",
+        folderId: undefined,
+      }),
+    );
+
+    await toolExecute(tools.note_update, {
+      noteId: "note-without-folder",
+      folderId: "00000000-0000-0000-0000-000000000000",
+    });
+    expect(mockMutation).toHaveBeenCalledWith(
+      api.notes.updateForConversation,
+      expect.objectContaining({
+        serviceKey: "agent-secret",
+        conversationId,
+        id: "note-without-folder",
+        folderId: undefined,
+      }),
+    );
+  });
+
+  it("passes through a valid folderId when it matches Convex ID shape", async () => {
+    const { tools, mockMutation, mockQuery } = await setupTools();
+    mockQuery.mockResolvedValue([]);
+    mockMutation.mockResolvedValue("note-valid-folder");
+
+    const validFolderId = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6";
+
+    await toolExecute(tools.note_create, {
+      title: "With folder",
+      content: "Notes",
+      folderId: validFolderId,
+    });
+
+    expect(mockMutation).toHaveBeenCalledWith(
+      api.notes.createForConversation,
+      expect.objectContaining({
+        folderId: validFolderId,
+      }),
+    );
+  });
+
   it("returns service errors from tool execution", async () => {
     const { tools, mockQuery } = await setupTools();
     mockQuery.mockRejectedValue(new Error("transcript service unavailable"));
