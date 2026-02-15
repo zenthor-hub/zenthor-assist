@@ -1,7 +1,7 @@
 "use client";
 
 import { AlertTriangle, ArrowLeft, RotateCw } from "lucide-react";
-import { Geist, Geist_Mono, Noto_Sans } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import Link from "next/link";
 import { useEffect } from "react";
 
@@ -10,13 +10,8 @@ import { Button } from "@/components/ui/button";
 import { ZenthorHeroMark, ZenthorMark } from "@/components/zenthor-logo";
 import { logWebClientEvent } from "@/lib/observability/client";
 
-const notoSans = Noto_Sans({
-  variable: "--font-sans",
-  subsets: ["latin"],
-});
-
 const geistSans = Geist({
-  variable: "--font-geist-sans",
+  variable: "--font-sans",
   subsets: ["latin"],
 });
 
@@ -48,7 +43,7 @@ export default function GlobalError({
   }, [error.digest, error.message, error.name, isDev]);
 
   return (
-    <html lang="en" className={notoSans.variable} suppressHydrationWarning>
+    <html lang="en" className={geistSans.variable} suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <div className="noise-texture bg-background text-foreground relative flex min-h-svh flex-col overflow-hidden">
           <div

@@ -2,13 +2,13 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { dark } from "@clerk/themes";
 import { GTProvider } from "gt-next";
 import type { Metadata } from "next";
-import { Geist_Mono, Space_Grotesk } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 
 import "../index.css";
 import Providers from "@/components/providers";
 
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
+const geistSans = Geist({
+  variable: "--font-geist-sans",
   subsets: ["latin"],
 });
 
@@ -76,7 +76,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={spaceGrotesk.variable} suppressHydrationWarning>
+    <html lang="en" className={geistSans.variable} suppressHydrationWarning>
       <body className={`${geistMono.variable} antialiased`}>
         <ClerkProvider
           signInUrl="/sign-in"
