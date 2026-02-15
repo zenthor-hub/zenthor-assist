@@ -12,8 +12,46 @@ export async function handleIncomingMessage(message: WAMessage) {
   if (!jid || jid === "status@broadcast") return;
   if (message.key.fromMe) return;
 
-  const text = message.message?.conversation || message.message?.extendedTextMessage?.text;
+  const imageMessage = message.message?.imageMessage;
+  const videoMessage = message.message?.videoMessage;
+  const documentMessage = message.message?.documentMessage;
+
+  const rawText =
+    message.message?.conversation ||
+    message.message?.extendedTextMessage?.text ||
+    imageMessage?.caption ||
+    videoMessage?.caption ||
+    documentMessage?.caption;
+  const fallbackText = imageMessage
+    ? "[Image message]"
+    : videoMessage
+      ? "[Video message]"
+      : documentMessage
+        ? "[Document message]"
+        : "";
+  const text = rawText?.trim() ? rawText : fallbackText;
+
   if (!text) return;
+
+  const media = imageMessage
+    ? {
+        type: "image" as const,
+        sourceId: message.key.id ?? `wa-${Date.now()}`,
+        mimetype: imageMessage.mimetype ?? "image/jpeg",
+      }
+    : videoMessage
+      ? {
+          type: "video" as const,
+          sourceId: message.key.id ?? `wa-${Date.now()}`,
+          mimetype: videoMessage.mimetype ?? "video/mp4",
+        }
+      : documentMessage
+        ? {
+            type: "document" as const,
+            sourceId: message.key.id ?? `wa-${Date.now()}`,
+            mimetype: documentMessage.mimetype ?? "application/octet-stream",
+          }
+        : undefined;
 
   const phone = jid.replace("@s.whatsapp.net", "");
   void logger.lineInfo(`[whatsapp] Incoming from ${phone}: ${text.substring(0, 50)}...`);
@@ -108,6 +146,7 @@ export async function handleIncomingMessage(message: WAMessage) {
     conversationId,
     content: text,
     channel: "whatsapp",
+    ...(media ? { media } : {}),
   });
 
   void logger.lineInfo(`[whatsapp] Queued message from ${phone} for processing`);

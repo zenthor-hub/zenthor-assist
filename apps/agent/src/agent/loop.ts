@@ -12,6 +12,7 @@ import { evaluateContext } from "./context-guard";
 import { classifyError, isRetryable } from "./errors";
 import type { AgentConfig } from "./generate";
 import { generateResponse, generateResponseStreaming } from "./generate";
+import { downloadWhatsAppMedia, uploadMediaToBlob } from "./media";
 import { friendlyModelName } from "./model-names";
 import {
   discoverAndActivate,
@@ -30,6 +31,18 @@ interface ConversationAudioMessage {
   _id: Id<"messages">;
   role: "user" | "assistant" | "system";
   media?: AudioTriggerMessage["media"];
+}
+
+interface ConversationMediaMessage {
+  _id: Id<"messages">;
+  content: string;
+  role: "user" | "assistant" | "system";
+  media?: {
+    type: "audio" | "image" | "video" | "document";
+    sourceId: string;
+    mimetype: string;
+    url?: string;
+  };
 }
 
 interface ToolCallRecord {
@@ -403,6 +416,52 @@ export function startAgentLoop() {
             transcript: triggerTranscript,
             mediaUrl: audioResult.blobUrl,
           });
+        }
+
+        const mediaTrigger = (context.messages as ConversationMediaMessage[]).find(
+          (
+            m,
+          ): m is ConversationMediaMessage & {
+            media: NonNullable<ConversationMediaMessage["media"]>;
+          } =>
+            (() => {
+              const media = m.media;
+              return (
+                m._id === job.messageId &&
+                media !== undefined &&
+                media.type !== "audio" &&
+                !!media.sourceId &&
+                !media.url &&
+                context.conversation.accountId === "cloud-api"
+              );
+            })(),
+        );
+
+        if (mediaTrigger) {
+          try {
+            const { buffer } = await downloadWhatsAppMedia(mediaTrigger.media.sourceId);
+            const mediaUrl = await uploadMediaToBlob({
+              buffer,
+              conversationId: job.conversationId,
+              messageId: mediaTrigger._id,
+              mimetype: mediaTrigger.media.mimetype,
+              category: mediaTrigger.media.type,
+            });
+
+            await client.mutation(api.messages.updateMediaTranscript, {
+              serviceKey,
+              messageId: mediaTrigger._id,
+              transcript: mediaTrigger.content,
+              mediaUrl,
+            });
+          } catch (error) {
+            logger.warn("agent.media.upload_failed", {
+              messageId: mediaTrigger._id,
+              conversationId: job.conversationId,
+              mediaType: mediaTrigger.media.type,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
         }
 
         let conversationMessages = buildConversationMessages(context.messages, audioResult);
