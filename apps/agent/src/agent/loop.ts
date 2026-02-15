@@ -400,7 +400,7 @@ export function startAgentLoop() {
         if (agentConfig?.toolPolicy) policies.push(agentConfig.toolPolicy);
         const mergedPolicy = policies.length > 1 ? mergeToolPolicies(...policies) : channelPolicy;
         const noteAwarePolicy: typeof mergedPolicy = (() => {
-          if (channel !== "web") return mergedPolicy;
+          if (channel === "telegram") return mergedPolicy;
 
           const denied = new Set<string>(mergedPolicy.deny ?? []);
           const allowed = mergedPolicy.allow ? [...mergedPolicy.allow] : [];
