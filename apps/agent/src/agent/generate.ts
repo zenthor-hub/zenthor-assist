@@ -25,16 +25,7 @@ function buildProviderOptions(
   };
 }
 
-export interface UserProfile {
-  preferredName?: string;
-  agentName?: string;
-  timezone?: string;
-  communicationStyle?: "concise" | "balanced" | "detailed";
-  focusArea?: string;
-  boundaries?: string;
-}
-
-const BASE_SYSTEM_PROMPT = `You are a helpful personal AI assistant. You can assist with questions, tasks, and general conversation. Be concise but friendly. When you don't know something, say so. Use tools when appropriate.
+const BASE_SYSTEM_PROMPT = `You are a helpful personal AI assistant for Guilherme (gbarros). You can assist with questions, tasks, and general conversation. Be concise but friendly. When you don't know something, say so. Use tools when appropriate.
 
 ## Tool usage guidance
 - Use \`calculate\` for precise math instead of doing mental arithmetic.
@@ -103,51 +94,14 @@ You are replying on WhatsApp. Follow these formatting rules strictly:
 - Use line breaks to separate sections instead of headers
 - Avoid long paragraphs — break them into shorter chunks`;
 
-function buildUserProfileSection(profile?: UserProfile): string {
-  if (!profile) return "";
-
-  const lines: string[] = [];
-  const agentName = profile.agentName ?? "Guilb";
-  lines.push(`Your name is ${agentName}.`);
-
-  if (profile.preferredName) {
-    lines.push(`The user's name is ${profile.preferredName}.`);
-  }
-  if (profile.timezone) {
-    lines.push(`The user's timezone is ${profile.timezone}.`);
-  }
-  if (profile.communicationStyle) {
-    const styleDescriptions: Record<string, string> = {
-      concise: "Keep responses short and to the point.",
-      balanced: "Use a balanced level of detail — not too brief, not too verbose.",
-      detailed: "Provide thorough, detailed responses with context and explanation.",
-    };
-    lines.push(styleDescriptions[profile.communicationStyle] ?? "");
-  }
-  if (profile.focusArea) {
-    lines.push(`The user's primary focus is ${profile.focusArea}. Prioritize helping with this.`);
-  }
-  if (profile.boundaries) {
-    lines.push(`User boundaries: ${profile.boundaries}. Always respect these.`);
-  }
-
-  return lines.filter(Boolean).join("\n");
-}
-
 function buildSystemPrompt(
   skills?: Skill[],
   agentConfig?: AgentConfig,
   channel?: "web" | "whatsapp" | "telegram",
-  userProfile?: UserProfile,
 ): string {
   const basePrompt = agentConfig?.systemPrompt ?? BASE_SYSTEM_PROMPT;
 
   let prompt = basePrompt;
-
-  const profileSection = buildUserProfileSection(userProfile);
-  if (profileSection) {
-    prompt += `\n\n## User Profile\n\n${profileSection}`;
-  }
 
   if (channel === "whatsapp") {
     prompt += WHATSAPP_FORMATTING_INSTRUCTIONS;
@@ -229,7 +183,6 @@ interface GenerateOptions {
   channel?: "web" | "whatsapp" | "telegram";
   toolCount?: number;
   messageCount?: number;
-  userProfile?: UserProfile;
 }
 
 function resolveModels(options?: GenerateOptions): {
@@ -275,12 +228,7 @@ export async function generateResponse(
     channel: options?.channel,
   });
 
-  const systemPrompt = buildSystemPrompt(
-    skills,
-    options?.agentConfig,
-    options?.channel,
-    options?.userProfile,
-  );
+  const systemPrompt = buildSystemPrompt(skills, options?.agentConfig, options?.channel);
 
   const useStreaming = (await getAIProvider()).mode === "openai_subscription";
 
@@ -378,12 +326,7 @@ export async function generateResponseStreaming(
     channel: options?.channel,
   });
 
-  const streamSystemPrompt = buildSystemPrompt(
-    skills,
-    options?.agentConfig,
-    options?.channel,
-    options?.userProfile,
-  );
+  const streamSystemPrompt = buildSystemPrompt(skills, options?.agentConfig, options?.channel);
 
   const { result, modelUsed } = await runWithFallback({
     primaryModel,
