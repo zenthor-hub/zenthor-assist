@@ -54,7 +54,7 @@ interface SidebarConversation {
 
 function getSidebarModeFromPath(pathname: string): SidebarMode {
   if (pathname.startsWith("/chat")) return "chats";
-  if (pathname.startsWith("/notes")) return "chats";
+  if (pathname.startsWith("/notes")) return "nav";
   if (pathname.startsWith("/settings")) return "settings";
   return "nav";
 }
