@@ -13,6 +13,7 @@ const outboundMetadataValidator = v.optional(
   v.object({
     kind: v.string(),
     toolName: v.optional(v.string()),
+    buttons: v.optional(v.any()),
   }),
 );
 
