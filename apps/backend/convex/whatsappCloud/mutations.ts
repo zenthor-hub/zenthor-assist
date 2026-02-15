@@ -200,6 +200,7 @@ export const handleIncomingMedia = internalMutation({
     messageType: v.string(),
     mediaId: v.string(),
     mimetype: v.string(),
+    caption: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -263,23 +264,40 @@ export const handleIncomingMedia = internalMutation({
     }
 
     // 4. Insert message with media metadata and placeholder content
+    const caption = args.caption?.trim();
+    const content =
+      caption && caption.length > 0
+        ? caption
+        : args.messageType === "audio"
+          ? "[Audio message]"
+          : "[Image message]";
+    const mediaType = args.messageType === "audio" ? "audio" : "image";
+    const autoTitle =
+      caption && caption.length > 0
+        ? caption
+        : mediaType === "audio"
+          ? "Voice message"
+          : mediaType === "image"
+            ? "Image message"
+            : "Media message";
+
     const msgId = await ctx.db.insert("messages", {
       conversationId,
       role: "user",
-      content: "[Audio message]",
+      content,
       channel: "whatsapp",
       media: {
-        type: "audio",
+        type: mediaType,
         sourceId: args.mediaId,
         mimetype: args.mimetype,
       },
       status: "sent",
     });
 
-    // Auto-title for audio conversations
+    // Auto-title for media conversations
     const conversation = await ctx.db.get(conversationId);
     if (conversation && (!conversation.title || conversation.title === "New chat")) {
-      await ctx.db.patch(conversationId, { title: "Voice message" });
+      await ctx.db.patch(conversationId, { title: autoTitle });
     }
 
     // 5. Enqueue agent job
@@ -289,7 +307,9 @@ export const handleIncomingMedia = internalMutation({
       status: "pending",
     });
 
-    console.info(`[whatsapp-cloud] Queued audio message from ${args.from} for processing`);
+    console.info(
+      `[whatsapp-cloud] Queued ${args.messageType} message from ${args.from} for processing`,
+    );
     return null;
   },
 });

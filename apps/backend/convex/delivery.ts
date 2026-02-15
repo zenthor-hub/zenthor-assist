@@ -14,6 +14,9 @@ const outboundMetadataValidator = v.optional(
     kind: v.string(),
     toolName: v.optional(v.string()),
     buttons: v.optional(v.any()),
+    mediaUrl: v.optional(v.string()),
+    mediaType: v.optional(v.string()),
+    caption: v.optional(v.string()),
   }),
 );
 

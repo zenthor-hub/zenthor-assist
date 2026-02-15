@@ -15,14 +15,16 @@ const toolCallValidator = v.optional(
   ),
 );
 
+const mediaTypeValidator = v.union(
+  v.literal("audio"),
+  v.literal("image"),
+  v.literal("video"),
+  v.literal("document"),
+);
+
 const mediaValidator = v.optional(
   v.object({
-    type: v.union(
-      v.literal("audio"),
-      v.literal("image"),
-      v.literal("video"),
-      v.literal("document"),
-    ),
+    type: mediaTypeValidator,
     sourceId: v.string(),
     mimetype: v.string(),
     url: v.optional(v.string()),
@@ -85,6 +87,7 @@ export const send = authMutation({
   args: {
     conversationId: v.id("conversations"),
     content: v.string(),
+    media: mediaValidator,
     noteId: v.optional(v.id("notes")),
     channel: v.optional(v.union(v.literal("whatsapp"), v.literal("web"), v.literal("telegram"))),
   },
@@ -92,6 +95,16 @@ export const send = authMutation({
   handler: async (ctx, args) => {
     const conv = await getConversationIfOwnedByUser(ctx, ctx.auth.user._id, args.conversationId);
     if (!conv) return null;
+
+    const trimmedContent = args.content.trim();
+    const content =
+      trimmedContent.length === 0 && args.media
+        ? args.media.type === "audio"
+          ? "[Audio message]"
+          : args.media.type === "image"
+            ? "[Image message]"
+            : "[Media message]"
+        : args.content;
 
     if (args.noteId) {
       await ensureNoteConversationMatch(ctx, args.noteId, args.conversationId, ctx.auth.user._id);
@@ -101,13 +114,15 @@ export const send = authMutation({
       conversationId: args.conversationId,
       noteId: args.noteId,
       role: "user",
-      content: args.content,
+      content,
+      media: args.media,
       channel: conv.channel,
       status: "sent",
     });
 
     if (!conv.title || conv.title === "New chat") {
-      const title = args.content.length > 50 ? `${args.content.slice(0, 50)}…` : args.content;
+      const titleSource = content.length > 0 ? content : "Image message";
+      const title = titleSource.length > 50 ? `${titleSource.slice(0, 50)}…` : titleSource;
       await ctx.db.patch(args.conversationId, { title });
     }
 
@@ -125,6 +140,7 @@ export const sendService = serviceMutation({
   args: {
     conversationId: v.id("conversations"),
     content: v.string(),
+    media: mediaValidator,
     noteId: v.optional(v.id("notes")),
     channel: v.optional(v.union(v.literal("whatsapp"), v.literal("web"), v.literal("telegram"))),
   },
@@ -141,17 +157,29 @@ export const sendService = serviceMutation({
       await ensureNoteConversationMatch(ctx, args.noteId, args.conversationId, userId);
     }
 
+    const trimmedContent = args.content.trim();
+    const content =
+      trimmedContent.length === 0 && args.media
+        ? args.media.type === "audio"
+          ? "[Audio message]"
+          : args.media.type === "image"
+            ? "[Image message]"
+            : "[Media message]"
+        : args.content;
+
     const messageId = await ctx.db.insert("messages", {
       conversationId: args.conversationId,
       noteId: args.noteId,
       role: "user",
-      content: args.content,
+      content,
+      media: args.media,
       channel: conversation.channel,
       status: "sent",
     });
 
     if (!conversation.title || conversation.title === "New chat") {
-      const title = args.content.length > 50 ? `${args.content.slice(0, 50)}…` : args.content;
+      const titleSource = content.length > 0 ? content : "Media message";
+      const title = titleSource.length > 50 ? `${titleSource.slice(0, 50)}…` : titleSource;
       await ctx.db.patch(args.conversationId, { title });
     }
 

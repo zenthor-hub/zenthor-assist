@@ -191,6 +191,21 @@ export async function handleIncomingWebhook(
           );
           continue;
         }
+
+        if (message.type === "image" && message.image?.id) {
+          mutations.push(
+            ctx.runMutation(internal.whatsappCloud.mutations.handleIncomingMedia, {
+              from,
+              messageId,
+              timestamp,
+              messageType: "image",
+              mediaId: message.image.id,
+              mimetype: message.image.mime_type ?? "image/jpeg",
+              caption: message.image.caption,
+            }),
+          );
+          continue;
+        }
       }
 
       // Handle status updates
@@ -256,9 +271,16 @@ interface WebhookMessage {
   timestamp: string;
   type: string;
   text?: { body: string };
+  image?: WebhookMessageImage;
   audio?: { id: string; mime_type: string };
   button?: { text?: string; payload?: string };
   interactive?: { button_reply?: { id?: string; title?: string } };
+}
+
+interface WebhookMessageImage {
+  id: string;
+  mime_type?: string;
+  caption?: string;
 }
 
 interface WebhookStatus {
