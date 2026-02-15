@@ -98,6 +98,7 @@ function buildSystemPrompt(
   skills?: Skill[],
   agentConfig?: AgentConfig,
   channel?: "web" | "whatsapp" | "telegram",
+  noteContext?: { title: string; preview?: string },
 ): string {
   const basePrompt = agentConfig?.systemPrompt ?? BASE_SYSTEM_PROMPT;
 
@@ -107,17 +108,33 @@ function buildSystemPrompt(
     prompt += WHATSAPP_FORMATTING_INSTRUCTIONS;
   }
 
-  if (!skills || skills.length === 0) return prompt;
+  if (!skills || skills.length === 0) {
+    if (!noteContext) return prompt;
+  } else {
+    const skillsSection = skills
+      .map((s) => {
+        const lines = [`### ${s.name}`, s.description];
+        if (s.config?.systemPrompt) lines.push(s.config.systemPrompt);
+        return lines.join("\n");
+      })
+      .join("\n\n");
 
-  const skillsSection = skills
-    .map((s) => {
-      const lines = [`### ${s.name}`, s.description];
-      if (s.config?.systemPrompt) lines.push(s.config.systemPrompt);
-      return lines.join("\n");
-    })
-    .join("\n\n");
+    prompt = `${prompt}\n\n## Active Skills\n\n${skillsSection}`;
+  }
 
-  return `${prompt}\n\n## Active Skills\n\n${skillsSection}`;
+  if (!noteContext) return prompt;
+
+  const commandHints = [
+    "/organize — restructure sections",
+    "/rewrite — apply a stronger structure",
+    "/expand — enrich the current draft",
+    "/summarize — condense with headings",
+    "/extract — produce key list",
+    "/clean-style — refine writing quality",
+    "/ask — keep discussion context but stay note-aware",
+  ].join("\n");
+
+  return `${prompt}\n\n## Note-editor mode\nYou are operating as an AI note editor for "${noteContext.title}". Provide concise edit-focused responses and prefer machine-readable change suggestions.\nWhen the user asks for an edit command, first return a structured proposal with fields resultText and operations.\nAvailable commands:\n${commandHints}\n\nCurrent note preview:\n${noteContext.preview ?? "(empty)"}`;
 }
 
 function getDefaultTools(modelName: string): Record<string, Tool> {
@@ -183,6 +200,10 @@ interface GenerateOptions {
   channel?: "web" | "whatsapp" | "telegram";
   toolCount?: number;
   messageCount?: number;
+  noteContext?: {
+    title: string;
+    preview?: string;
+  };
 }
 
 function resolveModels(options?: GenerateOptions): {
@@ -228,7 +249,12 @@ export async function generateResponse(
     channel: options?.channel,
   });
 
-  const systemPrompt = buildSystemPrompt(skills, options?.agentConfig, options?.channel);
+  const systemPrompt = buildSystemPrompt(
+    skills,
+    options?.agentConfig,
+    options?.channel,
+    options?.noteContext,
+  );
 
   const useStreaming = (await getAIProvider()).mode === "openai_subscription";
 
@@ -326,7 +352,12 @@ export async function generateResponseStreaming(
     channel: options?.channel,
   });
 
-  const streamSystemPrompt = buildSystemPrompt(skills, options?.agentConfig, options?.channel);
+  const streamSystemPrompt = buildSystemPrompt(
+    skills,
+    options?.agentConfig,
+    options?.channel,
+    options?.noteContext,
+  );
 
   const { result, modelUsed } = await runWithFallback({
     primaryModel,

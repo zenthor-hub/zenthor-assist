@@ -18,6 +18,13 @@ interface ApprovalContext {
   accountId?: string;
 }
 
+interface ToolApprovalResult {
+  _id: string;
+  toolName: string;
+  toolInput: unknown;
+  status: "pending" | "approved" | "rejected";
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -34,14 +41,17 @@ async function waitForApproval(
       serviceKey: env.AGENT_SECRET,
       jobId: jobId as Id<"agentQueue">,
     });
+    const typedPending = (pending as Array<ToolApprovalResult>) ?? [];
 
-    const stillPending = pending.some((a) => a._id === approvalId);
+    const stillPending = typedPending.some((a) => a._id === approvalId);
     if (!stillPending) {
       const all = await client.query(api.toolApprovals.getByJob, {
         serviceKey: env.AGENT_SECRET,
         jobId: jobId as Id<"agentQueue">,
       });
-      const resolved = all.find((a) => a._id === approvalId);
+      const typedAll = (all as Array<ToolApprovalResult>) ?? [];
+
+      const resolved = typedAll.find((a) => a._id === approvalId);
       if (resolved) {
         return resolved.status as "approved" | "rejected";
       }

@@ -14,6 +14,11 @@ import {
 } from "./registry";
 import type { ActivationResult, ResolvedPluginTools, RuntimePlugin } from "./types";
 
+interface PluginInstall {
+  pluginName: string;
+  enabled: boolean;
+}
+
 function filterByPolicy(
   tools: Record<string, Tool>,
   policy?: { allow?: string[]; deny?: string[] },
@@ -110,10 +115,11 @@ export async function resolvePluginTools(params: {
       channel,
     }),
   ]);
+  const normalizedInstalls = installs as Array<PluginInstall>;
 
   const enabledPluginNames =
-    installs.length > 0
-      ? installs.filter((install) => install.enabled).map((install) => install.pluginName)
+    normalizedInstalls.length > 0
+      ? normalizedInstalls.filter((install) => install.enabled).map((install) => install.pluginName)
       : listBuiltinPlugins().map((plugin) => plugin.name);
 
   const merged: Record<string, Tool> = {};

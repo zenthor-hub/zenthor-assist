@@ -21,9 +21,16 @@ import {
 } from "./plugins/loader";
 import { wrapToolsWithApproval } from "./tool-approval";
 import { filterTools, getDefaultPolicy, mergeToolPolicies } from "./tool-policy";
+import { getNoteTools } from "./tools";
 import { createMemoryTools } from "./tools/memory";
 import { createScheduleTask } from "./tools/schedule";
 import { createTaskTools } from "./tools/tasks";
+
+interface ConversationAudioMessage {
+  _id: Id<"messages">;
+  role: "user" | "assistant" | "system";
+  media?: AudioTriggerMessage["media"];
+}
 
 /** Convert any remaining markdown syntax to WhatsApp-compatible formatting */
 function sanitizeForWhatsApp(text: string): string {
@@ -158,8 +165,8 @@ export function startAgentLoop() {
           : undefined;
 
         // Process audio for the triggering message only (Meta media URLs expire quickly)
-        const triggerMsg = context.messages.find(
-          (m): m is typeof m & { media: AudioTriggerMessage["media"] } =>
+        const triggerMsg = (context.messages as ConversationAudioMessage[]).find(
+          (m): m is ConversationAudioMessage & { media: AudioTriggerMessage["media"] } =>
             m._id === job.messageId && m.media?.type === "audio" && !m.media.transcript,
         );
 
@@ -266,6 +273,8 @@ export function startAgentLoop() {
           modelName: env.AI_MODEL,
         });
 
+        const noteTools = getNoteTools(job.conversationId);
+
         // Bind schedule_task to this conversation so cron can trigger follow-ups
         if (pluginTools.tools.schedule_task) {
           pluginTools.tools.schedule_task = createScheduleTask(job.conversationId);
@@ -316,7 +325,12 @@ export function startAgentLoop() {
         if (agentConfig?.toolPolicy) policies.push(agentConfig.toolPolicy);
         const mergedPolicy = policies.length > 1 ? mergeToolPolicies(...policies) : channelPolicy;
 
-        const filteredTools = filterTools(pluginTools.tools, mergedPolicy) as Record<string, Tool>;
+        const mergedTools = {
+          ...pluginTools.tools,
+          ...noteTools,
+        };
+
+        const filteredTools = filterTools(mergedTools, mergedPolicy) as Record<string, Tool>;
 
         // Wrap high-risk tools with approval flow
         const approvalTools = wrapToolsWithApproval(filteredTools, {
@@ -375,6 +389,12 @@ export function startAgentLoop() {
               toolsOverride: approvalTools,
               agentConfig,
               channel,
+              noteContext: context.noteContext
+                ? {
+                    title: context.noteContext.title,
+                    preview: context.noteContext.contentPreview,
+                  }
+                : undefined,
               toolCount: 0,
               messageCount: compactedMessages.length,
             },
@@ -430,6 +450,12 @@ export function startAgentLoop() {
             toolsOverride: approvalTools,
             agentConfig,
             channel,
+            noteContext: context.noteContext
+              ? {
+                  title: context.noteContext.title,
+                  preview: context.noteContext.contentPreview,
+                }
+              : undefined,
             toolCount: 0,
             messageCount: compactedMessages.length,
           });

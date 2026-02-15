@@ -14,6 +14,7 @@ import {
 } from "./finance";
 import { internetSearch } from "./internet-search";
 import { memorySearch, memoryStore } from "./memory";
+import { createNoteTools } from "./notes";
 import { scheduleTask } from "./schedule";
 import { taskComplete, taskCreate, taskDelete, taskList, taskUpdate } from "./tasks";
 
@@ -40,3 +41,7 @@ export const tools = {
   finance_create_transaction: financeCreateTransaction,
   finance_create_transfer: financeCreateTransfer,
 };
+
+export function getNoteTools(conversationId: Parameters<typeof createNoteTools>[0]) {
+  return createNoteTools(conversationId);
+}
