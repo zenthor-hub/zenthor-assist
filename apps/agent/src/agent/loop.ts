@@ -44,6 +44,19 @@ interface NoteCreationSummary {
   source: string;
 }
 
+const NOTE_TOOL_NAMES = [
+  "note_list",
+  "note_get",
+  "note_create",
+  "note_update",
+  "note_move",
+  "note_archive",
+  "note_generate_from_conversation",
+  "note_transform",
+  "note_apply_transform",
+  "note_update_from_ai",
+] as const;
+
 /** Convert any remaining markdown syntax to WhatsApp-compatible formatting */
 function sanitizeForWhatsApp(text: string): string {
   return (
@@ -386,13 +399,28 @@ export function startAgentLoop() {
         if (pluginTools.policy) policies.push(pluginTools.policy);
         if (agentConfig?.toolPolicy) policies.push(agentConfig.toolPolicy);
         const mergedPolicy = policies.length > 1 ? mergeToolPolicies(...policies) : channelPolicy;
+        const noteAwarePolicy: typeof mergedPolicy = (() => {
+          if (channel !== "web") return mergedPolicy;
+
+          const denied = new Set<string>(mergedPolicy.deny ?? []);
+          const allowed = mergedPolicy.allow ? [...mergedPolicy.allow] : [];
+          const addOn = NOTE_TOOL_NAMES.filter(
+            (name) => !denied.has(name) && !allowed.includes(name),
+          );
+          if (addOn.length === 0) return mergedPolicy;
+
+          return {
+            ...mergedPolicy,
+            allow: [...allowed, ...addOn],
+          };
+        })();
 
         const mergedTools = {
           ...pluginTools.tools,
           ...noteTools,
         };
 
-        const filteredTools = filterTools(mergedTools, mergedPolicy) as Record<string, Tool>;
+        const filteredTools = filterTools(mergedTools, noteAwarePolicy) as Record<string, Tool>;
 
         // Wrap high-risk tools with approval flow
         const approvalTools = wrapToolsWithApproval(filteredTools, {
