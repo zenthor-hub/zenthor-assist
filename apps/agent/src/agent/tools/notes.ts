@@ -5,6 +5,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { getConvexClient } from "../../convex/client";
+import { logger } from "../../observability/logger";
 
 const listNotesInput = z.object({
   folderId: z.string().optional().describe("Note folder ID to scope results"),
@@ -85,11 +86,44 @@ function cleanText(value: unknown): string {
 
 const noteFolderIdPattern = /^[a-z0-9]{32}$/i;
 
-function normalizeNoteFolderId(folderId?: string): Id<"noteFolders"> | undefined {
+type NoteFolderIdNormalization = {
+  value: Id<"noteFolders"> | undefined;
+  wasSanitized: boolean;
+  reason?: "empty" | "invalid-format";
+  rawValue?: string;
+};
+
+function normalizeNoteFolderId(folderId?: string): NoteFolderIdNormalization {
   const normalized = cleanText(folderId);
-  if (!normalized) return undefined;
-  if (!noteFolderIdPattern.test(normalized)) return undefined;
-  return normalized as Id<"noteFolders">;
+  if (folderId === undefined) return { value: undefined, wasSanitized: false };
+  if (!normalized) return { value: undefined, wasSanitized: true, reason: "empty" };
+  if (!noteFolderIdPattern.test(normalized)) {
+    return {
+      value: undefined,
+      wasSanitized: true,
+      reason: "invalid-format",
+      rawValue: normalized,
+    };
+  }
+  return { value: normalized as Id<"noteFolders">, wasSanitized: false };
+}
+
+function resolveNoteFolderId(
+  conversationId: Id<"conversations">,
+  toolName: string,
+  folderId?: string,
+): Id<"noteFolders"> | undefined {
+  const normalized = normalizeNoteFolderId(folderId);
+  if (!normalized.wasSanitized) return normalized.value;
+
+  void logger.warn("agent.notes.tool.folder_id_sanitized", {
+    toolName,
+    conversationId,
+    reason: normalized.reason ?? "invalid-format",
+    rawFolderId: normalized.rawValue ?? folderId,
+  });
+
+  return undefined;
 }
 
 function summarizeText(content: string, maxChars = 500) {
@@ -189,7 +223,7 @@ export function createNoteTools(conversationId: Id<"conversations">) {
           const notes = await client.query(api.notes.listForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
-            folderId: normalizeNoteFolderId(folderId),
+            folderId: resolveNoteFolderId(conversationId, "note_list", folderId),
             isArchived,
             limit,
           });
@@ -231,7 +265,7 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             conversationId,
             title: normalizedTitle,
             content,
-            folderId: normalizeNoteFolderId(folderId),
+            folderId: resolveNoteFolderId(conversationId, "note_create", folderId),
             source: source ?? "chat-generated",
           });
           return noteCreatedResult(id, normalizedTitle, source ?? "chat-generated");
@@ -252,7 +286,7 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             id: noteId as Id<"notes">,
             title,
             content,
-            folderId: normalizeNoteFolderId(folderId),
+            folderId: resolveNoteFolderId(conversationId, "note_update", folderId),
             isArchived,
             metadata,
           });
@@ -272,7 +306,7 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             serviceKey: env.AGENT_SECRET,
             conversationId,
             id: noteId as Id<"notes">,
-            folderId: normalizeNoteFolderId(folderId),
+            folderId: resolveNoteFolderId(conversationId, "note_move", folderId),
           });
           return `Moved note ${noteId}.`;
         } catch (error) {
@@ -327,7 +361,11 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             conversationId,
             title: normalizedTitle,
             content: `## Source conversation\n${body || "(No messages)"}`,
-            folderId: normalizeNoteFolderId(folderId),
+            folderId: resolveNoteFolderId(
+              conversationId,
+              "note_generate_from_conversation",
+              folderId,
+            ),
             source: source ?? "chat-generated",
           });
           return noteCreatedResult(id, normalizedTitle, source ?? "chat-generated");
