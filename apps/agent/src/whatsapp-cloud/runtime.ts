@@ -3,7 +3,12 @@ import { env } from "@zenthor-assist/env/agent";
 
 import { getConvexClient } from "../convex/client";
 import { logger, typedEvent } from "../observability/logger";
-import { sendCloudApiMessage, sendCloudApiQuickReplyButtons, sendTypingIndicator } from "./sender";
+import {
+  sendCloudApiImage,
+  sendCloudApiMessage,
+  sendCloudApiQuickReplyButtons,
+  sendTypingIndicator,
+} from "./sender";
 
 type QuickReplyButton = {
   id: string;
@@ -14,6 +19,9 @@ type OutboundMetadata = {
   kind: string;
   toolName?: string;
   buttons?: unknown;
+  mediaUrl?: string;
+  mediaType?: string;
+  caption?: string;
 };
 
 function getQuickReplyButtons(
@@ -143,11 +151,15 @@ async function startOutboundLoop(accountId: string, ownerId: string): Promise<vo
       try {
         const metadata = job.payload.metadata as OutboundMetadata | undefined;
         const buttons = getQuickReplyButtons(metadata);
+        const mediaType = metadata?.mediaType?.toLowerCase();
+        const mediaUrl = metadata?.mediaUrl?.trim();
 
         if (job.payload.metadata?.kind === "typing_indicator") {
           await sendTypingIndicator(job.to);
         } else if (buttons !== undefined) {
           await sendCloudApiQuickReplyButtons(job.to, job.payload.content, buttons);
+        } else if (mediaUrl && mediaType?.startsWith("image/")) {
+          await sendCloudApiImage(job.to, mediaUrl, metadata?.caption);
         } else {
           await sendCloudApiMessage(job.to, job.payload.content);
         }
