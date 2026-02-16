@@ -5,7 +5,7 @@ import { generateText, stepCountIs, streamText } from "ai";
 import { logger } from "../observability/logger";
 import { getAIProvider } from "./ai-gateway";
 import { runWithFallback } from "./model-fallback";
-import { selectModel } from "./model-router";
+import { type ModelTier, selectModel } from "./model-router";
 import { tools } from "./tools";
 import { getWebSearchTool } from "./tools/web-search";
 
@@ -162,7 +162,19 @@ function buildSystemPrompt(
     "Use note_transform for direct full-note rewrites such as: rewrite this note, rewrite this entire note, rewrite the note, clean-up the note.\n" +
     "For full-note rewrite or clean-up, call note_transform first with the current noteId.\n" +
     "Only call note_apply_transform/note_update_from_ai after the user explicitly approves or requested a direct update.";
-  return `${prompt}${NOTE_TOOL_CONFIRMATION_PROMPT}\n\n## Note-editor mode\nYou are operating as an AI note editor for "${noteContext.title}". Provide concise edit-focused responses and prefer machine-readable change suggestions.\nWhen the user asks for an edit command, first return a structured proposal with fields resultText and operations.\nIf the request is a full-note rewrite, clean-up, structure change, or reformat, call note_transform for the current note first.\nAvoid sending an empty final response after note tool calls.\nAvailable commands:\n${commandHints}\n\nCurrent note preview:\n${noteContext.preview ?? "(empty)"}\n${noteIdLine}\n\n${commandPolicy}`;
+  return `${prompt}${NOTE_TOOL_CONFIRMATION_PROMPT}\n\n## Note-editor mode
+You are operating as an AI note editor for "${noteContext.title}". Provide concise edit-focused responses and prefer machine-readable change suggestions.
+When the user asks for an edit command, first return a structured proposal with fields resultText and operations.
+If the request is a full-note rewrite, clean-up, structure change, or reformat, call note_transform for the current note first.
+Avoid sending an empty final response after note tool calls.
+Available commands:
+${commandHints}
+
+Current note preview:
+${noteContext.preview ?? "(empty)"}
+${noteIdLine}
+
+${commandPolicy}`;
 }
 
 function getDefaultTools(modelName: string): Record<string, Tool> {
@@ -228,6 +240,14 @@ interface GenerateOptions {
   channel?: "web" | "whatsapp" | "telegram";
   toolCount?: number;
   messageCount?: number;
+  contextMessageCount?: number;
+  contextTokenEstimate?: number;
+  shouldCompact?: boolean;
+  shouldBlock?: boolean;
+  policyFingerprint?: string;
+  policyMergeSource?: string;
+  conversationId?: string;
+  jobId?: string;
   noteContext?: {
     noteId?: string;
     title: string;
@@ -235,23 +255,40 @@ interface GenerateOptions {
   };
 }
 
-function resolveModels(options?: GenerateOptions): {
+interface ResolvedModelConfig {
   primaryModel: string;
   fallbackModels: string[];
-} {
+  tier: ModelTier;
+  reason: string;
+  resolveMode: "agent_config_override" | "manual_model_override" | "router";
+}
+
+function resolveModels(options?: GenerateOptions): ResolvedModelConfig {
   // Explicit agent config takes priority (skip routing)
   if (options?.agentConfig?.model) {
     const fallbacks: string[] = [];
     if (options.agentConfig.fallbackModel) fallbacks.push(options.agentConfig.fallbackModel);
     else if (env.AI_FALLBACK_MODEL) fallbacks.push(env.AI_FALLBACK_MODEL);
-    return { primaryModel: options.agentConfig.model, fallbackModels: fallbacks };
+    return {
+      primaryModel: options.agentConfig.model,
+      fallbackModels: fallbacks,
+      tier: "power",
+      reason: "agent_config_override",
+      resolveMode: "agent_config_override",
+    };
   }
 
   // Explicit model override takes priority
   if (options?.modelOverride) {
     const fallbacks: string[] = [];
     if (env.AI_FALLBACK_MODEL) fallbacks.push(env.AI_FALLBACK_MODEL);
-    return { primaryModel: options.modelOverride, fallbackModels: fallbacks };
+    return {
+      primaryModel: options.modelOverride,
+      fallbackModels: fallbacks,
+      tier: "standard",
+      reason: "manual_model_override",
+      resolveMode: "manual_model_override",
+    };
   }
 
   // Use router for dynamic selection
@@ -260,7 +297,123 @@ function resolveModels(options?: GenerateOptions): {
     toolCount: options?.toolCount ?? 0,
     messageCount: options?.messageCount ?? 0,
   });
-  return { primaryModel: route.primary, fallbackModels: route.fallbacks };
+  return {
+    primaryModel: route.primary,
+    fallbackModels: route.fallbacks,
+    tier: route.tier,
+    reason: route.reason,
+    resolveMode: "router",
+  };
+}
+
+function estimateContextTokens(messages: Message[]): number {
+  const totalChars = messages.reduce((acc, message) => acc + message.content.length, 0);
+  return Math.max(1, Math.ceil(totalChars / 4));
+}
+
+function logModelGenerationStarted(
+  mode: "non_streaming" | "streaming",
+  payload: {
+    providerMode: string;
+    resolveMode: string;
+    routeTier: ModelTier;
+    routeReason: string;
+    options?: GenerateOptions;
+    context: {
+      contextMessageCount: number;
+      contextTokenEstimate: number;
+      shouldCompact?: boolean;
+      shouldBlock?: boolean;
+      activeToolCount: number;
+      systemPromptChars: number;
+    };
+    primaryModel: string;
+    fallbackModels: string[];
+    messageCount: number;
+  },
+) {
+  const policyFingerprint = payload.options?.policyFingerprint ?? "default";
+  const policyMergeSource = payload.options?.policyMergeSource ?? "default";
+
+  void logger.info("agent.model.generate.started", {
+    model: payload.primaryModel,
+    primaryModel: payload.primaryModel,
+    fallbackModels: payload.fallbackModels,
+    mode,
+    channel: payload.options?.channel,
+    messageCount: payload.messageCount,
+    conversationId: payload.options?.conversationId,
+    jobId: payload.options?.jobId,
+    contextMessageCount: payload.context.contextMessageCount,
+    contextTokenEstimate: payload.context.contextTokenEstimate,
+    shouldCompact: payload.context.shouldCompact,
+    shouldBlock: payload.context.shouldBlock,
+    systemPromptChars: payload.context.systemPromptChars,
+    activeToolCount: payload.context.activeToolCount,
+    policyFingerprint,
+    policyMergeSource,
+    routeTier: payload.routeTier,
+    routeReason: payload.routeReason,
+    providerMode: payload.providerMode,
+    resolveMode: payload.resolveMode,
+  });
+}
+
+function logModelGenerationCompleted(
+  mode: "non_streaming" | "streaming" | "stream_consumed",
+  payload: {
+    providerMode: string;
+    routeTier: ModelTier;
+    context: {
+      contextMessageCount: number;
+      contextTokenEstimate: number;
+    };
+    options?: GenerateOptions;
+    modelUsed: string;
+    startedAt: number;
+    fallbackAttempt: number;
+    attemptedModels: string[];
+  },
+) {
+  void logger.info("agent.model.generate.completed", {
+    model: payload.modelUsed,
+    modelUsed: payload.modelUsed,
+    mode,
+    channel: payload.options?.channel,
+    conversationId: payload.options?.conversationId,
+    jobId: payload.options?.jobId,
+    providerMode: payload.providerMode,
+    routeTier: payload.routeTier,
+    fallbackAttempt: payload.fallbackAttempt,
+    attemptedModels: payload.attemptedModels,
+    contextMessageCount: payload.context.contextMessageCount,
+    contextTokenEstimate: payload.context.contextTokenEstimate,
+    durationMs: Date.now() - payload.startedAt,
+  });
+}
+
+function processModelResult(contentMessages: {
+  steps: Array<{
+    toolCalls: Array<{ toolName: string; toolCallId: string; input: unknown }>;
+    toolResults: Array<{ toolCallId: string; output: unknown }>;
+  }>;
+  text: string;
+}) {
+  const allToolCalls = contentMessages.steps.flatMap((step) => step.toolCalls);
+  const allToolResults = contentMessages.steps.flatMap((step) => step.toolResults);
+
+  const resultsByCallId = new Map(allToolResults.map((tr) => [tr.toolCallId, tr.output]));
+
+  const toolCalls = allToolCalls.map((tc) => ({
+    name: tc.toolName,
+    input: tc.input,
+    output: resultsByCallId.get(tc.toolCallId),
+  }));
+
+  return {
+    content: contentMessages.text,
+    toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+  };
 }
 
 export async function generateResponse(
@@ -269,15 +422,12 @@ export async function generateResponse(
   options?: GenerateOptions,
 ): Promise<GenerateResult> {
   const startedAt = Date.now();
-  const { primaryModel, fallbackModels } = resolveModels(options);
-  void logger.info("agent.model.generate.started", {
-    mode: "non_streaming",
-    primaryModel,
-    fallbackModels,
-    messageCount: conversationMessages.length,
-    channel: options?.channel,
-  });
-
+  const provider = await getAIProvider();
+  const useStreaming = provider.mode === "openai_subscription";
+  const { primaryModel, fallbackModels, tier, reason, resolveMode } = resolveModels(options);
+  const contextMessageCount = options?.contextMessageCount ?? conversationMessages.length;
+  const contextTokenEstimate =
+    options?.contextTokenEstimate ?? estimateContextTokens(conversationMessages);
   const systemPrompt = buildSystemPrompt(
     skills,
     options?.agentConfig,
@@ -285,13 +435,29 @@ export async function generateResponse(
     options?.noteContext,
   );
 
-  const useStreaming = (await getAIProvider()).mode === "openai_subscription";
+  logModelGenerationStarted("non_streaming", {
+    providerMode: provider.mode,
+    resolveMode,
+    routeTier: tier,
+    routeReason: reason,
+    options,
+    context: {
+      contextMessageCount,
+      contextTokenEstimate,
+      shouldCompact: options?.shouldCompact,
+      shouldBlock: options?.shouldBlock,
+      activeToolCount: options?.toolCount ?? 0,
+      systemPromptChars: systemPrompt.length,
+    },
+    primaryModel,
+    fallbackModels,
+    messageCount: conversationMessages.length,
+  });
 
-  const { result, modelUsed } = await runWithFallback({
+  const { result, modelUsed, fallbackAttempt, attemptedModels } = await runWithFallback({
     primaryModel,
     fallbackModels,
     run: async (modelName) => {
-      const provider = await getAIProvider();
       const m = provider.model(modelName);
       const resolvedTools = resolveToolsForModel(modelName, options?.toolsOverride);
       const providerOptions = buildProviderOptions(provider.mode, systemPrompt);
@@ -310,15 +476,14 @@ export async function generateResponse(
           const stream = streamText({ ...callOptions, tools: toolsToUse });
           const text = await stream.text;
           const steps = await stream.steps;
-          return { text, steps };
+          return processModelResult({ steps, text });
         }
         const gen = await generateText({ ...callOptions, tools: toolsToUse });
-        return { text: gen.text, steps: gen.steps };
+        return processModelResult({ steps: gen.steps, text: gen.text });
       };
 
-      let completed;
       try {
-        completed = await execute(resolvedTools);
+        return await execute(resolvedTools);
       } catch (err) {
         const hasProviderSearchTool = SEARCH_TOOL_NAMES.some((name) => name in resolvedTools);
         if (!hasProviderSearchTool || !shouldRetryWithoutProviderSearch(provider.mode, err)) {
@@ -331,32 +496,23 @@ export async function generateResponse(
           mode: provider.mode,
         });
 
-        completed = await execute(removeProviderSearchTools(resolvedTools));
+        return execute(removeProviderSearchTools(resolvedTools));
       }
-
-      const allToolCalls = completed.steps.flatMap((step) => step.toolCalls);
-      const allToolResults = completed.steps.flatMap((step) => step.toolResults);
-
-      const resultsByCallId = new Map(allToolResults.map((tr) => [tr.toolCallId, tr.output]));
-
-      const toolCalls = allToolCalls.map((tc) => ({
-        name: tc.toolName,
-        input: tc.input,
-        output: resultsByCallId.get(tc.toolCallId),
-      }));
-
-      return {
-        content: completed.text,
-        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-      };
     },
   });
 
-  void logger.info("agent.model.generate.completed", {
-    mode: useStreaming ? "stream_consumed" : "non_streaming",
+  logModelGenerationCompleted("non_streaming", {
+    providerMode: provider.mode,
+    routeTier: tier,
+    context: {
+      contextMessageCount,
+      contextTokenEstimate,
+    },
+    options,
     modelUsed,
-    durationMs: Date.now() - startedAt,
-    channel: options?.channel,
+    startedAt,
+    fallbackAttempt,
+    attemptedModels,
   });
   return { ...result, modelUsed };
 }
@@ -372,15 +528,11 @@ export async function generateResponseStreaming(
   options?: GenerateOptions,
 ): Promise<GenerateResult> {
   const startedAt = Date.now();
-  const { primaryModel, fallbackModels } = resolveModels(options);
-  void logger.info("agent.model.generate.started", {
-    mode: "streaming",
-    primaryModel,
-    fallbackModels,
-    messageCount: conversationMessages.length,
-    channel: options?.channel,
-  });
-
+  const provider = await getAIProvider();
+  const { primaryModel, fallbackModels, tier, reason, resolveMode } = resolveModels(options);
+  const contextMessageCount = options?.contextMessageCount ?? conversationMessages.length;
+  const contextTokenEstimate =
+    options?.contextTokenEstimate ?? estimateContextTokens(conversationMessages);
   const streamSystemPrompt = buildSystemPrompt(
     skills,
     options?.agentConfig,
@@ -388,11 +540,29 @@ export async function generateResponseStreaming(
     options?.noteContext,
   );
 
-  const { result, modelUsed } = await runWithFallback({
+  logModelGenerationStarted("streaming", {
+    providerMode: provider.mode,
+    resolveMode,
+    routeTier: tier,
+    routeReason: reason,
+    options,
+    context: {
+      contextMessageCount,
+      contextTokenEstimate,
+      shouldCompact: options?.shouldCompact,
+      shouldBlock: options?.shouldBlock,
+      activeToolCount: options?.toolCount ?? 0,
+      systemPromptChars: streamSystemPrompt.length,
+    },
+    primaryModel,
+    fallbackModels,
+    messageCount: conversationMessages.length,
+  });
+
+  const { result, modelUsed, fallbackAttempt, attemptedModels } = await runWithFallback({
     primaryModel,
     fallbackModels,
     run: async (modelName) => {
-      const provider = await getAIProvider();
       const m = provider.model(modelName);
       const resolvedTools = resolveToolsForModel(modelName, options?.toolsOverride);
       const providerOptions = buildProviderOptions(provider.mode, streamSystemPrompt);
@@ -415,12 +585,11 @@ export async function generateResponseStreaming(
 
         const steps = await streamResult.steps;
         const text = await streamResult.text;
-        return { steps, text };
+        return processModelResult({ steps, text });
       };
 
-      let streamed;
       try {
-        streamed = await executeStream(resolvedTools);
+        return await executeStream(resolvedTools);
       } catch (err) {
         const hasProviderSearchTool = SEARCH_TOOL_NAMES.some((name) => name in resolvedTools);
         if (!hasProviderSearchTool || !shouldRetryWithoutProviderSearch(provider.mode, err)) {
@@ -433,34 +602,23 @@ export async function generateResponseStreaming(
           mode: provider.mode,
         });
 
-        streamed = await executeStream(removeProviderSearchTools(resolvedTools));
+        return executeStream(removeProviderSearchTools(resolvedTools));
       }
-
-      const { steps, text } = streamed;
-
-      const allToolCalls = steps.flatMap((step) => step.toolCalls);
-      const allToolResults = steps.flatMap((step) => step.toolResults);
-
-      const resultsByCallId = new Map(allToolResults.map((tr) => [tr.toolCallId, tr.output]));
-
-      const toolCalls = allToolCalls.map((tc) => ({
-        name: tc.toolName,
-        input: tc.input,
-        output: resultsByCallId.get(tc.toolCallId),
-      }));
-
-      return {
-        content: text,
-        toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-      };
     },
   });
 
-  void logger.info("agent.model.generate.completed", {
-    mode: "streaming",
+  logModelGenerationCompleted("streaming", {
+    providerMode: provider.mode,
+    routeTier: tier,
+    context: {
+      contextMessageCount,
+      contextTokenEstimate,
+    },
+    options,
     modelUsed,
-    durationMs: Date.now() - startedAt,
-    channel: options?.channel,
+    startedAt,
+    fallbackAttempt,
+    attemptedModels,
   });
   return { ...result, modelUsed };
 }

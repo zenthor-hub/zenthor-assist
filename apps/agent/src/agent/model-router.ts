@@ -2,18 +2,19 @@ import { env } from "@zenthor-assist/env/agent";
 
 import { logger } from "../observability/logger";
 
-interface RouteContext {
+export interface RouteContext {
   channel: "web" | "whatsapp" | "telegram";
   toolCount: number;
   messageCount: number;
 }
 
-type ModelTier = "lite" | "standard" | "power";
+export type ModelTier = "lite" | "standard" | "power";
 
-interface RouteResult {
+export interface RouteResult {
   primary: string;
   fallbacks: string[];
   tier: ModelTier;
+  reason: string;
 }
 
 /** Thresholds for escalating from lite → standard tier. */
@@ -41,16 +42,19 @@ export function selectModel(ctx: RouteContext): RouteResult {
   // model strength, and the compaction system handles long conversations.
   if (ctx.channel === "whatsapp") {
     void logger.info("agent.model.route.selected", {
+      routeTier: "lite",
       tier: "lite",
       channel: ctx.channel,
       toolCount: ctx.toolCount,
       messageCount: ctx.messageCount,
       model: lite,
+      reason: "whatsapp_always_lite",
     });
     return {
       primary: lite,
       fallbacks: buildFallbacks(standard, power),
       tier: "lite",
+      reason: "whatsapp_always_lite",
     };
   }
 
@@ -58,30 +62,36 @@ export function selectModel(ctx: RouteContext): RouteResult {
   const complex = isComplexTask(ctx);
   if (complex) {
     void logger.info("agent.model.route.selected", {
+      routeTier: "standard",
       tier: "standard",
       channel: ctx.channel,
       toolCount: ctx.toolCount,
       messageCount: ctx.messageCount,
       model: standard,
+      reason: "complexity_thresholds_met",
     });
     return {
       primary: standard,
       fallbacks: buildFallbacks(power),
       tier: "standard",
+      reason: "complexity_thresholds_met",
     };
   }
 
   // Web simple tasks use lite, with standard as first fallback
   void logger.info("agent.model.route.selected", {
+    routeTier: "lite",
     tier: "lite",
     channel: ctx.channel,
     toolCount: ctx.toolCount,
     messageCount: ctx.messageCount,
     model: lite,
+    reason: "simple_path",
   });
   return {
     primary: lite,
     fallbacks: buildFallbacks(standard, power),
     tier: "lite",
+    reason: "simple_path",
   };
 }

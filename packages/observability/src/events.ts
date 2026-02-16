@@ -102,11 +102,35 @@ export interface AgentConversationTruncatedPayload {
   truncatedCount: number;
 }
 
+export interface AgentModelPreGenerationDiagnosticsPayload {
+  conversationId: string;
+  jobId: string;
+  shouldCompact: boolean;
+  shouldBlock: boolean;
+  contextMessageCount: number;
+  contextTokenEstimate: number;
+}
+
+export interface AgentModelRouteSelectedPayload {
+  conversationId?: string;
+  jobId?: string;
+  channel: string;
+  toolCount: number;
+  messageCount: number;
+  routeTier: "lite" | "standard" | "power";
+  reason: string;
+  model: string;
+  fallbackModels: string[];
+}
+
 export interface AgentModelFallbackUsedPayload {
   jobId?: string;
   originalModel: string;
   fallbackModel: string;
   reason: string;
+  attempt: number;
+  attemptCount: number;
+  attemptedModels?: string[];
 }
 
 export interface AgentRetryAttemptPayload {
@@ -127,6 +151,21 @@ export interface AgentModelGenerateStartedPayload {
   model: string;
   messageCount: number;
   toolCount: number;
+  contextMessageCount?: number;
+  contextTokenEstimate?: number;
+  shouldCompact?: boolean;
+  shouldBlock?: boolean;
+  systemPromptChars?: number;
+  activeToolCount?: number;
+  policyFingerprint?: string;
+  policyMergeSource?: string;
+  routeTier?: "lite" | "standard" | "power";
+  routeReason?: string;
+  providerMode?: "gateway" | "openai_subscription";
+  resolveMode?: string;
+  fallbackAttempt?: number;
+  attemptedModels?: string[];
+  mode?: "non_streaming" | "streaming";
 }
 
 export interface AgentModelGenerateCompletedPayload {
@@ -134,6 +173,15 @@ export interface AgentModelGenerateCompletedPayload {
   jobId: string;
   model: string;
   durationMs: number;
+  routeTier?: "lite" | "standard" | "power";
+  providerMode?: "gateway" | "openai_subscription";
+  contextMessageCount?: number;
+  contextTokenEstimate?: number;
+  fallbackAttempt?: number;
+  attemptedModels?: string[];
+  shouldCompact?: boolean;
+  shouldBlock?: boolean;
+  mode?: "non_streaming" | "streaming" | "stream_consumed";
   promptTokens?: number;
   completionTokens?: number;
   finishReason?: string;
@@ -263,6 +311,8 @@ export interface OperationalEventMap {
   // Recovery
   "agent.conversation.compacted": AgentConversationCompactedPayload;
   "agent.conversation.truncated": AgentConversationTruncatedPayload;
+  "agent.model.pre_generation_diagnostics": AgentModelPreGenerationDiagnosticsPayload;
+  "agent.model.route.selected": AgentModelRouteSelectedPayload;
   "agent.model.fallback.used": AgentModelFallbackUsedPayload;
   "agent.retry.attempt": AgentRetryAttemptPayload;
 

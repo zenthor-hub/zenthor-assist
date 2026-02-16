@@ -285,6 +285,17 @@ function buildNoteToolFallbackReply(toolCalls: ToolCallRecord[] | undefined): st
   return "I completed a note action. Open Tool call details for the results.";
 }
 
+function buildPolicyFingerprint(policy?: { allow?: string[]; deny?: string[] }): string {
+  const allow = [...(policy?.allow ?? [])].sort().join(",");
+  const deny = [...(policy?.deny ?? [])].sort().join(",");
+  return `allow:${allow || "<none>"}|deny:${deny || "<none>"}`;
+}
+
+function estimateContextTokens(messages: { content: string }[]): number {
+  const charCount = messages.reduce((acc, message) => acc + message.content.length, 0);
+  return Math.max(1, Math.ceil(charCount / 4));
+}
+
 export function startAgentLoop() {
   const client = getConvexClient();
   const workerId = env.WORKER_ID ?? `worker-${process.pid}`;
@@ -492,27 +503,32 @@ export function startAgentLoop() {
         }
 
         // Post-compaction context guard: if still over budget, truncate
-        const guard = evaluateContext(conversationMessages, env.AI_CONTEXT_WINDOW);
-        if (guard.shouldBlock) {
-          // Trim oldest messages until within budget (keep at least the last message)
-          while (
-            conversationMessages.length > 1 &&
-            evaluateContext(conversationMessages, env.AI_CONTEXT_WINDOW).shouldBlock
-          ) {
-            conversationMessages.shift();
-          }
+        const originalMessageCount = conversationMessages.length;
+        const preGuard = evaluateContext(conversationMessages, env.AI_CONTEXT_WINDOW);
+        const shouldCompact = !!summary;
+        let shouldBlock = preGuard.shouldBlock;
+        while (shouldBlock && conversationMessages.length > 1) {
+          conversationMessages.shift();
+          shouldBlock = evaluateContext(conversationMessages, env.AI_CONTEXT_WINDOW).shouldBlock;
+        }
+        const contextMessageCount = conversationMessages.length;
+        const didTruncate = contextMessageCount < originalMessageCount;
+
+        if (didTruncate) {
           void logger.lineInfo(
             `[agent] Truncated conversation ${job.conversationId} to ${conversationMessages.length} messages (context guard)`,
             {
               conversationId: job.conversationId,
               jobId: job._id,
-              messageCount: conversationMessages.length,
+              messageCount: contextMessageCount,
+              originalCount: originalMessageCount,
             },
           );
           void logger.warn("agent.conversation.truncated", {
             conversationId: job.conversationId,
             jobId: job._id,
-            messageCount: conversationMessages.length,
+            originalCount: originalMessageCount,
+            truncatedCount: contextMessageCount,
           });
         }
 
@@ -520,6 +536,16 @@ export function startAgentLoop() {
         if (checkLease("pre_generate")) {
           continue;
         }
+
+        const contextDiagnosticPayload = {
+          conversationId: job.conversationId,
+          jobId: job._id,
+          shouldCompact,
+          shouldBlock,
+          contextTokenEstimate: estimateContextTokens(conversationMessages),
+          contextMessageCount: conversationMessages.length,
+        };
+        void logger.info("agent.model.pre_generation_diagnostics", contextDiagnosticPayload);
 
         const channel = context.conversation.channel as "web" | "whatsapp" | "telegram";
 
@@ -601,6 +627,16 @@ export function startAgentLoop() {
         if (pluginTools.policy) policies.push(pluginTools.policy);
         if (agentConfig?.toolPolicy) policies.push(agentConfig.toolPolicy);
         const mergedPolicy = policies.length > 1 ? mergeToolPolicies(...policies) : channelPolicy;
+        const policyMergeSource = [
+          "channel",
+          unionedSkillPolicy ? "skills" : undefined,
+          pluginTools.policy ? "plugin" : undefined,
+          agentConfig?.toolPolicy ? "agent" : undefined,
+        ]
+          .filter((source): source is string => source !== undefined)
+          .join("+");
+        const policyFingerprint = buildPolicyFingerprint(mergedPolicy);
+
         const noteAwarePolicy: typeof mergedPolicy = (() => {
           if (channel === "telegram") return mergedPolicy;
 
@@ -681,6 +717,15 @@ export function startAgentLoop() {
               toolsOverride: approvalTools,
               agentConfig,
               channel,
+              toolCount: Object.keys(approvalTools).length,
+              contextMessageCount,
+              contextTokenEstimate: estimateContextTokens(compactedMessages),
+              shouldCompact,
+              shouldBlock,
+              policyFingerprint,
+              policyMergeSource,
+              conversationId: job.conversationId,
+              jobId: job._id,
               noteContext: context.noteContext
                 ? {
                     noteId: context.noteContext.noteId,
@@ -688,7 +733,6 @@ export function startAgentLoop() {
                     preview: context.noteContext.contentPreview,
                   }
                 : undefined,
-              toolCount: 0,
               messageCount: compactedMessages.length,
             },
           );
@@ -755,6 +799,15 @@ export function startAgentLoop() {
             toolsOverride: approvalTools,
             agentConfig,
             channel,
+            toolCount: Object.keys(approvalTools).length,
+            contextMessageCount,
+            contextTokenEstimate: estimateContextTokens(compactedMessages),
+            shouldCompact,
+            shouldBlock,
+            policyFingerprint,
+            policyMergeSource,
+            conversationId: job.conversationId,
+            jobId: job._id,
             noteContext: context.noteContext
               ? {
                   noteId: context.noteContext.noteId,
@@ -762,7 +815,6 @@ export function startAgentLoop() {
                   preview: context.noteContext.contentPreview,
                 }
               : undefined,
-            toolCount: 0,
             messageCount: compactedMessages.length,
           });
           modelUsed = response.modelUsed;
