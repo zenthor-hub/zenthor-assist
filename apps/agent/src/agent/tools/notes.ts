@@ -5,7 +5,7 @@ import { tool } from "ai";
 import { z } from "zod";
 
 import { getConvexClient } from "../../convex/client";
-import { logger } from "../../observability/logger";
+import { logger, typedEvent } from "../../observability/logger";
 
 const listNotesInput = z.object({
   folderId: z.string().optional().describe("Note folder ID to scope results"),
@@ -117,7 +117,7 @@ function beginNoteToolInvocation(
   if (extra) {
     Object.assign(invocation, extra);
   }
-  void logger.info("agent.notes.tool.request.started", invocation);
+  void typedEvent.info("agent.notes.tool.request.started", invocation);
   return invocation;
 }
 
@@ -126,7 +126,10 @@ function finalizeNoteToolInvocation(
   outcome: "succeeded" | "validation_failed" | "failed",
   extra?: Record<string, unknown>,
 ) {
-  const payload: NoteToolInvocation & { outcome: string; durationMs: number } = {
+  const payload: NoteToolInvocation & {
+    outcome: "succeeded" | "validation_failed" | "failed";
+    durationMs: number;
+  } = {
     ...invocation,
     outcome,
     durationMs: Date.now() - invocation.startedAt,
@@ -134,11 +137,11 @@ function finalizeNoteToolInvocation(
   if (extra) {
     Object.assign(payload, extra);
   }
-  void logger.info("agent.notes.tool.request.outcome", payload);
+  void typedEvent.info("agent.notes.tool.request.outcome", payload);
 }
 
 function logNoteToolError(toolName: string, context: NoteToolContext, error: unknown) {
-  void logger.exception("agent.notes.tool.request.exception", error, {
+  void typedEvent.exception("agent.notes.tool.request.exception", error, {
     toolName,
     conversationId: context.conversationId,
     ...(context.jobId ? { jobId: context.jobId } : {}),

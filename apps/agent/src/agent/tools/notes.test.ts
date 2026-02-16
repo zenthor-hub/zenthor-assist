@@ -16,6 +16,8 @@ type SetupResult = {
   mockQuery: ReturnType<typeof vi.fn>;
   mockMutation: ReturnType<typeof vi.fn>;
   mockLoggerWarn: ReturnType<typeof vi.fn>;
+  mockTypedEventInfo: ReturnType<typeof vi.fn>;
+  mockTypedEventException: ReturnType<typeof vi.fn>;
 };
 
 const conversationId = "conv-note-1" as Id<"conversations">;
@@ -29,6 +31,8 @@ function makeToolResultMock(overrides?: { serviceSecret?: string }) {
   const mockQuery = vi.fn();
   const mockMutation = vi.fn();
   const mockLoggerWarn = vi.fn();
+  const mockTypedEventInfo = vi.fn();
+  const mockTypedEventException = vi.fn();
 
   vi.doMock("@zenthor-assist/env/agent", () => ({
     env: {
@@ -47,16 +51,23 @@ function makeToolResultMock(overrides?: { serviceSecret?: string }) {
       exception: vi.fn(),
       flush: vi.fn(),
     },
+    typedEvent: {
+      info: mockTypedEventInfo,
+      warn: vi.fn(),
+      error: vi.fn(),
+      exception: mockTypedEventException,
+    },
   }));
   vi.doMock("../../convex/client", () => ({
     getConvexClient: () => ({ query: mockQuery, mutation: mockMutation }),
   }));
 
-  return { mockQuery, mockMutation, mockLoggerWarn };
+  return { mockQuery, mockMutation, mockLoggerWarn, mockTypedEventInfo, mockTypedEventException };
 }
 
 async function setupTools(overrides?: { serviceSecret?: string }): Promise<SetupResult> {
-  const { mockQuery, mockMutation, mockLoggerWarn } = makeToolResultMock(overrides);
+  const { mockQuery, mockMutation, mockLoggerWarn, mockTypedEventInfo, mockTypedEventException } =
+    makeToolResultMock(overrides);
   const { createNoteTools } = await import("./notes");
 
   return {
@@ -67,6 +78,8 @@ async function setupTools(overrides?: { serviceSecret?: string }): Promise<Setup
     mockQuery,
     mockMutation,
     mockLoggerWarn,
+    mockTypedEventInfo,
+    mockTypedEventException,
   };
 }
 
@@ -439,7 +452,7 @@ describe("createNoteTools", () => {
   });
 
   it("returns service errors from tool execution", async () => {
-    const { tools, mockQuery } = await setupTools();
+    const { tools, mockQuery, mockTypedEventException } = await setupTools();
     mockQuery.mockRejectedValue(new Error("transcript service unavailable"));
 
     const result = (await toolExecute(tools.note_transform, {
@@ -448,5 +461,44 @@ describe("createNoteTools", () => {
     })) as string;
 
     expect(result).toBe("Could not complete note action: transcript service unavailable");
+    expect(mockTypedEventException).toHaveBeenCalledWith(
+      "agent.notes.tool.request.exception",
+      expect.any(Error),
+      expect.objectContaining({
+        toolName: "note_transform",
+        conversationId,
+      }),
+    );
+  });
+
+  it("emits structured request lifecycle events for note creation", async () => {
+    const { tools, mockQuery, mockMutation, mockTypedEventInfo } = await setupTools();
+    mockQuery.mockResolvedValue({
+      _id: validNoteIdThree,
+      title: "Focus notes",
+      content: "First point\nSecond point",
+      isArchived: false,
+    } satisfies NoteRecord);
+    mockMutation.mockResolvedValue(validNoteIdThree);
+
+    await toolExecute(tools.note_generate_from_conversation, {
+      title: "Trip notes",
+      messageLimit: 20,
+    });
+
+    expect(mockTypedEventInfo).toHaveBeenCalledWith(
+      "agent.notes.tool.request.started",
+      expect.objectContaining({
+        toolName: "note_generate_from_conversation",
+        conversationId,
+      }),
+    );
+    expect(mockTypedEventInfo).toHaveBeenCalledWith(
+      "agent.notes.tool.request.outcome",
+      expect.objectContaining({
+        toolName: "note_generate_from_conversation",
+        conversationId,
+      }),
+    );
   });
 });
