@@ -8,7 +8,10 @@ import {
   ArrowLeft,
   ArrowRight,
   Blocks,
+  Check,
   CheckSquare,
+  ChevronRight,
+  FolderPlus,
   House,
   LayoutGrid,
   MessageCircle,
@@ -19,14 +22,16 @@ import {
   Sparkles,
   SlidersHorizontal,
   UserCircle,
+  X,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type * as React from "react";
 import { toast } from "sonner";
 
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Sidebar,
   SidebarContent,
@@ -38,8 +43,12 @@ import {
   SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
 
 import { NavUser } from "./nav-user";
 import { ThemeSwitcher } from "./theme-switcher";
@@ -58,7 +67,28 @@ interface SidebarNote {
   _creationTime: number;
   title?: string;
   isArchived: boolean;
+  folderId?: string;
 }
+
+interface SidebarFolder {
+  _id: string;
+  name: string;
+  color: string;
+  position: number;
+}
+
+const PRESET_FOLDER_COLORS = [
+  "#60a5fa",
+  "#38bdf8",
+  "#34d399",
+  "#f472b6",
+  "#facc15",
+  "#fb923c",
+  "#c084fc",
+  "#f87171",
+  "#a78bfa",
+  "#22c55e",
+];
 
 function getSidebarModeFromPath(pathname: string): SidebarMode {
   if (pathname.startsWith("/chat")) return "chats";
@@ -109,6 +139,51 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   }) ?? []) as SidebarNote[];
   const archiveConversation = useMutation(api.conversations.archive);
   const archiveNote = useMutation(api.notes.archive);
+  const folders = (useQuery(api.noteFolders.list) ?? []) as SidebarFolder[];
+  const createFolder = useMutation(api.noteFolders.create);
+  const [showNewFolderForm, setShowNewFolderForm] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [newFolderColor, setNewFolderColor] = useState(PRESET_FOLDER_COLORS[0]!);
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
+  const newFolderInputRef = useRef<HTMLInputElement>(null);
+
+  const folderGroups = useMemo(() => {
+    const groups = new Map<string, SidebarNote[]>();
+    for (const note of activeNotes) {
+      const key = note.folderId ?? "unfiled";
+      const list = groups.get(key) ?? [];
+      list.push(note);
+      groups.set(key, list);
+    }
+    return groups;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- activeNotes ref from useQuery
+  }, [activeNotes]);
+
+  function toggleFolder(folderId: string) {
+    setCollapsedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderId)) {
+        next.delete(folderId);
+      } else {
+        next.add(folderId);
+      }
+      return next;
+    });
+  }
+
+  async function handleCreateFolder() {
+    const name = newFolderName.trim();
+    if (!name) return;
+    try {
+      await createFolder({ name, color: newFolderColor });
+      setNewFolderName("");
+      setNewFolderColor(PRESET_FOLDER_COLORS[0]!);
+      setShowNewFolderForm(false);
+      toast.success(t("Folder created"));
+    } catch {
+      toast.error(t("Failed to create folder"));
+    }
+  }
 
   useEffect(() => {
     setMode(getSidebarModeFromPath(pathname));
@@ -374,31 +449,199 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    tooltip={t("New folder")}
+                    onClick={() => {
+                      setShowNewFolderForm((prev) => !prev);
+                      if (!showNewFolderForm) {
+                        setTimeout(() => newFolderInputRef.current?.focus(), 0);
+                      }
+                    }}
+                  >
+                    <FolderPlus className="size-4" />
+                    <span>
+                      <T>New folder</T>
+                    </span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
+            {showNewFolderForm && (
+              <div className="mx-3 mt-2 flex flex-col gap-2 rounded-lg border p-2">
+                <input
+                  ref={newFolderInputRef}
+                  type="text"
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleCreateFolder();
+                    if (e.key === "Escape") setShowNewFolderForm(false);
+                  }}
+                  placeholder={t("Folder name")}
+                  className="text-foreground placeholder:text-muted-foreground bg-transparent text-xs outline-none"
+                />
+                <div className="flex items-center gap-1">
+                  <div className="flex flex-1 flex-wrap items-center gap-1">
+                    {PRESET_FOLDER_COLORS.map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => setNewFolderColor(color)}
+                        className={cn(
+                          "size-3.5 rounded-full transition-transform",
+                          newFolderColor === color &&
+                            "ring-foreground ring-offset-background scale-110 ring-2 ring-offset-1",
+                        )}
+                        style={{ backgroundColor: color }}
+                      />
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCreateFolder}
+                    disabled={!newFolderName.trim()}
+                    className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+                  >
+                    <Check className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewFolderForm(false)}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
             <SidebarGroupContent className="mt-2">
               <SidebarMenu>
-                {activeNotes.map((note) => {
-                  const isActive = pathname === `/notes/${note._id}`;
-                  const tooltip = note.title || t("Untitled note");
-
-                  return (
-                    <SidebarMenuItem key={note._id}>
-                      <SidebarMenuButton asChild isActive={isActive} tooltip={tooltip}>
-                        <Link href={`/notes/${note._id}`}>
-                          <NotebookText className="size-4" />
-                          <span className="truncate">{tooltip}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                      <SidebarMenuAction
-                        onClick={(e) => handleArchiveNote(e, note._id, true)}
-                        showOnHover
+                {folders.length > 0 ? (
+                  <>
+                    {folders.map((folder) => {
+                      const notes = folderGroups.get(folder._id) ?? [];
+                      const isOpen = !collapsedFolders.has(folder._id);
+                      return (
+                        <Collapsible
+                          key={folder._id}
+                          open={isOpen}
+                          onOpenChange={() => toggleFolder(folder._id)}
+                        >
+                          <SidebarMenuItem>
+                            <CollapsibleTrigger asChild>
+                              <SidebarMenuButton tooltip={folder.name}>
+                                <span
+                                  className="size-2 shrink-0 rounded-full"
+                                  style={{ backgroundColor: folder.color }}
+                                />
+                                <span className="truncate">{folder.name}</span>
+                                <ChevronRight
+                                  className={cn(
+                                    "text-muted-foreground ml-auto size-3.5 shrink-0 transition-transform",
+                                    isOpen && "rotate-90",
+                                  )}
+                                />
+                              </SidebarMenuButton>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent>
+                              <SidebarMenuSub>
+                                {notes.map((note) => {
+                                  const isActive = pathname === `/notes/${note._id}`;
+                                  const noteTitle = note.title || t("Untitled note");
+                                  return (
+                                    <SidebarMenuSubItem key={note._id}>
+                                      <SidebarMenuSubButton asChild size="sm" isActive={isActive}>
+                                        <Link href={`/notes/${note._id}`}>
+                                          <span className="truncate">{noteTitle}</span>
+                                        </Link>
+                                      </SidebarMenuSubButton>
+                                      <button
+                                        type="button"
+                                        onClick={(e) => handleArchiveNote(e, note._id, true)}
+                                        className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground absolute top-0.5 right-1 flex size-5 items-center justify-center rounded-md opacity-0 group-focus-within/menu-sub-item:opacity-100 group-hover/menu-sub-item:opacity-100"
+                                      >
+                                        <Archive className="size-3" />
+                                      </button>
+                                    </SidebarMenuSubItem>
+                                  );
+                                })}
+                              </SidebarMenuSub>
+                            </CollapsibleContent>
+                          </SidebarMenuItem>
+                        </Collapsible>
+                      );
+                    })}
+                    {(folderGroups.get("unfiled") ?? []).length > 0 && (
+                      <Collapsible
+                        open={!collapsedFolders.has("unfiled")}
+                        onOpenChange={() => toggleFolder("unfiled")}
                       >
-                        <Archive className="size-4" />
-                      </SidebarMenuAction>
-                    </SidebarMenuItem>
-                  );
-                })}
+                        <SidebarMenuItem>
+                          <CollapsibleTrigger asChild>
+                            <SidebarMenuButton tooltip={t("Unfiled")}>
+                              <NotebookText className="size-4" />
+                              <span className="truncate">
+                                <T>Unfiled</T>
+                              </span>
+                              <ChevronRight
+                                className={cn(
+                                  "text-muted-foreground ml-auto size-3.5 shrink-0 transition-transform",
+                                  !collapsedFolders.has("unfiled") && "rotate-90",
+                                )}
+                              />
+                            </SidebarMenuButton>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent>
+                            <SidebarMenuSub>
+                              {(folderGroups.get("unfiled") ?? []).map((note) => {
+                                const isActive = pathname === `/notes/${note._id}`;
+                                const noteTitle = note.title || t("Untitled note");
+                                return (
+                                  <SidebarMenuSubItem key={note._id}>
+                                    <SidebarMenuSubButton asChild size="sm" isActive={isActive}>
+                                      <Link href={`/notes/${note._id}`}>
+                                        <span className="truncate">{noteTitle}</span>
+                                      </Link>
+                                    </SidebarMenuSubButton>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => handleArchiveNote(e, note._id, true)}
+                                      className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground absolute top-0.5 right-1 flex size-5 items-center justify-center rounded-md opacity-0 group-focus-within/menu-sub-item:opacity-100 group-hover/menu-sub-item:opacity-100"
+                                    >
+                                      <Archive className="size-3" />
+                                    </button>
+                                  </SidebarMenuSubItem>
+                                );
+                              })}
+                            </SidebarMenuSub>
+                          </CollapsibleContent>
+                        </SidebarMenuItem>
+                      </Collapsible>
+                    )}
+                  </>
+                ) : (
+                  activeNotes.map((note) => {
+                    const isActive = pathname === `/notes/${note._id}`;
+                    const noteTitle = note.title || t("Untitled note");
+                    return (
+                      <SidebarMenuItem key={note._id}>
+                        <SidebarMenuButton asChild isActive={isActive} tooltip={noteTitle}>
+                          <Link href={`/notes/${note._id}`}>
+                            <NotebookText className="size-4" />
+                            <span className="truncate">{noteTitle}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                        <SidebarMenuAction
+                          onClick={(e) => handleArchiveNote(e, note._id, true)}
+                          showOnHover
+                        >
+                          <Archive className="size-4" />
+                        </SidebarMenuAction>
+                      </SidebarMenuItem>
+                    );
+                  })
+                )}
                 {activeNotes.length === 0 && (
                   <div className="text-muted-foreground px-3 py-8 text-center text-xs">
                     <T>No notes yet</T>
