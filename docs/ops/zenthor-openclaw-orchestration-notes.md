@@ -14,14 +14,14 @@ This preserves your notes/tasks “service mindset” while making new capabilit
 
 ## 2) OpenClaw vs Zenthor Assist: quick comparison
 
-| Area | OpenClaw reference pattern | Zenthor Assist current pattern | Practical impact |
-|---|---|---|---|
-| Policy composition | Multi-source policy pipeline (pipeline stages) | Merged channel + skill + plugin + agent policies | Easier to reason in one code path; less granular policy pipeline state |
-| Plugin metadata | Rich plugin manifests + workspace tooling | Builtin and extension manifests are moving to richer metadata | We now align on `manifest`/`toolDescriptors` and policy hints |
-| Tool allow/deny | Strong allowlist + sandbox controls | Allow/deny with wildcard and `alsoAllow` merge behavior | More flexible than basic allowlist, fewer false denies |
-| Approval | Explicit approval hooks and allowlists | Global high-risk default + per-tool descriptor overrides | Good for fast rollout, still allows sensitive tools to stay gated |
-| Output contracts | Implicitly schema-driven via tool definitions | Explicit `outputContract` on tool descriptors + soft validation | Useful for predictable note/task automation output handling |
-| Extensibility | Plugin-first + deep channel integrations | Workspace-safe extension points plus static builtin registry | Slightly narrower than full plugin market, but safer for now |
+| Area               | OpenClaw reference pattern                     | Zenthor Assist current pattern                                  | Practical impact                                                       |
+| ------------------ | ---------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Policy composition | Multi-source policy pipeline (pipeline stages) | Merged channel + skill + plugin + agent policies                | Easier to reason in one code path; less granular policy pipeline state |
+| Plugin metadata    | Rich plugin manifests + workspace tooling      | Builtin and extension manifests are moving to richer metadata   | We now align on `manifest`/`toolDescriptors` and policy hints          |
+| Tool allow/deny    | Strong allowlist + sandbox controls            | Allow/deny with wildcard and `alsoAllow` merge behavior         | More flexible than basic allowlist, fewer false denies                 |
+| Approval           | Explicit approval hooks and allowlists         | Global high-risk default + per-tool descriptor overrides        | Good for fast rollout, still allows sensitive tools to stay gated      |
+| Output contracts   | Implicitly schema-driven via tool definitions  | Explicit `outputContract` on tool descriptors + soft validation | Useful for predictable note/task automation output handling            |
+| Extensibility      | Plugin-first + deep channel integrations       | Workspace-safe extension points plus static builtin registry    | Slightly narrower than full plugin market, but safer for now           |
 
 ## 3) Practical pros/cons of adding a new plugin/skill
 

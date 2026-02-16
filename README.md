@@ -7,7 +7,7 @@ Monorepo for Zenthor Assist: web app, Convex backend, and long-running AI agent 
 - Bun workspaces + Turborepo
 - `apps/web`: Next.js 16 + React 19 + TailwindCSS v4 + shadcn/ui + Clerk
 - `apps/backend`: Convex functions/schema + Clerk sync/webhooks
-- `apps/agent`: Bun runtime using AI SDK + optional WhatsApp (Baileys)
+- `apps/agent`: Bun runtime using AI SDK + WhatsApp (Baileys) + Telegram bot worker
 - Shared packages: `@zenthor-assist/config`, `@zenthor-assist/env`, `@zenthor-assist/observability`, `@zenthor-assist/agent-plugins`
 
 ## Prerequisites
@@ -41,10 +41,11 @@ bun run dev:setup
   - `CONVEX_URL`
   - `AI_GATEWAY_API_KEY` (required for `core`/`all` roles; not needed for `whatsapp-cloud`)
   - `AGENT_SECRET` (must match backend `AGENT_SECRET` for service-authenticated calls)
-  - `AGENT_ROLE` — one of `all | core | whatsapp | whatsapp-ingress | whatsapp-egress | whatsapp-cloud`
+  - `AGENT_ROLE` — one of `all | core | whatsapp | whatsapp-ingress | whatsapp-egress | whatsapp-cloud | telegram | telegram-egress`
   - `GROQ_API_KEY` (recommended for `core`/`all` — WhatsApp voice note transcription)
   - `BLOB_READ_WRITE_TOKEN` (recommended for `core`/`all` — audio blob storage)
   - For `whatsapp-cloud` role: `WHATSAPP_CLOUD_ACCESS_TOKEN`, `WHATSAPP_CLOUD_PHONE_NUMBER_ID`
+  - For `telegram`/`telegram-egress` roles: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_ACCOUNT_ID`
 - Convex Dashboard env:
   - `CLERK_JWT_ISSUER_DOMAIN`
   - `CLERK_WEBHOOK_SECRET`
@@ -55,6 +56,7 @@ bun run dev:setup
   - `TODOIST_CLIENT_SECRET` (optional, required for Todoist OAuth integration)
   - `TODOIST_OAUTH_REDIRECT_URI` (optional, required for Todoist OAuth integration)
   - `TODOIST_OAUTH_SCOPE` (optional, defaults to `data:read_write`)
+  - `TELEGRAM_WEBHOOK_SECRET` (required for Telegram webhook verification)
   - `WHATSAPP_CLOUD_APP_SECRET` (optional; enables webhook signature verification)
   - `WHATSAPP_CLOUD_VERIFY_TOKEN` (optional; webhook verification handshake token)
 
@@ -139,8 +141,12 @@ and creates a GitHub Release with generated notes.
 - Agent:
   - `cd apps/agent && bun run dev`
   - `cd apps/agent && bun run dev:core`
+  - `cd apps/agent && bun run dev:telegram`
   - `cd apps/agent && bun run dev:whatsapp`
+  - `cd apps/agent && bun run dev:telegram-egress`
   - `cd apps/agent && bun run start:core`
+  - `cd apps/agent && bun run start:telegram`
+  - `cd apps/agent && bun run start:telegram-egress`
   - `cd apps/agent && bun run start:whatsapp`
 
 ## Project Structure

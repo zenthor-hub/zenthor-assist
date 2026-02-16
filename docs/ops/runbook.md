@@ -1,9 +1,10 @@
-# Agent + WhatsApp Runbook
+# Agent + WhatsApp + Telegram Runbook
 
 This runbook is a quick smoke-test guide for the split runtime setup:
 
 - `core` worker handles AI processing.
 - `whatsapp` worker owns WhatsApp socket + outbound delivery.
+- `telegram` worker handles Telegram outbound queue consumption and consumes webhook inbound messages.
 - Convex remains the source of truth for queue/state.
 
 Decision reference:
@@ -56,7 +57,38 @@ Expected logs:
 - `[whatsapp] Starting outbound delivery loop...`
 - `[main] Agent is running (role: whatsapp)`
 
-## 4) Start Web App
+## 4) Start Telegram Worker
+
+From `apps/agent` in another terminal:
+
+```bash
+AGENT_ROLE=telegram TELEGRAM_ACCOUNT_ID=default TELEGRAM_BOT_TOKEN=<telegram-bot-token> bun run start:telegram
+```
+
+Generate a webhook secret if you do not already have one:
+
+```bash
+export TELEGRAM_WEBHOOK_SECRET="$(openssl rand -hex 32)"
+```
+
+Then configure it in Convex environment variables:
+
+```bash
+# Backend/Convex env (production/staging): TELEGRAM_WEBHOOK_SECRET
+# Local dev: set in apps/backend/.env.local
+```
+
+Register webhook with Telegram so requests include the same secret in:
+
+- `x-telegram-bot-api-secret-token` header for `POST /telegram/webhook`.
+
+Expected logs:
+
+- `[telegram] Starting outbound delivery loop...`
+- `[main] Agent is running (role: telegram)`
+- Confirm webhook is configured for `/telegram/webhook` with matching `TELEGRAM_WEBHOOK_SECRET`.
+
+## 5) Start Web App
 
 From `apps/web`:
 
@@ -104,7 +136,31 @@ If only core is running (`ENABLE_WHATSAPP=false`):
 1. WhatsApp-originated work can still be processed and queued.
 2. Outbound delivery does not happen until a WhatsApp worker is running.
 
-### D1) Optional Todoist Integration Smoke Test
+### E) Telegram End-to-End Works
+
+1. Ensure Telegram webhook is configured:
+
+```bash
+curl -X POST "https://<your-telegram-service-domain>/telegram/webhook" \
+  -H "Content-Type: application/json" \
+  -H "x-telegram-bot-api-secret-token: $TELEGRAM_WEBHOOK_SECRET" \
+  -d '{
+    "message": {
+      "message_id": 100,
+      "date": 1700000000,
+      "text": "hello from integration test",
+      "chat": { "id": 123456789 }
+    }
+  }'
+```
+
+2. In allowed Telegram chats, send a test message from the same chat.
+3. Expect:
+   - Convex log/handler: mutation call and job enqueue.
+   - Core worker processes the inbound message.
+   - Telegram worker claims and sends outbound response message.
+
+### F) Optional Todoist Integration Smoke Test
 
 Preconditions:
 
@@ -122,7 +178,7 @@ Steps:
 
 These scenarios validate that lease ownership, failover, and auth persistence work correctly. Run them before any production rollout.
 
-### E) Graceful Owner Handoff (SIGTERM)
+### G) Graceful Owner Handoff (SIGTERM)
 
 Validates that stopping a WhatsApp worker releases its lease and a standby takes over.
 
@@ -160,11 +216,11 @@ bunx convex run whatsappLeases.getLease '{"accountId":"default"}'
 
 ---
 
-### F) Crash Recovery (kill -9 / Forced Stop)
+### H) Crash Recovery (kill -9 / Forced Stop)
 
 Validates that a crashed worker's lease expires and a standby takes over after TTL.
 
-**Setup**: Same as scenario E — two workers running.
+**Setup**: Same as scenario G — two workers running.
 
 **Action**: Force-kill the primary worker (simulates crash):
 
@@ -191,7 +247,7 @@ bunx convex run whatsappLeases.getLease '{"accountId":"default"}'
 
 ---
 
-### G) Heartbeat Keeps Lease Alive Under Load
+### I) Heartbeat Keeps Lease Alive Under Load
 
 Validates that the heartbeat interval prevents lease expiry during normal operation.
 
@@ -219,7 +275,7 @@ bunx convex run whatsappLeases.getLease '{"accountId":"default"}'
 
 ---
 
-### H) Lease Contention Does Not Cause Duplicate Sends
+### J) Lease Contention Does Not Cause Duplicate Sends
 
 Validates that only the lease holder sends outbound messages.
 
@@ -239,7 +295,7 @@ Validates that only the lease holder sends outbound messages.
 
 ---
 
-### I) Convex Auth Persistence (WHATSAPP_AUTH_MODE=convex)
+### K) Convex Auth Persistence (WHATSAPP_AUTH_MODE=convex)
 
 Validates that WhatsApp session credentials survive worker restarts when using Convex-backed auth.
 
@@ -276,7 +332,7 @@ bunx convex run whatsappSession.getAll
 
 ---
 
-### J) Local Auth Persistence (WHATSAPP_AUTH_MODE=local)
+### L) Local Auth Persistence (WHATSAPP_AUTH_MODE=local)
 
 Validates that local file-based auth survives restarts.
 
