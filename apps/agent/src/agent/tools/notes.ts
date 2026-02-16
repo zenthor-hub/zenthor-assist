@@ -84,6 +84,21 @@ function cleanText(value: unknown): string {
   return String(value ?? "").trim();
 }
 
+function logEmptyNoteContent(
+  toolName: string,
+  conversationId: Id<"conversations">,
+  content: string,
+) {
+  void logger.warn("agent.notes.tool.empty_content", {
+    toolName,
+    conversationId,
+    rawLength: content.length,
+    renderedPreview: content.trim().slice(0, 200),
+  });
+}
+
+const EMPTY_NOTE_TOOL_MESSAGE = "Could not complete note action: note content is empty.";
+
 function stripInvisibleText(value: string) {
   const namedInvisibleEntities = new Set([
     "nbsp",
@@ -420,6 +435,19 @@ function hasRenderableText(html: string) {
   return stripInvisibleText(stripHtmlTags(html)) !== "";
 }
 
+function buildRenderableNoteContent(
+  content: string,
+  toolName: string,
+  conversationId: Id<"conversations">,
+  emptyMessage = EMPTY_NOTE_TOOL_MESSAGE,
+) {
+  const htmlContent = createNoteContent(content);
+  if (hasRenderableText(htmlContent)) return { htmlContent };
+
+  logEmptyNoteContent(toolName, conversationId, content);
+  return { error: emptyMessage };
+}
+
 function createNoteContent(content: string) {
   const converted = toHtmlFromTiptap(content);
   if (converted !== undefined) return converted;
@@ -576,16 +604,20 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             folderId,
           );
           const normalizedTitle = sanitizeNoteToolOutput(title);
-          const htmlContent = createNoteContent(content);
-          if (!hasRenderableText(htmlContent)) {
-            return "Could not complete note action: note content is empty.";
+          const renderableContent = buildRenderableNoteContent(
+            content,
+            "note_create",
+            conversationId,
+          );
+          if ("error" in renderableContent) {
+            return renderableContent.error;
           }
           const client = getConvexClient();
           const id = await client.mutation(api.notes.createForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
             title: normalizedTitle,
-            content: htmlContent,
+            content: renderableContent.htmlContent,
             folderId: resolvedFolderId,
             source: source ?? "chat-generated",
           });
@@ -611,17 +643,20 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             "note_update",
             folderId,
           );
-          const client = getConvexClient();
-          const htmlContent = content !== undefined ? createNoteContent(content) : undefined;
-          if (content !== undefined && !hasRenderableText(htmlContent ?? "")) {
-            return "Could not complete note action: note content is empty.";
+          const renderableContent =
+            content !== undefined
+              ? buildRenderableNoteContent(content, "note_update", conversationId)
+              : undefined;
+          if (renderableContent && "error" in renderableContent) {
+            return renderableContent.error;
           }
+          const client = getConvexClient();
           await client.mutation(api.notes.updateForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
             id: resolvedNoteId.value,
             title,
-            content: htmlContent,
+            content: renderableContent?.htmlContent,
             folderId: resolvedFolderId,
             isArchived,
             metadata,
@@ -723,17 +758,20 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             messageLimit,
           );
 
-          const htmlContent = toHtmlFromPlainText(
+          const renderableContent = buildRenderableNoteContent(
             `## Source conversation\n${body || "(No messages)"}`,
+            "note_generate_from_conversation",
+            conversationId,
+            "Could not complete note action: generated note content is empty.",
           );
-          if (!hasRenderableText(htmlContent)) {
-            return "Could not complete note action: generated note content is empty.";
+          if ("error" in renderableContent) {
+            return renderableContent.error;
           }
           const id = await client.mutation(api.notes.createForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
             title: normalizedTitle,
-            content: htmlContent,
+            content: renderableContent.htmlContent,
             folderId: resolvedFolderId,
             source: source ?? "chat-generated",
           });
@@ -793,15 +831,20 @@ export function createNoteTools(conversationId: Id<"conversations">) {
           }
 
           const client = getConvexClient();
-          const content = createNoteContent(resultText);
-          if (!hasRenderableText(content)) {
-            return "Could not complete note action: transform result is empty.";
+          const renderableContent = buildRenderableNoteContent(
+            resultText,
+            "note_apply_transform",
+            conversationId,
+            "Could not complete note action: transform result is empty.",
+          );
+          if ("error" in renderableContent) {
+            return renderableContent.error;
           }
           await client.mutation(api.notes.applyAiPatchForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
             id: resolvedNoteId.value,
-            content,
+            content: renderableContent.htmlContent,
             operations,
             model: "agent-notes-tools",
           });
@@ -823,15 +866,20 @@ export function createNoteTools(conversationId: Id<"conversations">) {
           }
 
           const client = getConvexClient();
-          const content = createNoteContent(resultText);
-          if (!hasRenderableText(content)) {
-            return "Could not complete note action: AI update content is empty.";
+          const renderableContent = buildRenderableNoteContent(
+            resultText,
+            "note_update_from_ai",
+            conversationId,
+            "Could not complete note action: AI update content is empty.",
+          );
+          if ("error" in renderableContent) {
+            return renderableContent.error;
           }
           await client.mutation(api.notes.applyAiPatchForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
             id: resolvedNoteId.value,
-            content,
+            content: renderableContent.htmlContent,
             operations,
             model: "agent-notes-tools",
           });
