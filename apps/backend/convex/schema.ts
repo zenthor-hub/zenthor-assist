@@ -361,6 +361,10 @@ export default defineSchema({
     source: v.string(),
     status: v.union(v.literal("active"), v.literal("inactive")),
     manifest: v.any(),
+    manifestVersion: v.optional(v.string()),
+    policyFingerprint: v.optional(v.string()),
+    riskProfile: v.optional(v.union(v.literal("low"), v.literal("medium"), v.literal("high"))),
+    toolContracts: v.optional(v.record(v.string(), v.any())),
     checksum: v.optional(v.string()),
     diagnosticStatus: v.optional(
       v.union(v.literal("activated"), v.literal("conflict"), v.literal("invalid")),
