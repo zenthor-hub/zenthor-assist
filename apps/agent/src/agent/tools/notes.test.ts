@@ -129,6 +129,32 @@ describe("createNoteTools", () => {
     expect(mockMutation).not.toHaveBeenCalled();
   });
 
+  it("rejects note_create content that is only invisible whitespace", async () => {
+    const { tools, mockMutation } = await setupTools();
+    mockMutation.mockResolvedValue(undefined);
+
+    const result = (await toolExecute(tools.note_create, {
+      title: "Draft",
+      content: "\u200B",
+    })) as string;
+
+    expect(result).toBe("Could not complete note action: note content is empty.");
+    expect(mockMutation).not.toHaveBeenCalled();
+  });
+
+  it("rejects note_create content that only looks empty after HTML entity normalization", async () => {
+    const { tools, mockMutation } = await setupTools();
+    mockMutation.mockResolvedValue(undefined);
+
+    const result = (await toolExecute(tools.note_create, {
+      title: "Draft",
+      content: "&nbsp;",
+    })) as string;
+
+    expect(result).toBe("Could not complete note action: note content is empty.");
+    expect(mockMutation).not.toHaveBeenCalled();
+  });
+
   it("blocks malformed note IDs before querying Convex", async () => {
     const { tools, mockQuery } = await setupTools();
     mockQuery.mockResolvedValue({
@@ -164,6 +190,25 @@ describe("createNoteTools", () => {
       conversationId,
       id: validNoteIdTwo,
     });
+  });
+
+  it("refuses note_transform when the target note body is only invisible text", async () => {
+    const { tools, mockQuery } = await setupTools();
+    mockQuery.mockResolvedValue({
+      _id: validNoteIdTwo,
+      title: "Empty note",
+      content: "<p>\u200B</p>",
+      isArchived: false,
+    } satisfies NoteRecord);
+
+    const result = (await toolExecute(tools.note_transform, {
+      noteId: validNoteIdTwo,
+      intent: "summarize",
+    })) as string;
+
+    expect(result).toBe(
+      `Note "Empty note" (${validNoteIdTwo}) is empty — there is no content to transform. Use note_update with a "content" field to add content directly.`,
+    );
   });
 
   it("persists transform output through note_apply_transform", async () => {

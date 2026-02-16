@@ -84,6 +84,69 @@ function cleanText(value: unknown): string {
   return String(value ?? "").trim();
 }
 
+function stripInvisibleText(value: string) {
+  const namedInvisibleEntities = new Set([
+    "nbsp",
+    "ensp",
+    "emsp",
+    "thinsp",
+    "zwnj",
+    "zwj",
+    "lrm",
+    "rlm",
+  ]);
+  const namedEntityPattern = /&(?:amp;)?([a-zA-Z]+);?/g;
+  const numericEntityPattern = /&(?:amp;)?#(x[0-9a-fA-F]+|\d+);?/g;
+
+  const decodedNamed = value.replace(namedEntityPattern, (match, entity: string) => {
+    return namedInvisibleEntities.has(entity.toLowerCase()) ? " " : match;
+  });
+
+  const decodedNumeric = decodedNamed.replace(numericEntityPattern, (_match, codeValue: string) => {
+    const decoded =
+      codeValue.startsWith("x") || codeValue.startsWith("X")
+        ? Number.parseInt(codeValue.slice(1), 16)
+        : Number.parseInt(codeValue, 10);
+    if (Number.isNaN(decoded)) return _match;
+
+    if (
+      decoded === 0x00a0 ||
+      decoded === 0x180e ||
+      decoded === 0x2000 ||
+      decoded === 0x2001 ||
+      decoded === 0x2002 ||
+      decoded === 0x2003 ||
+      decoded === 0x2004 ||
+      decoded === 0x2005 ||
+      decoded === 0x2006 ||
+      decoded === 0x2007 ||
+      decoded === 0x2008 ||
+      decoded === 0x2009 ||
+      decoded === 0x200a ||
+      decoded === 0x200b ||
+      decoded === 0x200c ||
+      decoded === 0x200d ||
+      decoded === 0x2028 ||
+      decoded === 0x2029 ||
+      decoded === 0x202f ||
+      decoded === 0x205f ||
+      decoded === 0x2060 ||
+      decoded === 0x3000 ||
+      decoded === 0xfeff
+    )
+      return " ";
+
+    return _match;
+  });
+
+  return decodedNumeric
+    .replace(
+      /[\u00A0\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\u180E\u200B-\u200D\u2060\uFEFF]/g,
+      " ",
+    )
+    .trim();
+}
+
 const noteFolderIdPattern = /^[a-z0-9]{32}$/i;
 const noteIdPattern = /^[a-z0-9]{32}$/i;
 
@@ -354,7 +417,7 @@ function parseUnknownObject(raw: string) {
 }
 
 function hasRenderableText(html: string) {
-  return cleanText(stripHtmlTags(html)) !== "";
+  return stripInvisibleText(stripHtmlTags(html)) !== "";
 }
 
 function createNoteContent(content: string) {
@@ -700,8 +763,7 @@ export function createNoteTools(conversationId: Id<"conversations">) {
           });
           if (!note) return "Note not found.";
 
-          const strippedContent = cleanText(stripHtmlTags(note.content));
-          if (!strippedContent) {
+          if (!hasRenderableText(note.content)) {
             return `Note "${note.title}" (${noteId}) is empty — there is no content to transform. Use note_update with a "content" field to add content directly.`;
           }
 
