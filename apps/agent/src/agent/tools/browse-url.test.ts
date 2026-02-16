@@ -17,6 +17,8 @@ async function exec(url: string): Promise<string> {
 const mockFetch = vi.fn<typeof globalThis.fetch>();
 
 beforeEach(() => {
+  mockFetch.mockReset();
+  mockLookup.mockReset();
   mockLookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
   vi.stubGlobal("fetch", mockFetch);
 });
@@ -30,6 +32,13 @@ function makeResponse(body: string, init?: { status?: number; headers?: Record<s
   return new Response(body, {
     status: init?.status ?? 200,
     headers: { "content-type": "text/html", ...init?.headers },
+  });
+}
+
+function makeRedirect(location: string, status = 302) {
+  return makeResponse("", {
+    status,
+    headers: { location, "content-type": "text/html" },
   });
 }
 
@@ -67,6 +76,11 @@ describe("browseUrl", () => {
       expect(result).toContain("Direct IP address target is blocked");
     });
 
+    it("blocks IPv6-mapped local address in URL", async () => {
+      const result = await exec("http://[::ffff:127.0.0.1]");
+      expect(result).toContain("Direct IP address target is blocked");
+    });
+
     it("blocks RFC1918 addresses resolved from hostname", async () => {
       mockLookup.mockResolvedValueOnce([{ address: "10.1.2.3", family: 4 }]);
       const result = await exec("http://example.internal-service.test");
@@ -86,6 +100,31 @@ describe("browseUrl", () => {
     it("blocks non-allowed port targets", async () => {
       const result = await exec("http://example.com:8080");
       expect(result).toContain("Port not allowed");
+    });
+
+    it("blocks redirect to blocked host", async () => {
+      mockLookup.mockImplementation(async (hostname) => {
+        if (hostname === "localhost") return [{ address: "127.0.0.1", family: 4 }];
+        return [{ address: "93.184.216.34", family: 4 }];
+      });
+
+      mockFetch.mockResolvedValueOnce(makeRedirect("http://localhost"));
+
+      const result = await exec("http://example.com/start");
+      expect(result).toContain("blocked for security reasons");
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("fails DNS security checks after redirect (rebinding)", async () => {
+      mockLookup.mockImplementation(async (hostname) => {
+        if (hostname === "evil.internal.example") return [{ address: "10.2.3.4", family: 4 }];
+        return [{ address: "93.184.216.34", family: 4 }];
+      });
+
+      mockFetch.mockResolvedValueOnce(makeRedirect("http://evil.internal.example"));
+
+      const result = await exec("http://example.com/start");
+      expect(result).toContain("resolves to blocked/private IP range");
     });
   });
 

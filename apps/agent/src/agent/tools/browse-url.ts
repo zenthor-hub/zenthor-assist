@@ -11,6 +11,7 @@ const MAX_PORT = 65_535;
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024; // 5MB
 const MAX_OUTPUT_CHARS = 100_000;
 const TIMEOUT_MS = 15_000;
+const MAX_REDIRECTS = 5;
 
 function isDisallowedHostname(hostname: string): boolean {
   const normalized = hostname.toLowerCase();
@@ -59,8 +60,40 @@ function isBlockedIPv6(address: string): boolean {
     normalized.startsWith("ff") ||
     normalized.startsWith("2001:db8") ||
     normalized.startsWith("2002:") ||
-    (normalized.startsWith("::ffff:") && isBlockedIPv4(normalized.slice("::ffff:".length)))
+    isMappedIPv6AddressBlocked(normalized)
   );
+}
+
+function isMappedIPv6AddressBlocked(address: string): boolean {
+  if (!address.startsWith("::ffff:")) return false;
+  const mappedAddress = address.slice("::ffff:".length);
+  if (mappedAddress.includes(".")) {
+    return isBlockedIPv4(mappedAddress);
+  }
+
+  const parts = mappedAddress.split(":");
+  if (parts.length > 2) return false;
+  const paddedParts = parts.map((part) => part.padStart(4, "0"));
+  if (!parts.every((part) => part.length > 0 && part.length <= 4 && /^[0-9a-f]+$/i.test(part)))
+    return false;
+
+  if (parts.length === 1) {
+    const value = Number.parseInt(paddedParts[0]!, 16);
+    if (Number.isNaN(value)) return false;
+    const octets = [
+      (value >>> 24) & 0xff,
+      (value >>> 16) & 0xff,
+      (value >>> 8) & 0xff,
+      value & 0xff,
+    ];
+    return isBlockedIPv4(octets.join("."));
+  }
+
+  const high = Number.parseInt(paddedParts[0]!, 16);
+  const low = Number.parseInt(paddedParts[1]!, 16);
+  if (Number.isNaN(high) || Number.isNaN(low)) return false;
+  const mapped = `${(high >>> 8) & 0xff}.${high & 0xff}.${(low >>> 8) & 0xff}.${low & 0xff}`;
+  return isBlockedIPv4(mapped);
 }
 
 function isBlockedIp(address: string): boolean {
@@ -126,6 +159,39 @@ async function isPrivateOrBlockedTarget(rawUrl: string): Promise<string | undefi
   return undefined;
 }
 
+async function fetchWithRedirectGuard(
+  rawUrl: string,
+  requestConfig: RequestInit,
+): Promise<Response> {
+  let currentUrl = rawUrl;
+
+  for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects++) {
+    const blocked = await isPrivateOrBlockedTarget(currentUrl);
+    if (blocked) {
+      throw new Error(blocked);
+    }
+
+    const response = await fetch(currentUrl, requestConfig);
+    if (response.status < 300 || response.status >= 400) {
+      return response;
+    }
+
+    const location = response.headers.get("location");
+    if (!location) {
+      return response;
+    }
+
+    const resolvedLocation = new URL(location, currentUrl).toString();
+    if (redirects === MAX_REDIRECTS) {
+      throw new Error("Error: Too many redirect hops while fetching URL.");
+    }
+
+    currentUrl = resolvedLocation;
+  }
+
+  throw new Error("Error: Too many redirect hops while fetching URL.");
+}
+
 function isBinaryContentType(ct: string): boolean {
   const binary = [
     "image/",
@@ -150,15 +216,17 @@ export const browseUrl = tool({
       return validationError;
     }
 
+    const fetchConfig: RequestInit = {
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      headers: {
+        "User-Agent": "ZenthorAssist/1.0 (compatible; bot)",
+        Accept: "text/html, application/xhtml+xml, text/plain, */*;q=0.8",
+      },
+      redirect: "manual",
+    };
+
     try {
-      const response = await fetch(url, {
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-        headers: {
-          "User-Agent": "ZenthorAssist/1.0 (compatible; bot)",
-          Accept: "text/html, application/xhtml+xml, text/plain, */*;q=0.8",
-        },
-        redirect: "follow",
-      });
+      const response = await fetchWithRedirectGuard(url, fetchConfig);
 
       if (!response.ok) {
         return `Error: HTTP ${response.status} ${response.statusText}`;
