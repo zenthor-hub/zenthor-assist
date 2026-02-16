@@ -23,6 +23,7 @@ import {
 import { wrapToolsWithApproval } from "./tool-approval";
 import { filterTools, getDefaultPolicy, mergeToolPolicies } from "./tool-policy";
 import { getNoteTools } from "./tools";
+import { createDelegateToSubagentTool } from "./tools/delegate-to-subagent";
 import { createMemoryTools } from "./tools/memory";
 import { createScheduleTask } from "./tools/schedule";
 import { createTaskTools } from "./tools/tasks";
@@ -601,6 +602,12 @@ export function startAgentLoop() {
           pluginTools.tools.task_complete = scopedTasks.task_complete;
         }
         if (pluginTools.tools.task_delete) pluginTools.tools.task_delete = scopedTasks.task_delete;
+        if (pluginTools.tools.delegate_to_subagent) {
+          pluginTools.tools.delegate_to_subagent = createDelegateToSubagentTool({
+            conversationId: job.conversationId,
+            parentJobId: job._id,
+          });
+        }
 
         // Build channel-aware tool policy
         const channelPolicy = getDefaultPolicy(channel);
@@ -669,10 +676,12 @@ export function startAgentLoop() {
           accountId: context.conversation.accountId ?? undefined,
         });
 
+        const isInternalJob = job.isInternal === true;
         const isWeb = context.conversation.channel === "web";
         let modelUsed: string | undefined;
+        let internalResult: string | undefined;
 
-        if (isWeb) {
+        if (!isInternalJob && isWeb) {
           if (checkLease("pre_placeholder")) {
             continue;
           }
@@ -794,7 +803,7 @@ export function startAgentLoop() {
             toolCalls: response.toolCalls,
             modelUsed,
           });
-        } else {
+        } else if (!isInternalJob) {
           const response = await generateResponse(compactedMessages, context.skills, {
             toolsOverride: approvalTools,
             agentConfig,
@@ -885,6 +894,46 @@ export function startAgentLoop() {
               },
             });
           }
+        } else {
+          const response = await generateResponse(compactedMessages, context.skills, {
+            toolsOverride: approvalTools,
+            agentConfig,
+            channel,
+            toolCount: Object.keys(approvalTools).length,
+            contextMessageCount,
+            contextTokenEstimate: estimateContextTokens(compactedMessages),
+            shouldCompact,
+            shouldBlock,
+            policyFingerprint,
+            policyMergeSource,
+            conversationId: job.conversationId,
+            jobId: job._id,
+            noteContext: context.noteContext
+              ? {
+                  noteId: context.noteContext.noteId,
+                  title: context.noteContext.title,
+                  preview: context.noteContext.contentPreview,
+                }
+              : undefined,
+            messageCount: compactedMessages.length,
+          });
+          modelUsed = response.modelUsed;
+          const noteCreationOutcomes = resolveNoteCreationOutcomes(response.toolCalls);
+          const noteCreationMessage = buildNoteCreationReply(
+            response.toolCalls,
+            channel,
+            noteCreationOutcomes,
+          );
+          const assistantContent = response.content ?? "";
+          const toolFallback =
+            assistantContent.trim() === ""
+              ? buildNoteToolFallbackReply(response.toolCalls)
+              : undefined;
+          internalResult = noteCreationMessage ?? toolFallback ?? assistantContent;
+
+          if (checkLease("post_generate")) {
+            continue;
+          }
         }
 
         // Check lease before completing (avoid overwriting a requeued job)
@@ -892,7 +941,12 @@ export function startAgentLoop() {
           continue;
         }
 
-        await client.mutation(api.agent.completeJob, { serviceKey, jobId: job._id, modelUsed });
+        await client.mutation(api.agent.completeJob, {
+          serviceKey,
+          jobId: job._id,
+          modelUsed,
+          result: isInternalJob ? internalResult : undefined,
+        });
         void logger.lineInfo(
           `[agent] Completed job ${job._id}${modelUsed ? ` (model: ${modelUsed})` : ""}`,
           {

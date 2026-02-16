@@ -2,6 +2,7 @@ import { browseUrl } from "./browse-url";
 import { calculate } from "./calculate";
 import { currentTime } from "./current-time";
 import { dateCalc } from "./date-calc";
+import { delegateToSubagent } from "./delegate-to-subagent";
 import {
   financeAccountSummary,
   financeCreateTransaction,
@@ -27,6 +28,7 @@ export const tools = {
   internet_search: internetSearch,
   calculate,
   date_calc: dateCalc,
+  delegate_to_subagent: delegateToSubagent,
   task_create: taskCreate,
   task_list: taskList,
   task_update: taskUpdate,

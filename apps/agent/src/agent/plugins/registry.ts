@@ -4,6 +4,7 @@ import { browseUrl } from "../tools/browse-url";
 import { calculate } from "../tools/calculate";
 import { currentTime } from "../tools/current-time";
 import { dateCalc } from "../tools/date-calc";
+import { delegateToSubagent } from "../tools/delegate-to-subagent";
 import { memorySearch, memoryStore } from "../tools/memory";
 import { scheduleTask } from "../tools/schedule";
 import { taskComplete, taskCreate, taskDelete, taskList, taskUpdate } from "../tools/tasks";
@@ -134,6 +135,23 @@ const coreDateCalcPlugin: RuntimePlugin = {
   },
 };
 
+const coreSubagentPlugin: RuntimePlugin = {
+  name: "core-subagent",
+  version: "1.0.0",
+  source: "builtin",
+  manifest: {
+    id: "core-subagent",
+    version: "1.0.0",
+    tools: ["delegate_to_subagent"],
+    riskLevel: "low",
+    source: "builtin",
+    description: "Delegates a focused task to a temporary internal subagent queue",
+  },
+  tools: {
+    delegate_to_subagent: delegateToSubagent,
+  },
+};
+
 const builtinPlugins: RuntimePlugin[] = [
   coreTimePlugin,
   coreMemoryPlugin,
@@ -142,6 +160,7 @@ const builtinPlugins: RuntimePlugin[] = [
   coreWebBrowsePlugin,
   coreCalculatorPlugin,
   coreDateCalcPlugin,
+  coreSubagentPlugin,
 ];
 
 export class PluginRegistry {

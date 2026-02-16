@@ -28,6 +28,7 @@ const PROFESSIONAL_WEB_ALLOWLIST = [
   "task_update",
   "task_complete",
   "task_delete",
+  "delegate_to_subagent",
 ];
 
 const PROFESSIONAL_WHATSAPP_ALLOWLIST = [
@@ -55,6 +56,7 @@ const PROFESSIONAL_WHATSAPP_ALLOWLIST = [
   "task_update",
   "task_complete",
   "task_delete",
+  "delegate_to_subagent",
 ];
 
 export function getDefaultPolicy(channel: "web" | "whatsapp" | "telegram"): ToolPolicy {
