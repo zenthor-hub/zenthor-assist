@@ -141,6 +141,54 @@ export interface AgentRetryAttemptPayload {
   reason: string;
 }
 
+export interface AgentLoopToolCallsPayload {
+  conversationId: string;
+  jobId: string;
+  channel: string;
+  modelUsed?: string;
+  generationMode: "streaming" | "non_streaming";
+  shouldCompact: boolean;
+  shouldBlock: boolean;
+  toolCount: number;
+  contextTokenEstimate?: number;
+  totalToolCalls: number;
+  uniqueToolCount: number;
+  noteToolCalls: number;
+  noteTools: string[];
+  noteCreationSuccessCount: number;
+  noteCreationFailureCount: number;
+  noteCreationFailures: Array<{
+    toolName: string;
+    reason: string;
+  }>;
+  toolCountByName: Record<string, number>;
+}
+
+export interface AgentNotesToolRequestStartedPayload {
+  invocationId: string;
+  startedAt: number;
+  toolName: string;
+  conversationId: string;
+  jobId?: string;
+}
+
+export interface AgentNotesToolRequestOutcomePayload {
+  invocationId: string;
+  startedAt: number;
+  toolName: string;
+  conversationId: string;
+  jobId?: string;
+  durationMs: number;
+  outcome: "succeeded" | "validation_failed" | "failed";
+  reason?: string;
+}
+
+export interface AgentNotesToolRequestExceptionPayload {
+  toolName: string;
+  conversationId: string;
+  jobId?: string;
+}
+
 // ---------------------------------------------------------------------------
 // Model generation
 // ---------------------------------------------------------------------------
@@ -331,6 +379,10 @@ export interface OperationalEventMap {
   "agent.model.route.selected": AgentModelRouteSelectedPayload;
   "agent.model.fallback.used": AgentModelFallbackUsedPayload;
   "agent.retry.attempt": AgentRetryAttemptPayload;
+  "agent.loop.tool_calls": AgentLoopToolCallsPayload;
+  "agent.notes.tool.request.started": AgentNotesToolRequestStartedPayload;
+  "agent.notes.tool.request.outcome": AgentNotesToolRequestOutcomePayload;
+  "agent.notes.tool.request.exception": AgentNotesToolRequestExceptionPayload;
 
   // Model generation
   "agent.model.generate.started": AgentModelGenerateStartedPayload;
