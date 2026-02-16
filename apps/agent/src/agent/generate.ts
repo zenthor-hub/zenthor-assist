@@ -75,7 +75,32 @@ interface Message {
   content: string;
 }
 
-function isLikelyNewNoteRequest(messages: Message[]) {
+const NOTE_EDIT_HINT_PATTERNS = [
+  /\b(rewrite|transform|summarize|extract|clean-style|clean up|expand|organize|translate)\b/i,
+  /\/rewrite\b/i,
+  /\/summarize\b/i,
+  /\/extract\b/i,
+  /\/expand\b/i,
+  /\/organize\b/i,
+  /\/clean-style\b/i,
+  /\/clean/i,
+];
+
+const NOTE_NEW_REQUEST_PATTERNS = [/(?:\b|\W)\/create-note\b/i, /(?:\b|\W)#create-note\b/i];
+
+const NOTE_CREATE_KEYWORDS = /\b(?:create|make|draft|write|generate|start|build)\b/i;
+const NOTE_NOUNS = /\b(?:note|notes)\b/i;
+const NOTE_NEWNESS_WORDS = /\b(?:new|another|fresh|additional|separate|extra|second|different)\b/i;
+const NOTE_EXISTING_REFERENCE_PATTERNS = [
+  /\bthis note\b/i,
+  /\bcurrent note\b/i,
+  /\bexisting note\b/i,
+  /\bthat note\b/i,
+  /\ban existent note\b/i,
+  /\bsame note\b/i,
+];
+
+export function isLikelyNewNoteRequest(messages: Message[]) {
   let latestUserMessage: Message | undefined;
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     if (messages[i]?.role === "user") {
@@ -86,16 +111,24 @@ function isLikelyNewNoteRequest(messages: Message[]) {
 
   if (!latestUserMessage) return false;
 
-  const content = latestUserMessage.content.toLowerCase();
-  if (/(this note|current note|existing note)/i.test(content)) {
+  const content = latestUserMessage.content;
+  if (NOTE_EDIT_HINT_PATTERNS.some((pattern) => pattern.test(content))) {
     return false;
   }
 
-  if (/\/create-note\b|#create-note\b/i.test(content)) {
+  if (NOTE_NEW_REQUEST_PATTERNS.some((pattern) => pattern.test(content))) {
     return true;
   }
 
-  return /\b(?:create|make|draft|write|generate)\b.*\b(?:new\s+)?note\b/i.test(content);
+  const hasCreateVerb = NOTE_CREATE_KEYWORDS.test(content);
+  const hasNoteNoun = NOTE_NOUNS.test(content);
+  if (!hasCreateVerb || !hasNoteNoun) return false;
+
+  if (NOTE_EXISTING_REFERENCE_PATTERNS.some((pattern) => pattern.test(content))) {
+    return NOTE_NEWNESS_WORDS.test(content);
+  }
+
+  return true;
 }
 
 interface ToolCallRecord {
@@ -601,9 +634,16 @@ export async function generateResponse(
   const contextMessageCount = options?.contextMessageCount ?? conversationMessages.length;
   const contextTokenEstimate =
     options?.contextTokenEstimate ?? estimateContextTokens(conversationMessages);
-  const resolvedNoteContext = isLikelyNewNoteRequest(conversationMessages)
-    ? undefined
-    : options?.noteContext;
+  const isNewNoteRequest = isLikelyNewNoteRequest(conversationMessages);
+  const resolvedNoteContext = isNewNoteRequest ? undefined : options?.noteContext;
+  if (options?.conversationId && options?.noteContext && isNewNoteRequest) {
+    void logger.debug("agent.model.generate.note_context_reset", {
+      conversationId: options.conversationId,
+      jobId: options.jobId,
+      channel: options.channel,
+      reason: "new_note_request_detected",
+    });
+  }
   const systemPrompt = buildSystemPrompt(
     skills,
     options?.agentConfig,
@@ -726,9 +766,16 @@ export async function generateResponseStreaming(
   const contextMessageCount = options?.contextMessageCount ?? conversationMessages.length;
   const contextTokenEstimate =
     options?.contextTokenEstimate ?? estimateContextTokens(conversationMessages);
-  const resolvedNoteContext = isLikelyNewNoteRequest(conversationMessages)
-    ? undefined
-    : options?.noteContext;
+  const isNewNoteRequest = isLikelyNewNoteRequest(conversationMessages);
+  const resolvedNoteContext = isNewNoteRequest ? undefined : options?.noteContext;
+  if (options?.conversationId && options?.noteContext && isNewNoteRequest) {
+    void logger.debug("agent.model.generate.note_context_reset", {
+      conversationId: options.conversationId,
+      jobId: options.jobId,
+      channel: options.channel,
+      reason: "new_note_request_detected",
+    });
+  }
   const streamSystemPrompt = buildSystemPrompt(
     skills,
     options?.agentConfig,
