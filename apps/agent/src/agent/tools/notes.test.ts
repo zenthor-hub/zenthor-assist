@@ -116,6 +116,19 @@ describe("createNoteTools", () => {
     expect(parsed.operations).toBe("summarize-content-blocks");
   });
 
+  it("rejects empty note_update content after conversion", async () => {
+    const { tools, mockMutation } = await setupTools();
+    mockMutation.mockResolvedValue(undefined);
+
+    const result = (await toolExecute(tools.note_update, {
+      noteId: validNoteIdOne,
+      content: "   ",
+    })) as string;
+
+    expect(result).toBe("Could not complete note action: note content is empty.");
+    expect(mockMutation).not.toHaveBeenCalled();
+  });
+
   it("blocks malformed note IDs before querying Convex", async () => {
     const { tools, mockQuery } = await setupTools();
     mockQuery.mockResolvedValue({

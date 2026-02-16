@@ -550,6 +550,9 @@ export function createNoteTools(conversationId: Id<"conversations">) {
           );
           const client = getConvexClient();
           const htmlContent = content !== undefined ? createNoteContent(content) : undefined;
+          if (content !== undefined && !hasRenderableText(htmlContent ?? "")) {
+            return "Could not complete note action: note content is empty.";
+          }
           await client.mutation(api.notes.updateForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
