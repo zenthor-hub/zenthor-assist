@@ -462,7 +462,10 @@ const onboardingDoc = v.object({
 });
 
 export const getConversationContext = serviceQuery({
-  args: { conversationId: v.id("conversations") },
+  args: {
+    conversationId: v.id("conversations"),
+    messageId: v.optional(v.id("messages")),
+  },
   returns: v.union(
     v.object({
       conversation: conversationDoc,
@@ -485,14 +488,29 @@ export const getConversationContext = serviceQuery({
     const contact = conversation.contactId ? await ctx.db.get(conversation.contactId) : null;
     const ownerUserId = conversation.userId ?? contact?.userId;
 
-    const noteContext = ownerUserId
-      ? await ctx.db
-          .query("notes")
-          .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))
-          .filter((q) => q.eq(q.field("isArchived"), false))
-          .collect()
-          .then((noteList) => noteList.sort((a, b) => b.updatedAt - a.updatedAt)[0] ?? null)
-      : null;
+    let noteContext = null;
+    if (ownerUserId && args.messageId) {
+      const triggeringMessage = await ctx.db.get(args.messageId);
+      if (
+        triggeringMessage &&
+        triggeringMessage.conversationId === args.conversationId &&
+        triggeringMessage.noteId
+      ) {
+        const messageNote = await ctx.db.get(triggeringMessage.noteId);
+        if (messageNote && messageNote.userId === ownerUserId && !messageNote.isArchived) {
+          noteContext = messageNote;
+        }
+      }
+    }
+
+    if (!noteContext && !args.messageId && ownerUserId) {
+      noteContext = await ctx.db
+        .query("notes")
+        .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))
+        .filter((q) => q.eq(q.field("isArchived"), false))
+        .collect()
+        .then((noteList) => noteList.sort((a, b) => b.updatedAt - a.updatedAt)[0] ?? null);
+    }
 
     const messageLimit = noteContext ? 180 : 360;
     const messages = noteContext
