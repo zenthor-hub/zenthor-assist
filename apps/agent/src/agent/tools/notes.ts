@@ -179,7 +179,9 @@ function toNoteResult(note: {
   isArchived: boolean;
   folderId?: Id<"noteFolders">;
 }) {
-  return `${note.title} (${note._id}) — archived: ${note.isArchived ? "yes" : "no"}${note.folderId ? ` · folder: ${note.folderId}` : ""}\n${summarizeText(note.content, 240)}`;
+  const plainContent = cleanText(stripHtmlTags(note.content));
+  const preview = plainContent ? summarizeText(plainContent, 240) : "(empty)";
+  return `${note.title} (${note._id}) — archived: ${note.isArchived ? "yes" : "no"}${note.folderId ? ` · folder: ${note.folderId}` : ""}\n${preview}`;
 }
 
 function formatMessagesForNote(
@@ -312,7 +314,9 @@ function toHtmlFromPlainText(value: string) {
 
     if (bulletMatch || orderedMatch) {
       const markerType = orderedMatch ? "ol" : "ul";
-      const text = escapeNoteHtml((orderedMatch ?? bulletMatch)?.[2] ?? "");
+      const text = escapeNoteHtml(
+        orderedMatch ? (orderedMatch[2] ?? "") : (bulletMatch?.[1] ?? ""),
+      );
 
       if (currentListType && currentListType !== markerType) {
         flushList();
@@ -333,6 +337,12 @@ function toHtmlFromPlainText(value: string) {
 }
 
 function getServiceError(message: string): string {
+  if (message.includes("not linked to this conversation")) {
+    return `Could not complete note action: ${message}. The note exists but is not linked to this chat. The user can open the note in the web app to edit it, or start a new conversation from the note's page.`;
+  }
+  if (message.includes("does not match note")) {
+    return `Could not complete note action: ${message}. This note belongs to a different conversation. The user can open the note in the web app to edit it, or start a new conversation from the note's page.`;
+  }
   return `Could not complete note action: ${message}`;
 }
 
@@ -381,7 +391,9 @@ export function createNoteTools(conversationId: Id<"conversations">) {
           });
 
           if (!note) return "Note not found.";
-          return `Title: ${note.title}\nID: ${note._id}\nArchived: ${note.isArchived}\n${note.content}`;
+          const plainContent = cleanText(stripHtmlTags(note.content));
+          const contentSection = plainContent || "(empty — no content)";
+          return `Title: ${note.title}\nID: ${note._id}\nArchived: ${note.isArchived}${note.folderId ? `\nFolder: ${note.folderId}` : ""}\nContent:\n${contentSection}`;
         } catch (error) {
           return getServiceError(error instanceof Error ? error.message : String(error));
         }
@@ -398,12 +410,13 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             folderId,
           );
           const normalizedTitle = sanitizeNoteToolOutput(title);
+          const htmlContent = toHtmlFromPlainText(content);
           const client = getConvexClient();
           const id = await client.mutation(api.notes.createForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
             title: normalizedTitle,
-            content,
+            content: htmlContent,
             folderId: resolvedFolderId,
             source: source ?? "chat-generated",
           });
@@ -430,17 +443,27 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             folderId,
           );
           const client = getConvexClient();
+          const htmlContent = content !== undefined ? toHtmlFromPlainText(content) : undefined;
           await client.mutation(api.notes.updateForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
             id: resolvedNoteId.value,
             title,
-            content,
+            content: htmlContent,
             folderId: resolvedFolderId,
             isArchived,
             metadata,
           });
-          const result = `Updated note ${noteId}.`;
+          const updatedFields: string[] = [];
+          if (title !== undefined) updatedFields.push("title");
+          if (content !== undefined) updatedFields.push("content");
+          if (resolvedFolderId !== undefined) updatedFields.push("folder");
+          if (isArchived !== undefined) updatedFields.push("archived");
+          if (metadata !== undefined) updatedFields.push("metadata");
+          const fieldsSummary = updatedFields.length
+            ? ` (updated: ${updatedFields.join(", ")})`
+            : "";
+          const result = `Updated note ${noteId}${fieldsSummary}.`;
           return warning ? `${result}\n\n${warning}` : result;
         } catch (error) {
           return getServiceError(error instanceof Error ? error.message : String(error));
@@ -528,11 +551,14 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             messageLimit,
           );
 
+          const htmlContent = toHtmlFromPlainText(
+            `## Source conversation\n${body || "(No messages)"}`,
+          );
           const id = await client.mutation(api.notes.createForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
             title: normalizedTitle,
-            content: `## Source conversation\n${body || "(No messages)"}`,
+            content: htmlContent,
             folderId: resolvedFolderId,
             source: source ?? "chat-generated",
           });
@@ -562,10 +588,16 @@ export function createNoteTools(conversationId: Id<"conversations">) {
           });
           if (!note) return "Note not found.";
 
+          const strippedContent = cleanText(stripHtmlTags(note.content));
+          if (!strippedContent) {
+            return `Note "${note.title}" (${noteId}) is empty — there is no content to transform. Use note_update with a "content" field to add content directly.`;
+          }
+
           const result = applyIntentTransform(note.content, intent, tone, language);
           const htmlResult = toHtmlFromPlainText(result.resultText);
           return JSON.stringify({
             noteId,
+            title: note.title,
             intent,
             resultText: htmlResult,
             operations: result.operations,

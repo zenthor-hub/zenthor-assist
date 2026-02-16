@@ -223,7 +223,8 @@ describe("createNoteTools", () => {
         title: "Roadmap notes",
         source: "chat-generated",
         folderId: undefined,
-        content: "## Source conversation\n- user: Write a roadmap\n- assistant: Draft: Q1, Q2, Q3",
+        content:
+          "<h2>Source conversation</h2><ul><li>user: Write a roadmap</li><li>assistant: Draft: Q1, Q2, Q3</li></ul>",
       }),
     );
     const parsed = JSON.parse(result) as {
