@@ -438,13 +438,16 @@ export function ChatArea({ conversationId, noteContext }: ChatAreaProps) {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       {hasActiveNoteContext && (
-        <div className="border-border border-b p-3">
-          <p className="text-sm font-medium">
-            <T>Editing note:</T> {resolvedNoteContext?.title}
-          </p>
-          <p className="text-muted-foreground mt-1 text-xs">
-            <T>Use quick actions or ask the assistant for a specific edit.</T>
-          </p>
+        <div className="bg-muted/20 flex items-center gap-2.5 border-b px-4 py-2.5">
+          <div className="bg-primary/10 flex size-6 shrink-0 items-center justify-center rounded-md">
+            <Sparkles className="text-primary size-3" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-medium">{resolvedNoteContext?.title}</p>
+            <p className="text-muted-foreground text-[11px]">
+              <T>AI assistant</T>
+            </p>
+          </div>
         </div>
       )}
       <Conversation>
@@ -471,9 +474,23 @@ export function ChatArea({ conversationId, noteContext }: ChatAreaProps) {
           ) : null}
           {messages === null ? null : messages.length === 0 ? (
             <ConversationEmptyState
-              title={<T>Start a conversation</T>}
-              description={<T>Send a message to begin chatting</T>}
-              icon={<MessageSquare className="size-8" />}
+              title={
+                hasActiveNoteContext ? <T>Ask about this note</T> : <T>Start a conversation</T>
+              }
+              description={
+                hasActiveNoteContext ? (
+                  <T>Summarize, rewrite, or extract actions from your note</T>
+                ) : (
+                  <T>Send a message to begin chatting</T>
+                )
+              }
+              icon={
+                hasActiveNoteContext ? (
+                  <Sparkles className="size-8" />
+                ) : (
+                  <MessageSquare className="size-8" />
+                )
+              }
             />
           ) : (
             messages.map((msg) => {
@@ -691,20 +708,19 @@ export function ChatArea({ conversationId, noteContext }: ChatAreaProps) {
         <ConversationScrollButton />
       </Conversation>
 
-      <div className="border-t p-4">
+      <div className="bg-muted/10 border-t p-3">
         {noteActions ? (
-          <div className="mb-3 flex flex-wrap gap-2">
+          <div className="mb-2 flex flex-wrap gap-1.5">
             {noteActions.map((action) => (
-              <Button
+              <button
                 key={action.id}
                 type="button"
-                variant="outline"
-                size="xs"
+                className="text-muted-foreground hover:text-foreground hover:bg-muted/50 flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors"
                 onClick={() => handleQuickAction(action.command)}
               >
                 <action.icon className="size-3" />
                 {action.label}
-              </Button>
+              </button>
             ))}
           </div>
         ) : null}

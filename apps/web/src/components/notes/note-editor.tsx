@@ -16,7 +16,10 @@ import {
   Italic,
   Link as LinkIcon,
   List,
+  ListChecks,
   ListOrdered,
+  Maximize2,
+  PenLine,
   Sparkles,
   Strikethrough,
   Type,
@@ -34,6 +37,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 import {
@@ -102,8 +106,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
       editable: !disabled,
       editorProps: {
         attributes: {
-          class:
-            "field-sizing-content max-h-[45vh] min-h-64 overflow-auto px-3 py-3 text-sm outline-none",
+          class: "min-h-48 px-4 py-3.5 text-sm leading-relaxed outline-none",
         },
       },
       onUpdate: () => {
@@ -208,13 +211,8 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
   }
 
   return (
-    <div
-      className={cn(
-        "border-input bg-input/30 has-focus-within:border-ring relative rounded-xl border",
-        className,
-      )}
-    >
-      <div className="border-border flex items-center gap-0.5 border-b px-2 py-1">
+    <div className={cn("relative flex flex-col overflow-hidden rounded-lg border", className)}>
+      <div className="bg-muted/30 flex shrink-0 items-center gap-0.5 border-b px-2 py-1.5">
         {/* ── Heading dropdown ── */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -261,7 +259,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
               onMouseDown={(e) => e.preventDefault()}
               className={
                 editor.isActive("bulletList") || editor.isActive("orderedList")
-                  ? "bg-muted"
+                  ? "bg-primary/10 text-primary"
                   : undefined
               }
             >
@@ -288,7 +286,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => applyFormat("bold")}
           disabled={disabled}
-          className={editor.isActive("bold") ? "bg-muted" : undefined}
+          className={editor.isActive("bold") ? "bg-primary/10 text-primary" : undefined}
         >
           <Bold className="size-3.5" />
         </Button>
@@ -298,7 +296,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => applyFormat("italic")}
           disabled={disabled}
-          className={editor.isActive("italic") ? "bg-muted" : undefined}
+          className={editor.isActive("italic") ? "bg-primary/10 text-primary" : undefined}
         >
           <Italic className="size-3.5" />
         </Button>
@@ -308,7 +306,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => applyFormat("strike")}
           disabled={disabled}
-          className={editor.isActive("strike") ? "bg-muted" : undefined}
+          className={editor.isActive("strike") ? "bg-primary/10 text-primary" : undefined}
         >
           <Strikethrough className="size-3.5" />
         </Button>
@@ -318,7 +316,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => applyFormat("underline")}
           disabled={disabled}
-          className={editor.isActive("underline") ? "bg-muted" : undefined}
+          className={editor.isActive("underline") ? "bg-primary/10 text-primary" : undefined}
         >
           <UnderlineIcon className="size-3.5" />
         </Button>
@@ -331,7 +329,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
               variant="ghost"
               disabled={disabled}
               onMouseDown={(e) => e.preventDefault()}
-              className={editor.isActive("link") ? "bg-muted" : undefined}
+              className={editor.isActive("link") ? "bg-primary/10 text-primary" : undefined}
             >
               <LinkIcon className="size-3.5" />
             </Button>
@@ -380,7 +378,9 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => applyFormat("alignLeft")}
           disabled={disabled}
-          className={editor.isActive({ textAlign: "left" }) ? "bg-muted" : undefined}
+          className={
+            editor.isActive({ textAlign: "left" }) ? "bg-primary/10 text-primary" : undefined
+          }
         >
           <AlignLeft className="size-3.5" />
         </Button>
@@ -390,7 +390,9 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => applyFormat("alignCenter")}
           disabled={disabled}
-          className={editor.isActive({ textAlign: "center" }) ? "bg-muted" : undefined}
+          className={
+            editor.isActive({ textAlign: "center" }) ? "bg-primary/10 text-primary" : undefined
+          }
         >
           <AlignCenter className="size-3.5" />
         </Button>
@@ -400,7 +402,9 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => applyFormat("alignRight")}
           disabled={disabled}
-          className={editor.isActive({ textAlign: "right" }) ? "bg-muted" : undefined}
+          className={
+            editor.isActive({ textAlign: "right" }) ? "bg-primary/10 text-primary" : undefined
+          }
         >
           <AlignRight className="size-3.5" />
         </Button>
@@ -410,17 +414,18 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => applyFormat("alignJustify")}
           disabled={disabled}
-          className={editor.isActive({ textAlign: "justify" }) ? "bg-muted" : undefined}
+          className={
+            editor.isActive({ textAlign: "justify" }) ? "bg-primary/10 text-primary" : undefined
+          }
         >
           <AlignJustify className="size-3.5" />
         </Button>
       </div>
 
-      <EditorContent editor={editor} />
-
-      <div className="text-muted-foreground border-border border-t px-3 py-1.5 text-[10px]">
-        {placeholder}
-      </div>
+      <EditorContent
+        editor={editor}
+        className="min-h-0 flex-1 overflow-hidden [&_.ProseMirror]:h-full [&_.ProseMirror]:overflow-auto"
+      />
 
       {onAiAction ? (
         <BubbleMenu
@@ -432,40 +437,69 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
             return text.length >= 10;
           }}
           tippyOptions={{ placement: "top-start" }}
-          className="bg-background/95 flex flex-wrap gap-1 rounded-full border px-2 py-1 shadow-md backdrop-blur"
+          className="animate-bubble-in bg-popover/95 flex items-center gap-0.5 rounded-xl border p-1 shadow-xl backdrop-blur-xl"
         >
-          <Button
-            size="xs"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => handleAiAction("rewrite")}
-          >
-            <AlignLeft className="size-3.5" />
-            <span className="text-[11px]">Rewrite</span>
-          </Button>
-          <Button
-            size="xs"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => handleAiAction("summarize")}
-          >
-            <span className="text-[11px]">Summarize</span>
-          </Button>
-          <Button
-            size="xs"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => handleAiAction("expand")}
-          >
-            <span className="text-[11px]">Expand</span>
-          </Button>
-          <Button
-            size="xs"
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => handleAiAction("extract")}
-          >
-            <span className="text-[11px]">Extract actions</span>
-          </Button>
-          <Button size="xs" variant="outline" onMouseDown={(event) => event.preventDefault()}>
-            <Sparkles className="size-3.5" />
-          </Button>
+          <span className="text-primary flex items-center gap-1 px-1.5 text-[11px] font-medium">
+            <Sparkles className="size-3" />
+            AI
+          </span>
+          <Separator orientation="vertical" className="mx-0.5 h-4" />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="xs"
+                variant="ghost"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => handleAiAction("rewrite")}
+              >
+                <PenLine className="size-3" />
+                <span className="text-[11px]">Rewrite</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Rewrite selected text</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="xs"
+                variant="ghost"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => handleAiAction("summarize")}
+              >
+                <AlignLeft className="size-3" />
+                <span className="text-[11px]">Summarize</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Condense into key points</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="xs"
+                variant="ghost"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => handleAiAction("expand")}
+              >
+                <Maximize2 className="size-3" />
+                <span className="text-[11px]">Expand</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Add detail and examples</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="xs"
+                variant="ghost"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => handleAiAction("extract")}
+              >
+                <ListChecks className="size-3" />
+                <span className="text-[11px]">Extract</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Pull out action items</TooltipContent>
+          </Tooltip>
         </BubbleMenu>
       ) : null}
     </div>

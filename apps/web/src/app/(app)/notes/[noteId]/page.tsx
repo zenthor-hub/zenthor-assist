@@ -4,7 +4,17 @@ import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import type { Id } from "@zenthor-assist/backend/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import { T, useGT } from "gt-next";
-import { AlertCircle, Archive, Check, Loader2, PenLine, Pin, PinOff, Save } from "lucide-react";
+import {
+  AlertCircle,
+  Archive,
+  Check,
+  Loader2,
+  MoreHorizontal,
+  PenLine,
+  Pin,
+  PinOff,
+  Sparkles,
+} from "lucide-react";
 import { use, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -13,9 +23,13 @@ import Loader from "@/components/loader";
 import { NoteEditor, type NoteEditorHandle } from "@/components/notes/note-editor";
 import { normalizeEditorMarkup } from "@/components/notes/note-editor-utils";
 import { PageWrapper } from "@/components/page-wrapper";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -23,6 +37,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type NoteItem = {
   _id: Id<"notes">;
@@ -45,10 +60,6 @@ type FolderItem = {
 };
 
 type SaveState = "idle" | "saving" | "saved" | "error";
-
-function getFolderName(folders: FolderItem[], folderId?: Id<"noteFolders">) {
-  return folders.find((folder) => folder._id === folderId)?.name ?? "Unfiled";
-}
 
 function getFolderColor(folders: FolderItem[], folderId?: Id<"noteFolders">) {
   return folders.find((folder) => folder._id === folderId)?.color ?? "#94a3b8";
@@ -284,14 +295,6 @@ ${snippet}`;
     return ago < 60 ? `${ago}m ago` : `${Math.floor(ago / 60)}h ago`;
   }
 
-  function formatAiActionAt(timestamp?: number) {
-    if (!timestamp) return null;
-    const delta = Math.max(1, Math.floor((Date.now() - timestamp) / 60000));
-    return delta < 60
-      ? t("AI updated {{mins}}m ago", { mins: `${delta}` })
-      : t("AI updated {{hours}}h ago", { hours: `${Math.floor(delta / 60)}` });
-  }
-
   if (note === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
@@ -313,11 +316,70 @@ ${snippet}`;
   const chatNoteContext = { noteId: note._id, title: title || note.title };
 
   return (
-    <PageWrapper title={<T>{title || "Untitled note"}</T>}>
-      <div className="grid gap-4 lg:min-h-[calc(100vh-15rem)] lg:grid-cols-[1.2fr_1fr]">
-        <div className="min-h-0 overflow-hidden rounded-lg border p-4">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <Input
+    <PageWrapper
+      title={<T>{title || "Untitled note"}</T>}
+      actions={
+        <div className="flex items-center gap-1">
+          {saveState !== "idle" && (
+            <span className="text-muted-foreground mr-2 flex items-center gap-1 text-xs">
+              {saveState === "saving" && <Loader2 className="size-3 animate-spin" />}
+              {saveState === "saved" && <Check className="size-3 text-emerald-500" />}
+              {saveState === "error" && <AlertCircle className="text-destructive size-3" />}
+              <span>
+                {saveState === "saving" && <T>Saving</T>}
+                {saveState === "saved" && <T>Saved</T>}
+                {saveState === "error" && <T>Failed</T>}
+              </span>
+            </span>
+          )}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button size="icon-xs" variant="ghost" onClick={togglePin}>
+                {isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{isPinned ? <T>Unpin note</T> : <T>Pin note</T>}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button size="icon-xs" variant="ghost" onClick={toggleArchive}>
+                <Archive className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {note.isArchived ? <T>Restore note</T> : <T>Archive note</T>}
+            </TooltipContent>
+          </Tooltip>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="icon-xs" variant="ghost">
+                <MoreHorizontal className="size-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => {
+                  editVersion.current++;
+                  hasUnsavedChanges.current = true;
+                  setTitle(`${title || t("Untitled note")} (AI draft)`);
+                  editorRef.current?.setContent("");
+                  setDirtyTick((n) => n + 1);
+                }}
+              >
+                <PenLine className="size-3.5" />
+                <T>AI draft this note</T>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      }
+    >
+      <div className="grid gap-6 lg:min-h-[calc(100vh-7rem)] lg:grid-cols-[1.3fr_1fr]">
+        {/* ── Editor panel ── */}
+        <div className="flex min-h-0 flex-col gap-3">
+          {/* Title + metadata */}
+          <div>
+            <input
               value={title}
               onChange={(event) => {
                 editVersion.current++;
@@ -325,13 +387,25 @@ ${snippet}`;
                 setTitle(event.target.value);
                 setDirtyTick((n) => n + 1);
               }}
+              className="text-foreground placeholder:text-muted-foreground w-full bg-transparent text-lg font-semibold tracking-tight outline-none"
+              placeholder={t("Untitled note")}
             />
-            <div className="flex items-center gap-2">
+
+            <div className="text-muted-foreground mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
               <Select
                 value={selectedFolderId}
                 onValueChange={(value) => updateFolder(value as "none" | Id<"noteFolders">)}
               >
-                <SelectTrigger className="w-40">
+                <SelectTrigger className="hover:text-foreground h-5 w-auto gap-1.5 border-none bg-transparent px-0 text-[11px] shadow-none [&_svg:last-child]:size-3">
+                  <span
+                    className="size-2 shrink-0 rounded-full"
+                    style={{
+                      backgroundColor: getFolderColor(
+                        folders,
+                        selectedFolderId === "none" ? undefined : selectedFolderId,
+                      ),
+                    }}
+                  />
                   <SelectValue placeholder={t("Folder")} />
                 </SelectTrigger>
                 <SelectContent>
@@ -345,112 +419,51 @@ ${snippet}`;
                   ))}
                 </SelectContent>
               </Select>
-              <Badge
-                variant="outline"
-                className="max-w-40 gap-1 text-[10px] text-nowrap"
-                style={{ borderColor: getFolderColor(folders, note.folderId) }}
-              >
-                <span
-                  className="size-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: getFolderColor(folders, note.folderId) }}
-                />
-                {getFolderName(folders, note.folderId)}
-              </Badge>
-              {note.source ? (
-                <Badge variant="outline" className="text-[10px] text-nowrap">
-                  {note.source}
-                </Badge>
-              ) : null}
-              {isPinned ? (
-                <Badge variant="outline" className="text-[10px]">
-                  <Pin className="size-3" />
-                  <T>Pinned</T>
-                </Badge>
-              ) : null}
-              {note.lastAiModel ? (
-                <Badge variant="outline" className="text-[10px] text-nowrap">
-                  {note.lastAiModel}
-                </Badge>
-              ) : null}
-              <Badge variant="secondary" className="text-[10px]">
-                {formatLastUpdated(note.updatedAt)}
-              </Badge>
-              <span className="text-muted-foreground text-[10px]">
-                {formatAiActionAt(note.lastAiActionAt)}
-              </span>
+
+              {note.source && (
+                <>
+                  <span className="text-border">·</span>
+                  <span>{note.source}</span>
+                </>
+              )}
+
+              <span className="text-border">·</span>
+              <span>{formatLastUpdated(note.updatedAt)}</span>
+
+              {note.lastAiModel && (
+                <>
+                  <span className="text-border">·</span>
+                  <span className="flex items-center gap-1">
+                    <Sparkles className="size-2.5" />
+                    {note.lastAiModel}
+                  </span>
+                </>
+              )}
+
+              {isPinned && (
+                <>
+                  <span className="text-border">·</span>
+                  <span className="flex items-center gap-1">
+                    <Pin className="size-2.5" />
+                    <T>Pinned</T>
+                  </span>
+                </>
+              )}
             </div>
           </div>
 
+          {/* Editor */}
           <NoteEditor
             ref={editorRef}
-            className="h-[45vh] lg:h-[calc(100%-5.5rem)]"
+            className="min-h-0 flex-1"
             initialContent={note.content}
             onDirty={handleDirty}
             onAiAction={handleSectionAiAction}
             placeholder={t("Write your note")}
           />
-
-          <div className="mt-3 flex items-center gap-2">
-            <Button size="xs" disabled={saveState === "saving"}>
-              {saveState === "saving" && (
-                <>
-                  <Loader2 className="size-3.5 animate-spin" />
-                  <T>Saving...</T>
-                </>
-              )}
-              {saveState === "saved" && (
-                <>
-                  <Check className="size-3.5" />
-                  <T>Saved</T>
-                </>
-              )}
-              {saveState === "error" && (
-                <>
-                  <AlertCircle className="size-3.5" />
-                  <T>Save failed</T>
-                </>
-              )}
-              {saveState === "idle" && (
-                <>
-                  <Save className="size-3.5" />
-                  <T>Save</T>
-                </>
-              )}
-            </Button>
-            <Button size="xs" variant="outline" onClick={toggleArchive}>
-              {note.isArchived ? (
-                <>
-                  <PinOff className="size-3.5" />
-                  <T>Restore</T>
-                </>
-              ) : (
-                <>
-                  <Archive className="size-3.5" />
-                  <T>Archive</T>
-                </>
-              )}
-            </Button>
-            <Button size="xs" variant="outline" onClick={togglePin}>
-              <Pin className="size-3.5" />
-              {isPinned ? <T>Unpin</T> : <T>Pin</T>}
-            </Button>
-            <Button
-              size="xs"
-              variant="outline"
-              onClick={() => {
-                editVersion.current++;
-                hasUnsavedChanges.current = true;
-                setTitle(`${title || t("Untitled note")} (AI draft)`);
-                editorRef.current?.setContent("");
-                setDirtyTick((n) => n + 1);
-              }}
-            >
-              <PenLine className="size-3.5" />
-              <T>AI draft this note</T>
-            </Button>
-          </div>
         </div>
 
+        {/* ── Chat panel ── */}
         <div className="min-h-0 overflow-hidden rounded-lg border">
           {isInitializingThread ? (
             <div className="flex min-h-full items-center justify-center">
