@@ -260,10 +260,107 @@ function escapeNoteHtml(value: string) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function closeList(listType: "ol" | "ul", items: string[]) {
-  if (!items.length) return "";
-  const tag = listType === "ol" ? "ol" : "ul";
-  return `<${tag}>${items.map((item) => `<li>${item}</li>`).join("")}</${tag}>`;
+type TiptapMark = {
+  type: "bold" | "italic" | "strike" | "code";
+  attrs?: {
+    href?: string;
+    [key: string]: unknown;
+  };
+};
+
+type TiptapNode = {
+  type?: string;
+  content?: unknown[];
+  text?: string;
+  attrs?: {
+    level?: number;
+    href?: string;
+    [key: string]: unknown;
+  };
+  marks?: TiptapMark[];
+};
+
+function renderTiptapText(raw: string, marks: TiptapMark[] = []) {
+  const hasBold = marks.some((mark) => mark.type === "bold");
+  const hasItalic = marks.some((mark) => mark.type === "italic");
+  const hasStrike = marks.some((mark) => mark.type === "strike");
+  const hasCode = marks.some((mark) => mark.type === "code");
+
+  const content = escapeNoteHtml(raw);
+  const wrappedCode = hasCode ? `<code>${content}</code>` : content;
+  const wrappedStrike = hasStrike ? `<s>${wrappedCode}</s>` : wrappedCode;
+  const wrappedItalic = hasItalic ? `<em>${wrappedStrike}</em>` : wrappedStrike;
+  return hasBold ? `<strong>${wrappedItalic}</strong>` : wrappedItalic;
+}
+
+function getTiptapNodes(value: unknown): TiptapNode[] {
+  return Array.isArray(value)
+    ? value.filter((node): node is TiptapNode => typeof node === "object" && node !== null)
+    : [];
+}
+
+function renderTiptapNodes(nodes: unknown[]): string {
+  return nodes.map(renderTiptapNode).join("");
+}
+
+function renderTiptapNode(node: unknown): string {
+  if (typeof node !== "object" || node === null) return "";
+  const typedNode = node as TiptapNode;
+
+  if (typeof typedNode.text === "string") {
+    return renderTiptapText(typedNode.text, typedNode.marks ?? []);
+  }
+
+  const children = typedNode.content ? renderTiptapNodes(typedNode.content) : "";
+  if (!typedNode.type) return children;
+
+  if (typedNode.type === "doc") return children;
+  if (typedNode.type === "text") return "";
+  if (typedNode.type === "paragraph") return `<p>${children}</p>`;
+  if (typedNode.type === "heading") {
+    const level = Math.min(Math.max(typedNode.attrs?.level ?? 1, 1), 6);
+    return `<h${level}>${children}</h${level}>`;
+  }
+  if (typedNode.type === "bulletList") return `<ul>${children}</ul>`;
+  if (typedNode.type === "orderedList") return `<ol>${children}</ol>`;
+  if (typedNode.type === "listItem") return `<li>${children}</li>`;
+  if (typedNode.type === "blockquote") return `<blockquote>${children}</blockquote>`;
+  if (typedNode.type === "codeBlock") return `<pre><code>${children}</code></pre>`;
+  if (typedNode.type === "horizontalRule") return "<hr />";
+  if (typedNode.type === "hardBreak") return "<br />";
+  if (typedNode.type === "image")
+    return `<img src="${escapeNoteHtml(`${typedNode.attrs?.href ?? ""}`)}" />`;
+  return children;
+}
+
+function toHtmlFromTiptap(value: string) {
+  const parsed = parseUnknownObject(value);
+  if (!parsed || (parsed.type !== "doc" && !Array.isArray(parsed.content))) return undefined;
+
+  const nodes = getTiptapNodes(parsed.content);
+  const html = nodes.map(renderTiptapNode).join("").trim();
+  return html || "<p></p>";
+}
+
+function parseUnknownObject(raw: string) {
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "object" && parsed !== null
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function hasRenderableText(html: string) {
+  return cleanText(stripHtmlTags(html)) !== "";
+}
+
+function createNoteContent(content: string) {
+  const converted = toHtmlFromTiptap(content);
+  if (converted !== undefined) return converted;
+  return toHtmlFromPlainText(content);
 }
 
 function toHtmlFromPlainText(value: string) {
@@ -281,6 +378,12 @@ function toHtmlFromPlainText(value: string) {
     const text = escapeNoteHtml(paragraphLines.join("\n")).replace(/\n/g, "<br />");
     output.push(`<p>${text}</p>`);
     paragraphLines.length = 0;
+  };
+
+  const closeList = (listType: "ol" | "ul", items: string[]) => {
+    if (!items.length) return "";
+    const tag = listType === "ol" ? "ol" : "ul";
+    return `<${tag}>${items.map((item) => `<li>${item}</li>`).join("")}</${tag}>`;
   };
 
   const flushList = () => {
@@ -410,7 +513,10 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             folderId,
           );
           const normalizedTitle = sanitizeNoteToolOutput(title);
-          const htmlContent = toHtmlFromPlainText(content);
+          const htmlContent = createNoteContent(content);
+          if (!hasRenderableText(htmlContent)) {
+            return "Could not complete note action: note content is empty.";
+          }
           const client = getConvexClient();
           const id = await client.mutation(api.notes.createForConversation, {
             serviceKey: env.AGENT_SECRET,
@@ -443,7 +549,7 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             folderId,
           );
           const client = getConvexClient();
-          const htmlContent = content !== undefined ? toHtmlFromPlainText(content) : undefined;
+          const htmlContent = content !== undefined ? createNoteContent(content) : undefined;
           await client.mutation(api.notes.updateForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
@@ -554,6 +660,9 @@ export function createNoteTools(conversationId: Id<"conversations">) {
           const htmlContent = toHtmlFromPlainText(
             `## Source conversation\n${body || "(No messages)"}`,
           );
+          if (!hasRenderableText(htmlContent)) {
+            return "Could not complete note action: generated note content is empty.";
+          }
           const id = await client.mutation(api.notes.createForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
@@ -619,7 +728,10 @@ export function createNoteTools(conversationId: Id<"conversations">) {
           }
 
           const client = getConvexClient();
-          const content = toHtmlFromPlainText(resultText);
+          const content = createNoteContent(resultText);
+          if (!hasRenderableText(content)) {
+            return "Could not complete note action: transform result is empty.";
+          }
           await client.mutation(api.notes.applyAiPatchForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
@@ -646,7 +758,10 @@ export function createNoteTools(conversationId: Id<"conversations">) {
           }
 
           const client = getConvexClient();
-          const content = toHtmlFromPlainText(stripHtmlTags(resultText));
+          const content = createNoteContent(resultText);
+          if (!hasRenderableText(content)) {
+            return "Could not complete note action: AI update content is empty.";
+          }
           await client.mutation(api.notes.applyAiPatchForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
