@@ -160,6 +160,12 @@ zenthor-assist/
 - Crons in `apps/backend/convex/crons.ts` handle stale-job requeue, scheduled-task processing, and cleanup jobs.
 - Convex-generated files are under `apps/backend/convex/_generated` and should not be manually edited.
 
+#### Hard Rule: Convex IDs
+
+- **DO NOT use `string` for Convex document IDs at API boundaries.** All Convex arguments for document IDs must use `v.id("tableName")` and typed `Id<"tableName">` in related logic.
+- **Never bypass Convex ID validators with normalization tricks** (e.g., `v.string()` for `noteId`) when dealing with identifiers.
+- **When input may be malformed, validate before calling Convex** and return a controlled error; do not alter schema contracts just to accept malformed IDs.
+
 #### Auth Wrapper Contract
 
 - Public Convex endpoints should use wrappers from `apps/backend/convex/auth/`:
