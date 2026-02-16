@@ -2,7 +2,12 @@ import type { PluginManifest } from "./types";
 
 export function createManifest(input: PluginManifest): PluginManifest {
   const uniqueToolDescriptors = input.toolDescriptors
-    ? Object.fromEntries(Object.entries(input.toolDescriptors).map(([toolName, descriptor]) => [toolName, descriptor]))
+    ? Object.fromEntries(
+        Object.entries(input.toolDescriptors).map(([toolName, descriptor]) => [
+          toolName,
+          descriptor,
+        ]),
+      )
     : undefined;
 
   return {

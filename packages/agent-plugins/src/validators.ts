@@ -7,14 +7,7 @@ export const pluginRiskLevelSchema = z.union([
 ]);
 
 const pluginSourceSchema = z.enum(["builtin", "remote", "workspace"]);
-const pluginKindSchema = z.enum([
-  "builtin",
-  "notes",
-  "tasks",
-  "finance",
-  "integration",
-  "custom",
-]);
+const pluginKindSchema = z.enum(["builtin", "notes", "tasks", "finance", "integration", "custom"]);
 const pluginChannelSchema = z.enum(["web", "whatsapp", "telegram"]);
 
 const toolOutputContractSchema = z

@@ -86,23 +86,23 @@ export const requestVerification = authMutation({
       .collect();
 
     const sorted = activeConversations.sort((a, b) => b._creationTime - a._creationTime);
-    let conversation = sorted[0] ?? null;
+    let conversationId = sorted[0]?._id ?? null;
     const duplicates = sorted.slice(1);
 
     for (const duplicate of duplicates) {
       await ctx.db.patch(duplicate._id, { status: "archived" });
     }
 
-    if (!conversation) {
-      const conversationId = await ctx.db.insert("conversations", {
+    if (conversationId === null) {
+      conversationId = await ctx.db.insert("conversations", {
         contactId: contact._id,
         channel: "whatsapp",
         accountId: "cloud-api",
         status: "active",
       });
-      conversation = await ctx.db.get(conversationId);
     }
 
+    const conversation = await ctx.db.get(conversationId);
     if (!conversation) {
       return { success: false, error: "Failed to create conversation" };
     }
