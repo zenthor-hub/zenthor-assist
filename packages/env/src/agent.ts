@@ -41,7 +41,6 @@ const envSchema = z.object({
       "whatsapp-egress",
       "whatsapp-cloud",
       "telegram",
-      "telegram-egress",
     ])
     .optional(),
   WORKER_ID: z.string().min(1).optional(),

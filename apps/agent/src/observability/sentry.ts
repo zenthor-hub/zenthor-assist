@@ -18,7 +18,7 @@ function resolveServiceName(role: string): string {
     return "agent-whatsapp";
   }
   if (role === "whatsapp-cloud") return "agent-whatsapp-cloud";
-  if (role === "telegram" || role === "telegram-egress") return "agent-telegram";
+  if (role === "telegram") return "agent-telegram";
   return "agent";
 }
 
@@ -28,7 +28,7 @@ function resolveWorkerRole(role: string): string {
     return "whatsapp";
   }
   if (role === "whatsapp-cloud") return "whatsapp-cloud";
-  if (role === "telegram" || role === "telegram-egress") return "telegram";
+  if (role === "telegram") return "telegram";
   return "all";
 }
 
@@ -42,7 +42,7 @@ function resolveChannel(role: string): string | undefined {
   ) {
     return "whatsapp";
   }
-  if (role === "telegram" || role === "telegram-egress") {
+  if (role === "telegram") {
     return "telegram";
   }
   return undefined;

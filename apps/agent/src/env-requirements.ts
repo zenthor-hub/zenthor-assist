@@ -33,7 +33,7 @@ export function getRequiredEnvForRole(
     required.push("WHATSAPP_CLOUD_ACCESS_TOKEN", "WHATSAPP_CLOUD_PHONE_NUMBER_ID");
   }
 
-  if (role === "telegram" || role === "telegram-egress") {
+  if (role === "telegram") {
     required.push("TELEGRAM_BOT_TOKEN");
   }
 
@@ -49,7 +49,7 @@ export function getRecommendedEnvForRole(role: string): string[] {
   // AGENT_SECRET is needed by all roles for service mutations in production
   recommended.push("AGENT_SECRET");
 
-  if (role === "telegram" || role === "telegram-egress") {
+  if (role === "telegram") {
     recommended.push("TELEGRAM_WEBHOOK_SECRET", "TELEGRAM_ACCOUNT_ID");
   }
 

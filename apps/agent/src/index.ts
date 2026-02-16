@@ -46,7 +46,7 @@ async function main() {
     startAgentLoop();
   }
 
-  if (role === "telegram" || role === "telegram-egress") {
+  if (role === "telegram") {
     await startTelegramRuntime();
   } else if (!enableWhatsApp) {
     await logger.lineInfo("[main] WhatsApp disabled via ENABLE_WHATSAPP=false");
