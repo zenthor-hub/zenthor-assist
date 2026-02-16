@@ -85,6 +85,7 @@ function cleanText(value: unknown): string {
 }
 
 const noteFolderIdPattern = /^[a-z0-9]{32}$/i;
+const noteIdPattern = /^[a-z0-9]{32}$/i;
 
 type NoteFolderIdNormalization = {
   value: Id<"noteFolders"> | undefined;
@@ -113,6 +114,11 @@ type FolderIdResolution = {
   warning?: string;
 };
 
+type NoteIdResolution = {
+  value: Id<"notes"> | undefined;
+  error?: string;
+};
+
 function resolveNoteFolderId(
   conversationId: Id<"conversations">,
   toolName: string,
@@ -134,6 +140,32 @@ function resolveNoteFolderId(
       : `(Note: folder ID "${normalized.rawValue ?? folderId}" was not recognized; operation proceeded without a folder.)`;
 
   return { value: undefined, warning };
+}
+
+function resolveNoteId(
+  conversationId: Id<"conversations">,
+  toolName: string,
+  noteId: string,
+): NoteIdResolution {
+  const normalized = cleanText(noteId);
+  if (!normalized) {
+    return { value: undefined, error: "Note ID is required." };
+  }
+
+  if (!noteIdPattern.test(normalized)) {
+    void logger.warn("agent.notes.tool.note_id_invalid", {
+      toolName,
+      conversationId,
+      rawNoteId: noteId,
+    });
+    return {
+      value: undefined,
+      error:
+        "The provided note ID is not valid. Use the exact note ID returned by note_list or note_get.",
+    };
+  }
+
+  return { value: normalized as Id<"notes">, error: undefined };
 }
 
 function summarizeText(content: string, maxChars = 500) {
@@ -336,11 +368,16 @@ export function createNoteTools(conversationId: Id<"conversations">) {
       inputSchema: getNoteInput,
       execute: async ({ noteId }) => {
         try {
+          const resolvedNoteId = resolveNoteId(conversationId, "note_get", noteId);
+          if (!resolvedNoteId.value) {
+            return getServiceError(resolvedNoteId.error ?? "Invalid note ID.");
+          }
+
           const client = getConvexClient();
           const note = await client.query(api.notes.getForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
-            id: noteId as Id<"notes">,
+            id: resolvedNoteId.value,
           });
 
           if (!note) return "Note not found.";
@@ -382,6 +419,11 @@ export function createNoteTools(conversationId: Id<"conversations">) {
       inputSchema: updateNoteInput,
       execute: async ({ noteId, title, content, folderId, isArchived, metadata }) => {
         try {
+          const resolvedNoteId = resolveNoteId(conversationId, "note_update", noteId);
+          if (!resolvedNoteId.value) {
+            return getServiceError(resolvedNoteId.error ?? "Invalid note ID.");
+          }
+
           const { value: resolvedFolderId, warning } = resolveNoteFolderId(
             conversationId,
             "note_update",
@@ -391,7 +433,7 @@ export function createNoteTools(conversationId: Id<"conversations">) {
           await client.mutation(api.notes.updateForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
-            id: noteId as Id<"notes">,
+            id: resolvedNoteId.value,
             title,
             content,
             folderId: resolvedFolderId,
@@ -410,6 +452,11 @@ export function createNoteTools(conversationId: Id<"conversations">) {
       inputSchema: moveNoteInput,
       execute: async ({ noteId, folderId }) => {
         try {
+          const resolvedNoteId = resolveNoteId(conversationId, "note_move", noteId);
+          if (!resolvedNoteId.value) {
+            return getServiceError(resolvedNoteId.error ?? "Invalid note ID.");
+          }
+
           const { value: resolvedFolderId, warning } = resolveNoteFolderId(
             conversationId,
             "note_move",
@@ -419,7 +466,7 @@ export function createNoteTools(conversationId: Id<"conversations">) {
           await client.mutation(api.notes.moveToFolderForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
-            id: noteId as Id<"notes">,
+            id: resolvedNoteId.value,
             folderId: resolvedFolderId,
           });
           const result = `Moved note ${noteId}.`;
@@ -434,11 +481,16 @@ export function createNoteTools(conversationId: Id<"conversations">) {
       inputSchema: archiveNoteInput,
       execute: async ({ noteId, isArchived }) => {
         try {
+          const resolvedNoteId = resolveNoteId(conversationId, "note_archive", noteId);
+          if (!resolvedNoteId.value) {
+            return getServiceError(resolvedNoteId.error ?? "Invalid note ID.");
+          }
+
           const client = getConvexClient();
           await client.mutation(api.notes.updateForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
-            id: noteId as Id<"notes">,
+            id: resolvedNoteId.value,
             isArchived,
           });
           return isArchived ? `Archived note ${noteId}.` : `Restored note ${noteId}.`;
@@ -497,11 +549,16 @@ export function createNoteTools(conversationId: Id<"conversations">) {
       inputSchema: noteTransformInput,
       execute: async ({ noteId, intent, tone, language }) => {
         try {
+          const resolvedNoteId = resolveNoteId(conversationId, "note_transform", noteId);
+          if (!resolvedNoteId.value) {
+            return getServiceError(resolvedNoteId.error ?? "Invalid note ID.");
+          }
+
           const client = getConvexClient();
           const note = await client.query(api.notes.getForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
-            id: noteId as Id<"notes">,
+            id: resolvedNoteId.value,
           });
           if (!note) return "Note not found.";
 
@@ -524,12 +581,17 @@ export function createNoteTools(conversationId: Id<"conversations">) {
       inputSchema: applyTransformInput,
       execute: async ({ noteId, resultText, operations }) => {
         try {
+          const resolvedNoteId = resolveNoteId(conversationId, "note_apply_transform", noteId);
+          if (!resolvedNoteId.value) {
+            return getServiceError(resolvedNoteId.error ?? "Invalid note ID.");
+          }
+
           const client = getConvexClient();
           const content = toHtmlFromPlainText(resultText);
           await client.mutation(api.notes.applyAiPatchForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
-            id: noteId as Id<"notes">,
+            id: resolvedNoteId.value,
             content,
             operations,
             model: "agent-notes-tools",
@@ -546,12 +608,17 @@ export function createNoteTools(conversationId: Id<"conversations">) {
       inputSchema: applyTransformInput,
       execute: async ({ noteId, resultText, operations }) => {
         try {
+          const resolvedNoteId = resolveNoteId(conversationId, "note_update_from_ai", noteId);
+          if (!resolvedNoteId.value) {
+            return getServiceError(resolvedNoteId.error ?? "Invalid note ID.");
+          }
+
           const client = getConvexClient();
           const content = toHtmlFromPlainText(stripHtmlTags(resultText));
           await client.mutation(api.notes.applyAiPatchForConversation, {
             serviceKey: env.AGENT_SECRET,
             conversationId,
-            id: noteId as Id<"notes">,
+            id: resolvedNoteId.value,
             content,
             operations,
             model: "agent-notes-tools",

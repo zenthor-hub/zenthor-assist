@@ -18,6 +18,11 @@ type SetupResult = {
 };
 
 const conversationId = "conv-note-1" as Parameters<typeof createNoteTools>[0];
+const validNoteIdOne = "a".repeat(32);
+const validNoteIdTwo = "b".repeat(32);
+const validNoteIdThree = "c".repeat(32);
+const validNoteIdFour = "d".repeat(32);
+const validNoteIdFive = "e".repeat(32);
 
 function makeToolResultMock(overrides?: { serviceSecret?: string }) {
   const mockQuery = vi.fn();
@@ -87,28 +92,48 @@ describe("createNoteTools", () => {
   it("formats note transform output with intent-derived operations", async () => {
     const { tools, mockQuery } = await setupTools();
     mockQuery.mockResolvedValue({
-      _id: "note-transform-1",
+      _id: validNoteIdOne,
       title: "Focus notes",
       content: "First point\nSecond point",
       isArchived: false,
     } satisfies NoteRecord);
 
     const result = (await toolExecute(tools.note_transform, {
-      noteId: "note-transform-1",
+      noteId: validNoteIdOne,
       intent: "summarize",
     })) as string;
 
     expect(mockQuery).toHaveBeenCalledWith(api.notes.getForConversation, {
       serviceKey: "agent-secret",
       conversationId,
-      id: "note-transform-1",
+      id: validNoteIdOne,
     });
 
     const parsed = parseTransformOutput(result);
-    expect(parsed.noteId).toBe("note-transform-1");
+    expect(parsed.noteId).toBe(validNoteIdOne);
     expect(parsed.intent).toBe("summarize");
     expect(parsed.resultText).toContain("Summary:");
     expect(parsed.operations).toBe("summarize-content-blocks");
+  });
+
+  it("blocks malformed note IDs before querying Convex", async () => {
+    const { tools, mockQuery } = await setupTools();
+    mockQuery.mockResolvedValue({
+      _id: validNoteIdOne,
+      title: "Focus notes",
+      content: "First point\nSecond point",
+      isArchived: false,
+    } satisfies NoteRecord);
+
+    const result = (await toolExecute(tools.note_transform, {
+      noteId: "malformed-note-id",
+      intent: "summarize",
+    })) as string;
+
+    expect(result).toBe(
+      "Could not complete note action: The provided note ID is not valid. Use the exact note ID returned by note_list or note_get.",
+    );
+    expect(mockQuery).not.toHaveBeenCalled();
   });
 
   it("returns not found for missing note transforms", async () => {
@@ -116,7 +141,7 @@ describe("createNoteTools", () => {
     mockQuery.mockResolvedValue(null);
 
     const result = (await toolExecute(tools.note_transform, {
-      noteId: "note-transform-missing",
+      noteId: validNoteIdTwo,
       intent: "rewrite",
     })) as string;
 
@@ -124,7 +149,7 @@ describe("createNoteTools", () => {
     expect(mockQuery).toHaveBeenCalledWith(api.notes.getForConversation, {
       serviceKey: "agent-secret",
       conversationId,
-      id: "note-transform-missing",
+      id: validNoteIdTwo,
     });
   });
 
@@ -133,17 +158,17 @@ describe("createNoteTools", () => {
     mockMutation.mockResolvedValue(undefined);
 
     const result = (await toolExecute(tools.note_apply_transform, {
-      noteId: "note-transform-save",
+      noteId: validNoteIdThree,
       resultText: "# Updated content",
       operations: "rewrite:tone",
     })) as string;
 
-    expect(result).toBe("Applied transform for note-transform-save.");
+    expect(result).toBe(`Applied transform for ${validNoteIdThree}.`);
     const [, mutationArgs] = mockMutation.mock.calls[0] ?? [];
     expect(mutationArgs).toMatchObject({
       serviceKey: "agent-secret",
       conversationId,
-      id: "note-transform-save",
+      id: validNoteIdThree,
       content: "<h1>Updated content</h1>",
       operations: "rewrite:tone",
       model: "agent-notes-tools",
@@ -155,17 +180,17 @@ describe("createNoteTools", () => {
     mockMutation.mockResolvedValue(undefined);
 
     const result = (await toolExecute(tools.note_update_from_ai, {
-      noteId: "note-update-ai",
+      noteId: validNoteIdFour,
       resultText: "## AI rewritten text",
       operations: "apply-override",
     })) as string;
 
-    expect(result).toBe("Applied AI update for note-update-ai.");
+    expect(result).toBe(`Applied AI update for ${validNoteIdFour}.`);
     const [, mutationArgs] = mockMutation.mock.calls[0] ?? [];
     expect(mutationArgs).toMatchObject({
       serviceKey: "agent-secret",
       conversationId,
-      id: "note-update-ai",
+      id: validNoteIdFour,
       content: "<h2>AI rewritten text</h2>",
       operations: "apply-override",
       model: "agent-notes-tools",
@@ -178,7 +203,7 @@ describe("createNoteTools", () => {
       { role: "user", content: "Write a roadmap" },
       { role: "assistant", content: "Draft: Q1, Q2, Q3" },
     ]);
-    mockMutation.mockResolvedValue("note-generated-1");
+    mockMutation.mockResolvedValue(validNoteIdOne);
 
     const result = (await toolExecute(tools.note_generate_from_conversation, {
       title: "Roadmap notes",
@@ -208,7 +233,7 @@ describe("createNoteTools", () => {
       source: string;
     };
     expect(parsed.action).toBe("note_created");
-    expect(parsed.noteId).toBe("note-generated-1");
+    expect(parsed.noteId).toBe(validNoteIdOne);
     expect(parsed.title).toBe("Roadmap notes");
     expect(parsed.source).toBe("chat-generated");
   });
@@ -216,7 +241,7 @@ describe("createNoteTools", () => {
   it("sanitizes invalid folder IDs for note operations", async () => {
     const { tools, mockQuery, mockMutation, mockLoggerWarn } = await setupTools();
     mockQuery.mockResolvedValue([]);
-    mockMutation.mockResolvedValue("note-without-folder");
+    mockMutation.mockResolvedValue(validNoteIdFive);
 
     const listResult = (await toolExecute(tools.note_list, {
       limit: 10,
@@ -297,7 +322,7 @@ describe("createNoteTools", () => {
     expect(generateWithEmpty).toContain("was empty");
 
     const moveResult = (await toolExecute(tools.note_move, {
-      noteId: "note-without-folder",
+      noteId: validNoteIdFive,
       folderId: "abcde",
     })) as string;
     expect(mockMutation).toHaveBeenCalledWith(
@@ -305,7 +330,7 @@ describe("createNoteTools", () => {
       expect.objectContaining({
         serviceKey: "agent-secret",
         conversationId,
-        id: "note-without-folder",
+        id: validNoteIdFive,
         folderId: undefined,
       }),
     );
@@ -313,7 +338,7 @@ describe("createNoteTools", () => {
     expect(moveResult).toContain("was not recognized");
 
     const updateResult = (await toolExecute(tools.note_update, {
-      noteId: "note-without-folder",
+      noteId: validNoteIdFive,
       folderId: "00000000-0000-0000-0000-000000000000",
     })) as string;
     expect(mockMutation).toHaveBeenCalledWith(
@@ -321,7 +346,7 @@ describe("createNoteTools", () => {
       expect.objectContaining({
         serviceKey: "agent-secret",
         conversationId,
-        id: "note-without-folder",
+        id: validNoteIdFive,
         folderId: undefined,
       }),
     );
@@ -355,7 +380,7 @@ describe("createNoteTools", () => {
     mockQuery.mockRejectedValue(new Error("transcript service unavailable"));
 
     const result = (await toolExecute(tools.note_transform, {
-      noteId: "note-failing",
+      noteId: validNoteIdFive,
       intent: "expand",
     })) as string;
 
