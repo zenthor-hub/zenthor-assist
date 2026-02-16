@@ -36,11 +36,34 @@ describe("pluginManifestSchema", () => {
       capabilities: ["read", "write"],
       requiredEnv: ["API_KEY"],
       riskLevel: "high" as const,
+      kind: "integration",
+      sourceType: "remote",
+      channels: ["web", "whatsapp"],
+      context: {
+        defaultModelTier: "standard",
+        workspaceScope: "default",
+      },
+      policy: { allow: ["note_list"], deny: ["delete_data"], alsoAllow: ["note_create"] },
+      toolDescriptors: {
+        tool_a: {
+          name: "tool_a",
+          requiresApproval: false,
+          outputContract: {
+            outputShape: "json",
+            requiredFields: ["action", "status"],
+          },
+        },
+      },
     };
     const result = pluginManifestSchema.parse(full);
     expect(result.capabilities).toEqual(["read", "write"]);
     expect(result.requiredEnv).toEqual(["API_KEY"]);
     expect(result.riskLevel).toBe("high");
+    expect(result.kind).toBe("integration");
+    expect(result.sourceType).toBe("remote");
+    expect(result.channels).toEqual(["web", "whatsapp"]);
+    expect(result.policy?.allow).toEqual(["note_list"]);
+    expect(result.toolDescriptors?.tool_a?.outputContract?.outputShape).toBe("json");
   });
 
   it("rejects manifest with empty name", () => {

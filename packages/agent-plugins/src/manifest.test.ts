@@ -62,4 +62,23 @@ describe("createManifest", () => {
     });
     expect(result.riskLevel).toBe("high");
   });
+
+  it("preserves tool descriptor metadata", () => {
+    const result = createManifest({
+      name: "descriptord",
+      version: "1.0.0",
+      tools: ["task_create"],
+      toolDescriptors: {
+        task_create: {
+          name: "task_create",
+          requiresApproval: true,
+          outputContract: {
+            outputShape: "string",
+            requiresStructuredOutput: false,
+          },
+        },
+      },
+    });
+    expect(result.toolDescriptors?.task_create?.requiresApproval).toBe(true);
+  });
 });
