@@ -4,7 +4,7 @@ import { env } from "@zenthor-assist/env/agent";
 import type { Tool } from "ai";
 
 import { getConvexClient } from "../convex/client";
-import { logger } from "../observability/logger";
+import { logger, typedEvent } from "../observability/logger";
 import type { AudioTriggerMessage } from "./audio-processing";
 import { buildConversationMessages, processAudioTrigger } from "./audio-processing";
 import { compactMessages } from "./compact";
@@ -226,6 +226,64 @@ function resolveNoteCreationSummaries(
     if (summary) entries.push(summary);
   }
   return entries;
+}
+
+interface ToolCallSummary {
+  totalCalls: number;
+  uniqueToolCount: number;
+  noteToolCalls: number;
+  toolCountByName: Record<string, number>;
+  noteTools: string[];
+}
+
+function summarizeToolCalls(toolCalls: ToolCallRecord[] | undefined): ToolCallSummary {
+  const calls = toolCalls ?? [];
+  const toolCountByName: Record<string, number> = {};
+
+  for (const toolCall of calls) {
+    toolCountByName[toolCall.name] = (toolCountByName[toolCall.name] ?? 0) + 1;
+  }
+
+  const noteTools = calls
+    .filter((toolCall) => NOTE_TOOL_NAME_SET.has(toolCall.name))
+    .map((toolCall) => toolCall.name);
+
+  return {
+    totalCalls: calls.length,
+    uniqueToolCount: Object.keys(toolCountByName).length,
+    noteToolCalls: noteTools.length,
+    toolCountByName,
+    noteTools,
+  };
+}
+
+function logToolCallSummary(
+  toolCalls: ToolCallRecord[] | undefined,
+  context: {
+    conversationId: Id<"conversations">;
+    jobId: Id<"agentQueue">;
+    channel: "web" | "whatsapp" | "telegram";
+    modelUsed?: string;
+    generationMode: "streaming" | "non_streaming";
+    shouldCompact: boolean;
+    shouldBlock: boolean;
+    toolCount: number;
+    contextTokenEstimate?: number;
+  },
+) {
+  const summary = summarizeToolCalls(toolCalls);
+  const outcomes = resolveNoteCreationOutcomes(toolCalls);
+  void typedEvent.info("agent.loop.tool_calls", {
+    ...context,
+    totalToolCalls: summary.totalCalls,
+    uniqueToolCount: summary.uniqueToolCount,
+    noteToolCalls: summary.noteToolCalls,
+    noteTools: summary.noteTools,
+    noteCreationSuccessCount: outcomes.successes.length,
+    noteCreationFailureCount: outcomes.failures.length,
+    noteCreationFailures: outcomes.failures,
+    toolCountByName: summary.toolCountByName,
+  });
 }
 
 export function buildNoteCreationReply(
@@ -589,7 +647,10 @@ export function startAgentLoop() {
           });
         }
 
-        const noteTools = getNoteTools(job.conversationId);
+        const noteTools = getNoteTools({
+          conversationId: job.conversationId,
+          jobId: job._id,
+        });
 
         // Bind schedule_task to this conversation so cron can trigger follow-ups
         if (pluginTools.tools.schedule_task) {
@@ -767,6 +828,17 @@ export function startAgentLoop() {
 
           modelUsed = response.modelUsed;
           const noteCreationOutcomes = resolveNoteCreationOutcomes(response.toolCalls);
+          logToolCallSummary(response.toolCalls, {
+            conversationId: job.conversationId,
+            jobId: job._id,
+            channel,
+            modelUsed,
+            generationMode: "streaming",
+            shouldCompact,
+            shouldBlock,
+            toolCount: Object.keys(approvalTools).length,
+            contextTokenEstimate: estimateContextTokens(compactedMessages),
+          });
           const noteCreationMessage = buildNoteCreationReply(
             response.toolCalls,
             channel,
@@ -848,6 +920,17 @@ export function startAgentLoop() {
           });
           modelUsed = response.modelUsed;
           const noteCreationOutcomes = resolveNoteCreationOutcomes(response.toolCalls);
+          logToolCallSummary(response.toolCalls, {
+            conversationId: job.conversationId,
+            jobId: job._id,
+            channel,
+            modelUsed,
+            generationMode: "non_streaming",
+            shouldCompact,
+            shouldBlock,
+            toolCount: Object.keys(approvalTools).length,
+            contextTokenEstimate: estimateContextTokens(compactedMessages),
+          });
           const noteCreationMessage = buildNoteCreationReply(
             response.toolCalls,
             channel,
@@ -954,6 +1037,17 @@ export function startAgentLoop() {
           });
           modelUsed = response.modelUsed;
           const noteCreationOutcomes = resolveNoteCreationOutcomes(response.toolCalls);
+          logToolCallSummary(response.toolCalls, {
+            conversationId: job.conversationId,
+            jobId: job._id,
+            channel,
+            modelUsed,
+            generationMode: "non_streaming",
+            shouldCompact,
+            shouldBlock,
+            toolCount: Object.keys(approvalTools).length,
+            contextTokenEstimate: estimateContextTokens(compactedMessages),
+          });
           const noteCreationMessage = buildNoteCreationReply(
             response.toolCalls,
             channel,

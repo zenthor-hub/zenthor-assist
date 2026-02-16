@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+interface MockAgentGenerateResponse {
+  content: string;
+  modelUsed: string;
+  toolCalls: Array<{ name: string; input: unknown; output: unknown }>;
+}
+
 const mockClient = vi.hoisted(() => ({
   onUpdate: vi.fn(),
   query: vi.fn(),
@@ -67,11 +73,13 @@ vi.mock("./errors", () => ({
 }));
 
 const mockGenerateResponse = vi.hoisted(() =>
-  vi.fn(async () => ({
-    content: "hello there",
-    toolCalls: [],
-    modelUsed: "xai/grok-4.1-fast-reasoning",
-  })),
+  vi.fn(
+    async (): Promise<MockAgentGenerateResponse> => ({
+      content: "hello there",
+      toolCalls: [],
+      modelUsed: "xai/grok-4.1-fast-reasoning",
+    }),
+  ),
 );
 
 vi.mock("./generate", () => ({
@@ -138,9 +146,15 @@ vi.mock("../observability/logger", () => ({
     error: vi.fn(),
     exception: vi.fn(),
   },
+  typedEvent: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    exception: vi.fn(),
+  },
 }));
 
-import { logger } from "../observability/logger";
+import { logger, typedEvent } from "../observability/logger";
 import { startAgentLoop } from "./loop";
 
 const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
@@ -245,6 +259,64 @@ describe("startAgentLoop", () => {
       expect.objectContaining({
         serviceKey: undefined,
         jobId: "job-1",
+      }),
+    );
+  });
+
+  it("emits a typed summary for note-capable tool usage", async () => {
+    mockGenerateResponse.mockResolvedValue({
+      content: "",
+      toolCalls: [
+        {
+          name: "note_create",
+          input: { title: "Rovaniemi Trip - 5 Days" },
+          output:
+            '{"action":"note_created","noteId":"nn79frtjskhcmh0dep31jzpz3n8190hn","title":"Rovaniemi Trip - 5 Days"}',
+        },
+        {
+          name: "note_generate_from_conversation",
+          input: { title: "Rovaniemi Trip - 5 Days" },
+          output: "Could not complete note action: note content is empty.",
+        },
+      ],
+      modelUsed: "xai/grok-4.1-fast-reasoning",
+    });
+
+    startAgentLoop();
+
+    const onUpdate = mockClient.onUpdate.mock.calls[0]?.[2];
+    expect(onUpdate).toBeDefined();
+    if (!onUpdate) return;
+
+    await onUpdate([
+      {
+        _id: "job-3",
+        conversationId: "conversation-3",
+        messageId: "message-3",
+      },
+    ]);
+
+    expect(mockGenerateResponse).toHaveBeenCalledOnce();
+    expect(logger.info).toHaveBeenCalledWith(
+      "agent.loop.started",
+      expect.objectContaining({ workerId: "test-worker" }),
+    );
+    expect(typedEvent.info).toHaveBeenCalledWith(
+      "agent.loop.tool_calls",
+      expect.objectContaining({
+        conversationId: "conversation-3",
+        jobId: "job-3",
+        channel: "whatsapp",
+        generationMode: "non_streaming",
+        totalToolCalls: 2,
+        uniqueToolCount: 2,
+        noteToolCalls: 2,
+        noteTools: ["note_create", "note_generate_from_conversation"],
+        noteCreationSuccessCount: 1,
+        noteCreationFailureCount: 1,
+        noteCreationFailures: [
+          { toolName: "note_generate_from_conversation", reason: "note content is empty." },
+        ],
       }),
     );
   });
