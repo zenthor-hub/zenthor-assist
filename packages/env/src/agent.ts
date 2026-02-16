@@ -38,6 +38,8 @@ const envSchema = z.object({
   WORKER_ID: z.string().min(1).optional(),
   AGENT_JOB_LOCK_MS: z.coerce.number().optional(),
   AGENT_JOB_HEARTBEAT_MS: z.coerce.number().optional(),
+  AGENT_MAX_DELEGATION_DEPTH: z.coerce.number().optional(),
+  AGENT_SUBAGENT_TIMEOUT_MS: z.coerce.number().optional(),
   ENABLE_WHATSAPP: z.string().optional(),
   WHATSAPP_ACCOUNT_ID: z.string().min(1).optional(),
   WHATSAPP_PHONE: z.string().min(1).optional(),
