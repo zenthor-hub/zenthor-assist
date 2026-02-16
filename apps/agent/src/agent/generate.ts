@@ -6,6 +6,7 @@ import { logger } from "../observability/logger";
 import { getAIProvider } from "./ai-gateway";
 import { runWithFallback } from "./model-fallback";
 import { type ModelTier, selectModel } from "./model-router";
+import type { PluginToolDescriptor, PluginToolDescriptorMap } from "./plugins/types";
 import { tools } from "./tools";
 import { getWebSearchTool } from "./tools/web-search";
 
@@ -84,6 +85,17 @@ interface GenerateResult {
   content: string;
   toolCalls?: ToolCallRecord[];
   modelUsed: string;
+}
+
+interface ToolContractValidation {
+  toolName: string;
+  reasons: string[];
+}
+
+interface ToolContractContext {
+  conversationId?: string;
+  jobId?: string;
+  channel?: "web" | "whatsapp" | "telegram";
 }
 
 const WHATSAPP_FORMATTING_INSTRUCTIONS = `
@@ -238,6 +250,7 @@ interface GenerateOptions {
   toolsOverride?: Record<string, Tool>;
   agentConfig?: AgentConfig;
   channel?: "web" | "whatsapp" | "telegram";
+  toolContracts?: PluginToolDescriptorMap;
   toolCount?: number;
   messageCount?: number;
   contextMessageCount?: number;
@@ -416,6 +429,139 @@ function processModelResult(contentMessages: {
   };
 }
 
+function validateRequiredFields(value: unknown, requiredFields?: string[]): string[] {
+  if (!requiredFields || requiredFields.length === 0) return [];
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return [`requiredFields=${requiredFields.join(", ")} requires object output`];
+  }
+
+  const missingFields = requiredFields.filter((field) => !(field in value));
+  return missingFields.map((field) => `missing required field "${field}"`);
+}
+
+function describeToolContractViolation(toolName: string, reasons: string[]): string {
+  return `Tool output contract warning for "${toolName}": ${reasons.join(" | ")}`;
+}
+
+function safeToJsonText(value: unknown): string {
+  if (value === null || value === undefined) return String(value);
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function validateOutputContractValue(
+  output: unknown,
+  descriptor: PluginToolDescriptor | undefined,
+): string[] {
+  if (!descriptor?.outputContract) return [];
+  const outputContract = descriptor.outputContract;
+  if (outputContract.requiresStructuredOutput === false) return [];
+
+  const reasons: string[] = [];
+  const shape = outputContract.outputShape;
+
+  if (shape === "string" || shape === "markdown") {
+    if (typeof output !== "string") reasons.push("output was not a string");
+    return reasons;
+  }
+
+  if (shape === "json") {
+    if (typeof output === "string") {
+      try {
+        output = JSON.parse(output.trim());
+      } catch {
+        reasons.push("output could not be parsed as JSON");
+        return reasons;
+      }
+    }
+
+    if (typeof output !== "object" || output === null) {
+      reasons.push("output was not a valid JSON value");
+      return reasons;
+    }
+
+    return [...reasons, ...validateRequiredFields(output, outputContract.requiredFields)];
+  }
+
+  if (shape === "json-lines") {
+    if (typeof output !== "string") {
+      reasons.push("json-lines output must be a newline-delimited string");
+      return reasons;
+    }
+
+    const lines = output
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (lines.length === 0) {
+      reasons.push("json-lines output was empty");
+      return reasons;
+    }
+
+    for (const line of lines) {
+      try {
+        const parsed = JSON.parse(line);
+        reasons.push(...validateRequiredFields(parsed, outputContract.requiredFields));
+      } catch {
+        reasons.push(`line not valid JSON: ${line}`);
+      }
+    }
+  }
+
+  return reasons;
+}
+
+function applyToolContractValidation(
+  toolCalls: ToolCallRecord[],
+  toolContracts?: PluginToolDescriptorMap,
+): { toolCalls: ToolCallRecord[]; violations: ToolContractValidation[] } {
+  if (!toolContracts || Object.keys(toolContracts).length === 0 || toolCalls.length === 0) {
+    return { toolCalls, violations: [] };
+  }
+
+  const violations: ToolContractValidation[] = [];
+  const normalized: ToolCallRecord[] = [];
+
+  for (const call of toolCalls) {
+    const descriptor = toolContracts?.[call.name];
+    const validation = validateOutputContractValue(call.output, descriptor);
+
+    if (validation.length === 0) {
+      normalized.push(call);
+      continue;
+    }
+
+    violations.push({ toolName: call.name, reasons: validation });
+    const warningSummary = describeToolContractViolation(call.name, validation);
+    normalized.push({
+      ...call,
+      output: `${safeToJsonText(call.output)}\n\n⚠️ ${warningSummary}`,
+    });
+  }
+
+  return { toolCalls: normalized, violations };
+}
+
+function logToolContractViolations(
+  violations: ToolContractValidation[],
+  context?: ToolContractContext,
+): void {
+  if (violations.length === 0) return;
+  for (const violation of violations) {
+    void logger.warn("agent.model.tool_output.contract_violation", {
+      conversationId: context?.conversationId,
+      jobId: context?.jobId,
+      channel: context?.channel,
+      toolName: violation.toolName,
+      warning: violation.reasons,
+    });
+  }
+}
+
 export async function generateResponse(
   conversationMessages: Message[],
   skills?: Skill[],
@@ -482,8 +628,25 @@ export async function generateResponse(
         return processModelResult({ steps: gen.steps, text: gen.text });
       };
 
+      const executeWithValidation = async (toolsToUse: Record<string, Tool>) => {
+        const modelResult = await execute(toolsToUse);
+        const withValidation = applyToolContractValidation(
+          modelResult.toolCalls ?? [],
+          options?.toolContracts,
+        );
+        logToolContractViolations(withValidation.violations, {
+          conversationId: options?.conversationId,
+          jobId: options?.jobId,
+          channel: options?.channel,
+        });
+        return {
+          ...modelResult,
+          ...withValidation,
+        };
+      };
+
       try {
-        return await execute(resolvedTools);
+        return await executeWithValidation(resolvedTools);
       } catch (err) {
         const hasProviderSearchTool = SEARCH_TOOL_NAMES.some((name) => name in resolvedTools);
         if (!hasProviderSearchTool || !shouldRetryWithoutProviderSearch(provider.mode, err)) {
@@ -496,7 +659,7 @@ export async function generateResponse(
           mode: provider.mode,
         });
 
-        return execute(removeProviderSearchTools(resolvedTools));
+        return executeWithValidation(removeProviderSearchTools(resolvedTools));
       }
     },
   });
@@ -588,8 +751,25 @@ export async function generateResponseStreaming(
         return processModelResult({ steps, text });
       };
 
+      const executeWithValidation = async (toolsToUse: Record<string, Tool>) => {
+        const modelResult = await executeStream(toolsToUse);
+        const withValidation = applyToolContractValidation(
+          modelResult.toolCalls ?? [],
+          options?.toolContracts,
+        );
+        logToolContractViolations(withValidation.violations, {
+          conversationId: options?.conversationId,
+          jobId: options?.jobId,
+          channel: options?.channel,
+        });
+        return {
+          ...modelResult,
+          ...withValidation,
+        };
+      };
+
       try {
-        return await executeStream(resolvedTools);
+        return await executeWithValidation(resolvedTools);
       } catch (err) {
         const hasProviderSearchTool = SEARCH_TOOL_NAMES.some((name) => name in resolvedTools);
         if (!hasProviderSearchTool || !shouldRetryWithoutProviderSearch(provider.mode, err)) {
@@ -602,7 +782,7 @@ export async function generateResponseStreaming(
           mode: provider.mode,
         });
 
-        return executeStream(removeProviderSearchTools(resolvedTools));
+        return executeWithValidation(removeProviderSearchTools(resolvedTools));
       }
     },
   });

@@ -576,6 +576,14 @@ export function startAgentLoop() {
           agentId: context.conversation.agentId ?? undefined,
           modelName: env.AI_MODEL,
         });
+        const policyResolutionWarnings = pluginTools.policyResolution?.warnings ?? [];
+        if (policyResolutionWarnings.length > 0) {
+          void logger.warn("agent.plugins.policy_resolution", {
+            conversationId: job.conversationId,
+            jobId: job._id,
+            warnings: policyResolutionWarnings,
+          });
+        }
 
         const noteTools = getNoteTools(job.conversationId);
 
@@ -668,13 +676,19 @@ export function startAgentLoop() {
         const filteredTools = filterTools(mergedTools, noteAwarePolicy) as Record<string, Tool>;
 
         // Wrap high-risk tools with approval flow
-        const approvalTools = wrapToolsWithApproval(filteredTools, {
-          jobId: job._id,
-          conversationId: job.conversationId,
-          channel,
-          phone: context.contact?.phone,
-          accountId: context.conversation.accountId ?? undefined,
-        });
+        const approvalTools = wrapToolsWithApproval(
+          filteredTools,
+          {
+            jobId: job._id,
+            conversationId: job.conversationId,
+            channel,
+            phone: context.contact?.phone,
+            accountId: context.conversation.accountId ?? undefined,
+          },
+          {
+            toolContracts: pluginTools.toolContracts,
+          },
+        );
 
         const isInternalJob = job.isInternal === true;
         const isWeb = context.conversation.channel === "web";
@@ -735,6 +749,7 @@ export function startAgentLoop() {
               policyMergeSource,
               conversationId: job.conversationId,
               jobId: job._id,
+              toolContracts: pluginTools.toolContracts,
               noteContext: context.noteContext
                 ? {
                     noteId: context.noteContext.noteId,
@@ -817,6 +832,7 @@ export function startAgentLoop() {
             policyMergeSource,
             conversationId: job.conversationId,
             jobId: job._id,
+            toolContracts: pluginTools.toolContracts,
             noteContext: context.noteContext
               ? {
                   noteId: context.noteContext.noteId,
@@ -908,6 +924,7 @@ export function startAgentLoop() {
             policyMergeSource,
             conversationId: job.conversationId,
             jobId: job._id,
+            toolContracts: pluginTools.toolContracts,
             noteContext: context.noteContext
               ? {
                   noteId: context.noteContext.noteId,

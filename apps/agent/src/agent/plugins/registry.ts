@@ -8,7 +8,7 @@ import { delegateToSubagent } from "../tools/delegate-to-subagent";
 import { memorySearch, memoryStore } from "../tools/memory";
 import { scheduleTask } from "../tools/schedule";
 import { taskComplete, taskCreate, taskDelete, taskList, taskUpdate } from "../tools/tasks";
-import type { ActivationResult, RuntimePlugin } from "./types";
+import type { ActivationResult, PluginToolDescriptor, RuntimePlugin } from "./types";
 import { validateManifest } from "./validators";
 
 const coreTimePlugin: RuntimePlugin = {
@@ -37,6 +37,7 @@ const coreMemoryPlugin: RuntimePlugin = {
     version: "1.0.0",
     tools: ["memory_search", "memory_store"],
     riskLevel: "low",
+    kind: "builtin",
     source: "builtin",
     description: "Agent memory storage and retrieval",
   },
@@ -55,6 +56,10 @@ const coreSchedulePlugin: RuntimePlugin = {
     version: "1.0.0",
     tools: ["schedule_task"],
     riskLevel: "medium",
+    kind: "builtin",
+    policy: {
+      deny: [],
+    },
     source: "builtin",
     description: "Schedule tasks for future execution",
   },
@@ -72,8 +77,47 @@ const coreTasksPlugin: RuntimePlugin = {
     version: "1.0.0",
     tools: ["task_create", "task_list", "task_update", "task_complete", "task_delete"],
     riskLevel: "low",
+    kind: "tasks",
     source: "builtin",
     description: "Built-in task management",
+    toolDescriptors: {
+      task_create: {
+        name: "task_create",
+        requiresApproval: false,
+        outputContract: {
+          outputShape: "string",
+          requiresStructuredOutput: true,
+        },
+      },
+      task_list: {
+        name: "task_list",
+        outputContract: {
+          outputShape: "string",
+          requiresStructuredOutput: true,
+        },
+      },
+      task_update: {
+        name: "task_update",
+        outputContract: {
+          outputShape: "string",
+          requiresStructuredOutput: true,
+        },
+      },
+      task_complete: {
+        name: "task_complete",
+        outputContract: {
+          outputShape: "string",
+          requiresStructuredOutput: true,
+        },
+      },
+      task_delete: {
+        name: "task_delete",
+        outputContract: {
+          outputShape: "string",
+          requiresStructuredOutput: true,
+        },
+      },
+    },
   },
   tools: {
     task_create: taskCreate,
@@ -93,6 +137,7 @@ const coreWebBrowsePlugin: RuntimePlugin = {
     version: "1.0.0",
     tools: ["browse_url"],
     riskLevel: "low",
+    kind: "integration",
     source: "builtin",
     description: "Fetch and extract readable text from web pages",
   },
@@ -110,6 +155,7 @@ const coreCalculatorPlugin: RuntimePlugin = {
     version: "1.0.0",
     tools: ["calculate"],
     riskLevel: "low",
+    kind: "builtin",
     source: "builtin",
     description: "Evaluate mathematical expressions",
   },
@@ -127,6 +173,7 @@ const coreDateCalcPlugin: RuntimePlugin = {
     version: "1.0.0",
     tools: ["date_calc"],
     riskLevel: "low",
+    kind: "builtin",
     source: "builtin",
     description: "Date arithmetic, difference, and info operations",
   },
@@ -144,6 +191,7 @@ const coreSubagentPlugin: RuntimePlugin = {
     version: "1.0.0",
     tools: ["delegate_to_subagent"],
     riskLevel: "low",
+    kind: "integration",
     source: "builtin",
     description: "Delegates a focused task to a temporary internal subagent queue",
   },
@@ -248,6 +296,29 @@ export class PluginRegistry {
       }
     }
     return names;
+  }
+
+  getToolContract(toolName: string): PluginToolDescriptor | undefined {
+    for (const plugin of this.active.values()) {
+      if (plugin.manifest.toolDescriptors?.[toolName]) {
+        return plugin.manifest.toolDescriptors[toolName];
+      }
+      if (plugin.tools[toolName]) {
+        return { name: toolName };
+      }
+    }
+    return undefined;
+  }
+
+  getToolContracts(): Record<string, PluginToolDescriptor> {
+    const contracts: Record<string, PluginToolDescriptor> = {};
+    for (const plugin of this.active.values()) {
+      if (!plugin.manifest.toolDescriptors) continue;
+      for (const [name, descriptor] of Object.entries(plugin.manifest.toolDescriptors)) {
+        contracts[name] = descriptor;
+      }
+    }
+    return contracts;
   }
 
   clear(): void {

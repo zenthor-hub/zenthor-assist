@@ -6,6 +6,7 @@ import type { Tool } from "ai";
 import { getConvexClient } from "../convex/client";
 import { logger } from "../observability/logger";
 import { getGlobalRegistry } from "./plugins/registry";
+import type { PluginToolDescriptorMap } from "./plugins/types";
 
 const POLL_INTERVAL_MS = 1_000;
 const APPROVAL_TIMEOUT_MS = 5 * 60 * 1_000;
@@ -67,13 +68,20 @@ async function waitForApproval(
 export function wrapToolsWithApproval(
   tools: Record<string, Tool>,
   context: ApprovalContext,
+  options?: {
+    toolContracts?: PluginToolDescriptorMap;
+  },
 ): Record<string, Tool> {
   const wrapped: Record<string, Tool> = {};
 
   const highRiskTools = getGlobalRegistry().getHighRiskToolNames();
+  const toolContracts = options?.toolContracts ?? {};
 
   for (const [name, t] of Object.entries(tools)) {
-    if (!highRiskTools.has(name)) {
+    const descriptor = toolContracts[name];
+    const requiresApproval = descriptor?.requiresApproval ?? highRiskTools.has(name);
+
+    if (!requiresApproval) {
       wrapped[name] = t;
       continue;
     }
