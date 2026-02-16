@@ -550,13 +550,16 @@ export function startAgentLoop() {
 
         const channel = context.conversation.channel as "web" | "whatsapp" | "telegram";
 
-        // Enqueue typing indicator for WhatsApp (processed by agent-whatsapp-cloud)
-        if (channel === "whatsapp" && context.contact?.phone) {
+        // Enqueue typing indicator for messaging channels (processed by their outbound runtimes)
+        if ((channel === "whatsapp" || channel === "telegram") && context.contact?.phone) {
           client
             .mutation(api.delivery.enqueueOutbound, {
               serviceKey,
-              channel: "whatsapp",
-              accountId: context.conversation.accountId ?? env.WHATSAPP_ACCOUNT_ID ?? "default",
+              channel,
+              accountId:
+                context.conversation.accountId ??
+                (channel === "telegram" ? env.TELEGRAM_ACCOUNT_ID : env.WHATSAPP_ACCOUNT_ID) ??
+                "default",
               conversationId: job.conversationId,
               messageId: job.messageId,
               to: context.contact.phone,
@@ -901,6 +904,20 @@ export function startAgentLoop() {
               serviceKey,
               channel: "whatsapp",
               accountId: context.conversation.accountId ?? env.WHATSAPP_ACCOUNT_ID ?? "default",
+              conversationId: job.conversationId,
+              messageId: assistantMessageId,
+              to: context.contact.phone,
+              content,
+              metadata: {
+                kind: "assistant_message",
+              },
+            });
+          }
+          if (channel === "telegram" && context.contact?.phone && assistantMessageId) {
+            await client.mutation(api.delivery.enqueueOutbound, {
+              serviceKey,
+              channel: "telegram",
+              accountId: context.conversation.accountId ?? env.TELEGRAM_ACCOUNT_ID ?? "default",
               conversationId: job.conversationId,
               messageId: assistantMessageId,
               to: context.contact.phone,

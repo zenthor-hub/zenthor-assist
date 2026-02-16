@@ -3,6 +3,7 @@ import { startAgentLoop } from "./agent/loop";
 import { getRecommendedEnvForRole, getRequiredEnvForRole } from "./env-requirements";
 import { logger } from "./observability/logger";
 import { initSentry } from "./observability/sentry";
+import { startTelegramRuntime } from "./telegram/runtime";
 import { startWhatsAppCloudRuntime } from "./whatsapp-cloud/runtime";
 import { startWhatsAppRuntime } from "./whatsapp/runtime";
 
@@ -45,7 +46,9 @@ async function main() {
     startAgentLoop();
   }
 
-  if (!enableWhatsApp) {
+  if (role === "telegram" || role === "telegram-egress") {
+    await startTelegramRuntime();
+  } else if (!enableWhatsApp) {
     await logger.lineInfo("[main] WhatsApp disabled via ENABLE_WHATSAPP=false");
     void logger.info("agent.whatsapp.disabled", { role });
   } else if (role === "whatsapp" || role === "all") {

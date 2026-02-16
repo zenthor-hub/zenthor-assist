@@ -33,7 +33,16 @@ const envSchema = z.object({
   ZENTHOR_FINANCE_SERVICE_KEY: z.string().min(1).optional(),
   ZENTHOR_FINANCE_ORG_ID: z.string().min(1).optional(),
   AGENT_ROLE: z
-    .enum(["all", "core", "whatsapp", "whatsapp-ingress", "whatsapp-egress", "whatsapp-cloud"])
+    .enum([
+      "all",
+      "core",
+      "whatsapp",
+      "whatsapp-ingress",
+      "whatsapp-egress",
+      "whatsapp-cloud",
+      "telegram",
+      "telegram-egress",
+    ])
     .optional(),
   WORKER_ID: z.string().min(1).optional(),
   AGENT_JOB_LOCK_MS: z.coerce.number().optional(),
@@ -50,6 +59,9 @@ const envSchema = z.object({
   WHATSAPP_CLOUD_PHONE_NUMBER_ID: z.string().min(1).optional(),
   WHATSAPP_CLOUD_ACCOUNT_ID: z.string().min(1).optional(),
   WHATSAPP_CLOUD_PHONE: z.string().min(1).optional(),
+  TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),
+  TELEGRAM_WEBHOOK_SECRET: z.string().min(1).optional(),
+  TELEGRAM_ACCOUNT_ID: z.string().min(1).optional(),
   BLOB_READ_WRITE_TOKEN: z.string().min(1).optional(),
   GROQ_API_KEY: z.string().min(1).optional(),
   AXIOM_TOKEN: z.string().min(1).optional(),

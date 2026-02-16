@@ -33,6 +33,10 @@ export function getRequiredEnvForRole(
     required.push("WHATSAPP_CLOUD_ACCESS_TOKEN", "WHATSAPP_CLOUD_PHONE_NUMBER_ID");
   }
 
+  if (role === "telegram" || role === "telegram-egress") {
+    required.push("TELEGRAM_BOT_TOKEN");
+  }
+
   return required;
 }
 
@@ -44,6 +48,10 @@ export function getRecommendedEnvForRole(role: string): string[] {
   const recommended: string[] = [];
   // AGENT_SECRET is needed by all roles for service mutations in production
   recommended.push("AGENT_SECRET");
+
+  if (role === "telegram" || role === "telegram-egress") {
+    recommended.push("TELEGRAM_WEBHOOK_SECRET", "TELEGRAM_ACCOUNT_ID");
+  }
 
   // Audio processing dependencies (relevant when core handles WhatsApp audio)
   if (role === "core" || role === "all") {

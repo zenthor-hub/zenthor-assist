@@ -15,6 +15,8 @@ describe("getRequiredEnvForRole", () => {
       "whatsapp-ingress",
       "whatsapp-egress",
       "whatsapp-cloud",
+      "telegram",
+      "telegram-egress",
     ];
     for (const role of roles) {
       const required = getRequiredEnvForRole(role, false, "gateway");
@@ -80,6 +82,16 @@ describe("getRequiredEnvForRole", () => {
     expect(required).not.toContain("WHATSAPP_CLOUD_ACCESS_TOKEN");
   });
 
+  it("requires Telegram bot token for telegram role", () => {
+    const required = getRequiredEnvForRole("telegram", false, "gateway");
+    expect(required).toContain("TELEGRAM_BOT_TOKEN");
+  });
+
+  it("requires Telegram bot token for telegram-egress role", () => {
+    const required = getRequiredEnvForRole("telegram-egress", false, "gateway");
+    expect(required).toContain("TELEGRAM_BOT_TOKEN");
+  });
+
   // No AI key required for non-core roles in subscription mode
 
   it("only requires CONVEX_URL for whatsapp-egress in subscription mode", () => {
@@ -94,7 +106,7 @@ describe("getRequiredEnvForRole", () => {
 
 describe("getRecommendedEnvForRole", () => {
   it("always recommends AGENT_SECRET", () => {
-    const roles = ["core", "all", "whatsapp", "whatsapp-cloud"];
+    const roles = ["core", "all", "whatsapp", "whatsapp-cloud", "telegram", "telegram-egress"];
     for (const role of roles) {
       const recommended = getRecommendedEnvForRole(role);
       expect(recommended).toContain("AGENT_SECRET");

@@ -257,6 +257,22 @@ export interface WhatsAppInboundIgnoredPayload {
   phone: string;
 }
 
+export interface TelegramOutboundLoopStartedPayload {
+  accountId: string;
+  ownerId: string;
+}
+
+export interface TelegramOutboundLoopErrorPayload {
+  accountId: string;
+  ownerId: string;
+}
+
+export interface TelegramApiFailedPayload {
+  method: string;
+  error: string;
+  statusCode: number;
+}
+
 export interface WhatsAppOutboundSentPayload {
   phone: string;
   jid: string;
@@ -357,6 +373,9 @@ export interface OperationalEventMap {
   "whatsapp.cloud.outbound.loop.error": WhatsAppOutboundLoopErrorPayload;
   "whatsapp.cloud.send.success": WhatsAppCloudSendSuccessPayload;
   "whatsapp.cloud.send.failed": WhatsAppCloudSendFailedPayload;
+  "telegram.outbound.loop.started": TelegramOutboundLoopStartedPayload;
+  "telegram.outbound.loop.error": TelegramOutboundLoopErrorPayload;
+  "telegram.api.failed": TelegramApiFailedPayload;
 
   // Plugin lifecycle
   "agent.plugins.sync.failed": AgentPluginsSyncFailedPayload;

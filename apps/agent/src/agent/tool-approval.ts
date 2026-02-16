@@ -118,19 +118,24 @@ export function wrapToolsWithApproval(
           channel: context.channel,
         });
 
-        if (context.channel === "whatsapp" && context.phone) {
+        if ((context.channel === "whatsapp" || context.channel === "telegram") && context.phone) {
           const prompt = `🔐 I'd like to use the tool '${name}'. Reply YES to approve or NO to reject.`;
           const messageId = await client.mutation(api.messages.addAssistantMessage, {
             serviceKey: env.AGENT_SECRET,
             conversationId: context.conversationId as Id<"conversations">,
             content: prompt,
-            channel: "whatsapp",
+            channel: context.channel,
           });
           if (messageId) {
             await client.mutation(api.delivery.enqueueOutbound, {
               serviceKey: env.AGENT_SECRET,
-              channel: "whatsapp",
-              accountId: context.accountId ?? env.WHATSAPP_ACCOUNT_ID ?? "default",
+              channel: context.channel,
+              accountId:
+                context.accountId ??
+                (context.channel === "telegram"
+                  ? env.TELEGRAM_ACCOUNT_ID
+                  : env.WHATSAPP_ACCOUNT_ID) ??
+                "default",
               conversationId: context.conversationId as Id<"conversations">,
               messageId,
               to: context.phone,

@@ -40,6 +40,8 @@ import type * as scheduledTasks from "../scheduledTasks.js";
 import type * as skills from "../skills.js";
 import type * as taskProjects from "../taskProjects.js";
 import type * as tasks from "../tasks.js";
+import type * as telegram_mutations from "../telegram/mutations.js";
+import type * as telegram_webhook from "../telegram/webhook.js";
 import type * as todoist from "../todoist.js";
 import type * as toolApprovals from "../toolApprovals.js";
 import type * as userPreferences from "../userPreferences.js";
@@ -88,6 +90,8 @@ declare const fullApi: ApiFromModules<{
   skills: typeof skills;
   taskProjects: typeof taskProjects;
   tasks: typeof tasks;
+  "telegram/mutations": typeof telegram_mutations;
+  "telegram/webhook": typeof telegram_webhook;
   todoist: typeof todoist;
   toolApprovals: typeof toolApprovals;
   userPreferences: typeof userPreferences;
