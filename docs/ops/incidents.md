@@ -317,5 +317,21 @@ event == "agent.notes.tool.request.started" and jobId == "job-123" | order by _t
 event == "agent.loop.tool_calls" and jobId == "job-123" | project _time, generationMode, noteToolCalls, noteCreationSuccessCount, noteCreationFailureCount, noteTools
 
 // Empty or malformed note bodies (prevents creation)
-event in ("agent.notes.tool.empty_content", "agent.notes.tool.request.outcome") and conversationId == "conv-abc" | order by _time desc
+event == "agent.notes.tool.request.started" and jobId == "job-123" | order by _time desc
+event == "agent.notes.tool.request.outcome" and jobId == "job-123" | order by _time desc
+event == "agent.notes.tool.request.exception" and jobId == "job-123" | order by _time desc
+
+// End-to-end note request chain for one job
+event in (
+  "agent.job.claimed",
+  "agent.loop.tool_calls",
+  "agent.notes.tool.request.started",
+  "agent.notes.tool.request.outcome",
+  "agent.notes.tool.request.exception",
+  "agent.job.completed",
+  "agent.job.failed",
+) 
+    and jobId == "job-123"
+| order by _time asc
+| project _time, event, conversationId, jobId, toolName, generationMode, noteCreationSuccessCount, noteCreationFailureCount, error
 ```
