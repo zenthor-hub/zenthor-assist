@@ -71,7 +71,7 @@ export default function NoteWorkspacePage({ params }: { params: Promise<{ noteId
   const [conversationId, setConversationId] = useState<Id<"conversations"> | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isInitializingThread, setIsInitializingThread] = useState(false);
-  const hasHydrated = useRef(false);
+  const hasUnsavedChanges = useRef(false);
 
   const chatQuickActionTemplate = useCallback(
     (action: "summarize" | "rewrite" | "expand" | "extract", selectedText: string) => {
@@ -139,7 +139,7 @@ ${snippet}`;
     setContent(note.content);
     setSelectedFolderId(note.folderId ?? "none");
     setIsPinned(note.isPinned === true);
-    hasHydrated.current = false;
+    hasUnsavedChanges.current = false;
     if (note.conversationId) setConversationId(note.conversationId);
   }, [note]);
 
@@ -169,28 +169,32 @@ ${snippet}`;
 
   useEffect(() => {
     if (!note) return;
-    if (hasHydrated.current) {
-      const timer = window.setTimeout(async () => {
-        if (note.title === title && note.content === content) return;
-        setIsSaving(true);
-        try {
-          await updateNote({
-            id: note._id,
-            title,
-            content,
-          });
-        } catch {
-          toast.error(t("Failed to save note"));
-        } finally {
-          setIsSaving(false);
-        }
-      }, 600);
-      return () => {
-        window.clearTimeout(timer);
-      };
+    if (!hasUnsavedChanges.current) {
+      return;
     }
-    hasHydrated.current = true;
-    return undefined;
+
+    const timer = window.setTimeout(async () => {
+      if (note.title === title && note.content === content) {
+        hasUnsavedChanges.current = false;
+        return;
+      }
+      setIsSaving(true);
+      try {
+        await updateNote({
+          id: note._id,
+          title,
+          content,
+        });
+        hasUnsavedChanges.current = false;
+      } catch {
+        toast.error(t("Failed to save note"));
+      } finally {
+        setIsSaving(false);
+      }
+    }, 600);
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [content, note, t, title, updateNote]);
 
   async function toggleArchive() {
@@ -265,7 +269,13 @@ ${snippet}`;
       <div className="grid gap-4 lg:min-h-[calc(100vh-15rem)] lg:grid-cols-[1.2fr_1fr]">
         <div className="min-h-0 overflow-hidden rounded-lg border p-4">
           <div className="mb-3 flex items-center justify-between gap-2">
-            <Input value={title} onChange={(event) => setTitle(event.target.value)} />
+            <Input
+              value={title}
+              onChange={(event) => {
+                hasUnsavedChanges.current = true;
+                setTitle(event.target.value);
+              }}
+            />
             <div className="flex items-center gap-2">
               <Select
                 value={selectedFolderId}
@@ -324,7 +334,10 @@ ${snippet}`;
           <NoteEditor
             className="h-[45vh] lg:h-[calc(100%-5.5rem)]"
             value={content}
-            onChange={setContent}
+            onChange={(nextContent) => {
+              hasUnsavedChanges.current = true;
+              setContent(nextContent);
+            }}
             onAiAction={handleSectionAiAction}
             placeholder={t("Write your note")}
           />
@@ -357,6 +370,7 @@ ${snippet}`;
               onClick={() => {
                 setTitle(`${title || t("Untitled note")} (AI draft)`);
                 setContent("");
+                hasUnsavedChanges.current = true;
               }}
             >
               <PenLine className="size-3.5" />
