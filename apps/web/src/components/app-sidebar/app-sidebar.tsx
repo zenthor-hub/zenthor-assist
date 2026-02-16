@@ -14,6 +14,7 @@ import {
   MessageCircle,
   MessageSquare,
   NotebookText,
+  Plus,
   Settings,
   Sparkles,
   SlidersHorizontal,
@@ -43,7 +44,7 @@ import {
 import { NavUser } from "./nav-user";
 import { ThemeSwitcher } from "./theme-switcher";
 
-type SidebarMode = "nav" | "chats" | "settings";
+type SidebarMode = "nav" | "chats" | "notes" | "settings";
 
 interface SidebarConversation {
   _id: string;
@@ -52,9 +53,16 @@ interface SidebarConversation {
   title?: string;
 }
 
+interface SidebarNote {
+  _id: string;
+  _creationTime: number;
+  title?: string;
+  isArchived: boolean;
+}
+
 function getSidebarModeFromPath(pathname: string): SidebarMode {
   if (pathname.startsWith("/chat")) return "chats";
-  if (pathname.startsWith("/notes")) return "nav";
+  if (pathname.startsWith("/notes")) return "notes";
   if (pathname.startsWith("/settings")) return "settings";
   return "nav";
 }
@@ -78,6 +86,12 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     router.push("/settings/general");
   }
 
+  function goToNotes() {
+    transitionDir.current = "forward";
+    setMode("notes");
+    router.push("/notes");
+  }
+
   function goToNav() {
     transitionDir.current = "back";
     setMode("nav");
@@ -85,7 +99,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   const conversations = (useQuery(api.conversations.listRecentWithLastMessage, {}) ??
     []) as SidebarConversation[];
+  const activeNotes = (useQuery(api.notes.list, {
+    isArchived: false,
+    limit: 200,
+  }) ?? []) as SidebarNote[];
+  const archivedNotes = (useQuery(api.notes.list, {
+    isArchived: true,
+    limit: 200,
+  }) ?? []) as SidebarNote[];
   const archiveConversation = useMutation(api.conversations.archive);
+  const archiveNote = useMutation(api.notes.archive);
 
   useEffect(() => {
     setMode(getSidebarModeFromPath(pathname));
@@ -104,6 +127,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       }
     } catch {
       toast.error(t("Failed to archive conversation"));
+    }
+  }
+
+  async function handleArchiveNote(e: React.MouseEvent, noteId: string, isArchived: boolean) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    try {
+      await archiveNote({
+        id: noteId as Parameters<typeof archiveNote>[0]["id"],
+        isArchived,
+      });
+      toast.success(isArchived ? t("Note archived") : t("Note restored"));
+      if (pathname === `/notes/${noteId}`) {
+        router.push("/notes");
+      }
+    } catch {
+      toast.error(isArchived ? t("Failed to archive note") : t("Failed to restore note"));
     }
   }
 
@@ -195,6 +236,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   asChild
                   isActive={pathname.startsWith("/notes")}
                   tooltip={t("Notes")}
+                  onClick={goToNotes}
                 >
                   <Link href="/notes">
                     <NotebookText className="size-4" />
@@ -223,9 +265,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarGroup key="chats" className="animate-slide-in-right">
             <SidebarMenu>
               <SidebarMenuItem>
-                <button
-                  type="button"
+                <SidebarMenuButton
                   onClick={goToNav}
+                  tooltip={t("Back to navigation")}
                   className="hover:bg-sidebar-accent text-sidebar-foreground flex w-full items-center rounded-md px-2 py-1.5 text-sm transition-colors"
                 >
                   <ArrowLeft className="size-4 shrink-0" />
@@ -233,7 +275,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     <T>Chats</T>
                   </span>
                   <span className="size-4 shrink-0" />
-                </button>
+                </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
             <SidebarGroupContent className="mt-2">
@@ -299,13 +341,113 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
+        ) : mode === "notes" ? (
+          <SidebarGroup key="notes" className="animate-slide-in-right">
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={goToNav}
+                  tooltip={t("Back to navigation")}
+                  className="hover:bg-sidebar-accent text-sidebar-foreground flex w-full items-center rounded-md px-2 py-1.5 text-sm transition-colors group-data-[collapsible=icon]:justify-center"
+                >
+                  <ArrowLeft className="size-4 shrink-0" />
+                  <span className="flex-1 text-center font-medium group-data-[collapsible=icon]:hidden">
+                    <T>Notes</T>
+                  </span>
+                  <span className="size-4 shrink-0 group-data-[collapsible=icon]:hidden" />
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+            <SidebarGroupContent className="mt-2">
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={pathname === "/notes"}
+                    tooltip={t("New note")}
+                  >
+                    <Link href="/notes">
+                      <Plus className="size-4" />
+                      <span>
+                        <T>New note</T>
+                      </span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+            <SidebarGroupContent className="mt-2">
+              <SidebarMenu>
+                {activeNotes.map((note) => {
+                  const isActive = pathname === `/notes/${note._id}`;
+                  const tooltip = note.title || t("Untitled note");
+
+                  return (
+                    <SidebarMenuItem key={note._id}>
+                      <SidebarMenuButton asChild isActive={isActive} tooltip={tooltip}>
+                        <Link href={`/notes/${note._id}`}>
+                          <NotebookText className="size-4" />
+                          <span className="truncate">{tooltip}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                      <SidebarMenuAction
+                        onClick={(e) => handleArchiveNote(e, note._id, true)}
+                        showOnHover
+                      >
+                        <Archive className="size-4" />
+                      </SidebarMenuAction>
+                    </SidebarMenuItem>
+                  );
+                })}
+                {activeNotes.length === 0 && (
+                  <div className="text-muted-foreground px-3 py-8 text-center text-xs">
+                    <T>No notes yet</T>
+                  </div>
+                )}
+              </SidebarMenu>
+            </SidebarGroupContent>
+            {archivedNotes.length > 0 ? (
+              <>
+                <SidebarGroupContent className="mt-4 px-3">
+                  <div className="text-muted-foreground text-[11px] font-medium">
+                    <T>Archived</T>
+                  </div>
+                </SidebarGroupContent>
+                <SidebarGroupContent className="mt-2">
+                  <SidebarMenu>
+                    {archivedNotes.map((note) => {
+                      const isActive = pathname === `/notes/${note._id}`;
+                      const tooltip = note.title || t("Untitled note");
+
+                      return (
+                        <SidebarMenuItem key={note._id}>
+                          <SidebarMenuButton asChild isActive={isActive} tooltip={tooltip}>
+                            <Link href={`/notes/${note._id}`}>
+                              <NotebookText className="size-4" />
+                              <span className="truncate">{tooltip}</span>
+                            </Link>
+                          </SidebarMenuButton>
+                          <SidebarMenuAction
+                            onClick={(e) => handleArchiveNote(e, note._id, false)}
+                            showOnHover
+                          >
+                            <Archive className="size-4" />
+                          </SidebarMenuAction>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </>
+            ) : null}
+          </SidebarGroup>
         ) : (
           <SidebarGroup key="settings" className="animate-slide-in-right">
             <SidebarMenu>
               <SidebarMenuItem>
-                <button
-                  type="button"
+                <SidebarMenuButton
                   onClick={goToNav}
+                  tooltip={t("Back to navigation")}
                   className="hover:bg-sidebar-accent text-sidebar-foreground flex w-full items-center rounded-md px-2 py-1.5 text-sm transition-colors"
                 >
                   <ArrowLeft className="size-4 shrink-0" />
@@ -313,7 +455,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     <T>Settings</T>
                   </span>
                   <span className="size-4 shrink-0" />
-                </button>
+                </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
             <SidebarGroupContent className="mt-2">

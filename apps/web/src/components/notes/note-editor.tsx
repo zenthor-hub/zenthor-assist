@@ -3,7 +3,7 @@
 import { EditorContent, type Editor, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { AlignLeft, ArrowRight, Bold, Italic, List, ListOrdered, Sparkles } from "lucide-react";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -63,6 +63,7 @@ export function NoteEditor({
 }: NoteEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [selection, setSelection] = useState<SelectionUiState | null>(null);
+  const suppressNextEditorUpdate = useRef(false);
 
   const setContentFromSelection = useCallback((editor: Editor) => {
     if (!containerRef.current) return;
@@ -118,6 +119,10 @@ export function NoteEditor({
         },
       },
       onUpdate: ({ editor: currentEditor }) => {
+        if (suppressNextEditorUpdate.current) {
+          suppressNextEditorUpdate.current = false;
+          return;
+        }
         onChange(currentEditor.getHTML());
       },
       onSelectionUpdate: ({ editor: currentEditor }) => {
@@ -135,6 +140,18 @@ export function NoteEditor({
     },
     [disabled],
   );
+  const initialContent = toEditorHtml(value);
+
+  useEffect(() => {
+    if (!editor) return;
+
+    editor.setEditable(!disabled);
+
+    if (editor.getHTML() !== initialContent) {
+      suppressNextEditorUpdate.current = true;
+      editor.commands.setContent(initialContent, false);
+    }
+  }, [disabled, editor, initialContent]);
 
   const applyFormat = useCallback(
     (command: "bold" | "italic" | "bulletList" | "orderedList") => {
@@ -166,14 +183,6 @@ export function NoteEditor({
 
   if (!editor) {
     return null;
-  }
-
-  editor.setEditable(!disabled);
-
-  const initialContent = toEditorHtml(value);
-
-  if (editor.getHTML() !== initialContent && editor.isEditable) {
-    editor.commands.setContent(initialContent, false);
   }
 
   return (
