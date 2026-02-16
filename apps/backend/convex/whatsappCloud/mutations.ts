@@ -8,6 +8,38 @@ import { classifyApprovalText } from "../lib/approvalKeywords";
 const CLOUD_API_ACCOUNT_ID = "cloud-api";
 
 /**
+ * Resolve the active WhatsApp conversation for a contact.
+ * Keeps the newest active conversation and archives duplicates.
+ */
+async function getOrCreateCloudConversation(ctx: MutationCtx, contactId: Id<"contacts">) {
+  const conversations = await ctx.db
+    .query("conversations")
+    .withIndex("by_contactId", (q) => q.eq("contactId", contactId))
+    .filter((q) => q.eq(q.field("channel"), "whatsapp"))
+    .filter((q) => q.eq(q.field("status"), "active"))
+    .filter((q) => q.eq(q.field("accountId"), CLOUD_API_ACCOUNT_ID))
+    .collect();
+
+  const sorted = conversations.sort((a, b) => b._creationTime - a._creationTime);
+  const [conversation, ...duplicates] = sorted;
+
+  for (const duplicate of duplicates) {
+    await ctx.db.patch(duplicate._id, { status: "archived" });
+  }
+
+  if (conversation) {
+    return conversation._id;
+  }
+
+  return await ctx.db.insert("conversations", {
+    contactId,
+    channel: "whatsapp",
+    accountId: CLOUD_API_ACCOUNT_ID,
+    status: "active",
+  });
+}
+
+/**
  * Generate phone number variants for lookup.
  * Handles the Brazilian 9th digit issue: mobile numbers may appear as
  * 55{area}{8digits} or 55{area}9{8digits} depending on the source.
@@ -131,25 +163,8 @@ export const handleIncoming = internalMutation({
       return null;
     }
 
-    // 3. Get or create conversation with accountId: "cloud-api"
-    const conversations = await ctx.db
-      .query("conversations")
-      .withIndex("by_contactId", (q) => q.eq("contactId", contact._id))
-      .filter((q) => q.eq(q.field("channel"), "whatsapp"))
-      .filter((q) => q.eq(q.field("status"), "active"))
-      .filter((q) => q.eq(q.field("accountId"), CLOUD_API_ACCOUNT_ID))
-      .collect();
-
-    let conversationId = conversations[0]?._id;
-
-    if (!conversationId) {
-      conversationId = await ctx.db.insert("conversations", {
-        contactId: contact._id,
-        channel: "whatsapp",
-        accountId: CLOUD_API_ACCOUNT_ID,
-        status: "active",
-      });
-    }
+    // 3. Get or create single active conversation with accountId: "cloud-api"
+    const conversationId = await getOrCreateCloudConversation(ctx, contact._id);
 
     // 4. Check for pending tool approvals (YES/NO flow) — shared keyword logic
     const resolved = await resolveApprovalByText(ctx, conversationId, args.text);
@@ -243,25 +258,8 @@ export const handleIncomingMedia = internalMutation({
       return null;
     }
 
-    // 3. Get or create conversation
-    const conversations = await ctx.db
-      .query("conversations")
-      .withIndex("by_contactId", (q) => q.eq("contactId", contact._id))
-      .filter((q) => q.eq(q.field("channel"), "whatsapp"))
-      .filter((q) => q.eq(q.field("status"), "active"))
-      .filter((q) => q.eq(q.field("accountId"), CLOUD_API_ACCOUNT_ID))
-      .collect();
-
-    let conversationId = conversations[0]?._id;
-
-    if (!conversationId) {
-      conversationId = await ctx.db.insert("conversations", {
-        contactId: contact._id,
-        channel: "whatsapp",
-        accountId: CLOUD_API_ACCOUNT_ID,
-        status: "active",
-      });
-    }
+    // 3. Get or create single active conversation
+    const conversationId = await getOrCreateCloudConversation(ctx, contact._id);
 
     // 4. Insert message with media metadata and placeholder content
     const caption = args.caption?.trim();

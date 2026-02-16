@@ -46,15 +46,22 @@ export const getOrCreate = serviceMutation({
     if ((args.channel === "whatsapp" || args.channel === "telegram") && args.contactId) {
       const accountId = args.accountId ?? "default";
 
-      const existing = await ctx.db
+      const active = await ctx.db
         .query("conversations")
         .withIndex("by_contactId", (q) => q.eq("contactId", args.contactId))
         .filter((q) => q.eq(q.field("channel"), args.channel))
         .filter((q) => q.eq(q.field("status"), "active"))
         .filter((q) => q.eq(q.field("accountId"), accountId))
-        .first();
+        .collect();
 
-      if (existing) return existing._id;
+      const sorted = active.sort((a, b) => b._creationTime - a._creationTime);
+      const [canonical, ...duplicates] = sorted;
+
+      for (const duplicate of duplicates) {
+        await ctx.db.patch(duplicate._id, { status: "archived" });
+      }
+
+      if (canonical) return canonical._id;
 
       return await ctx.db.insert("conversations", {
         contactId: args.contactId,

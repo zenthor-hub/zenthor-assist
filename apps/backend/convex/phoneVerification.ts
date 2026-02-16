@@ -77,17 +77,27 @@ export const requestVerification = authMutation({
     }
 
     // Get or create WhatsApp conversation for this contact
-    let conversation = await ctx.db
+    const activeConversations = await ctx.db
       .query("conversations")
       .withIndex("by_contactId", (q) => q.eq("contactId", contact._id))
       .filter((q) => q.eq(q.field("channel"), "whatsapp"))
+      .filter((q) => q.eq(q.field("accountId"), "cloud-api"))
       .filter((q) => q.eq(q.field("status"), "active"))
-      .first();
+      .collect();
+
+    const sorted = activeConversations.sort((a, b) => b._creationTime - a._creationTime);
+    let conversation = sorted[0] ?? null;
+    const duplicates = sorted.slice(1);
+
+    for (const duplicate of duplicates) {
+      await ctx.db.patch(duplicate._id, { status: "archived" });
+    }
 
     if (!conversation) {
       const conversationId = await ctx.db.insert("conversations", {
         contactId: contact._id,
         channel: "whatsapp",
+        accountId: "cloud-api",
         status: "active",
       });
       conversation = await ctx.db.get(conversationId);
