@@ -170,10 +170,12 @@ function buildSystemPrompt(
     "- /expand ... → intent: expand\n" +
     "- /organize ... → intent: organize\n" +
     "- /clean-style ... → intent: clean-style\n" +
-    "When intent is not explicit, infer the most likely command from the request intent and call note_transform.\n" +
+    "When intent is to transform existing content and is not explicit, infer the most likely command and call note_transform.\n" +
+    "When the user asks to add or write new content, use note_update with the 'content' field directly.\n" +
     "Use note_transform for direct full-note rewrites such as: rewrite this note, rewrite this entire note, rewrite the note, clean-up the note.\n" +
     "For full-note rewrite or clean-up, call note_transform first with the current noteId.\n" +
-    "Only call note_apply_transform/note_update_from_ai after the user explicitly approves or requested a direct update.";
+    "Only call note_apply_transform/note_update_from_ai after the user explicitly approves or requested a direct update.\n" +
+    "If the user says to forget, ignore, or cancel a previous request, treat the new message as a fresh request — do NOT continue the previous operation.";
   return `${prompt}${NOTE_TOOL_CONFIRMATION_PROMPT}\n\n## Note-editor mode
 You are operating as an AI note editor for "${noteContext.title}". Provide concise edit-focused responses and prefer machine-readable change suggestions.
 When the user asks for an edit command, first return a structured proposal with fields resultText and operations.
