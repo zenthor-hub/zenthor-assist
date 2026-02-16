@@ -32,6 +32,13 @@ cd apps/backend
 bun run dev:setup
 ```
 
+Notes for backend TypeScript setup:
+
+- `apps/backend` uses `@typescript/native-preview` with Convex `tsgo` (`apps/backend/convex.json`) so TypeScript 7 native checks only apply to backend Convex code.
+- `apps/backend/package.json` intentionally uses:
+  - `bunx @typescript/native-preview -p convex/tsconfig.json --noEmit`
+- Avoid adding a `tsc` subcommand here, because the native wrapper can interpret it as an input file and trigger `TS5042: Option 'project' cannot be mixed with source files on a command line`.
+
 3. Set environment variables:
 
 - Web (`apps/web/.env.local`):
