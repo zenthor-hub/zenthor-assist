@@ -392,6 +392,7 @@ export function startAgentLoop() {
         const context = await client.query(api.agent.getConversationContext, {
           serviceKey,
           conversationId: job.conversationId,
+          messageId: job.messageId,
         });
         if (!context) {
           await client.mutation(api.agent.failJob, { serviceKey, jobId: job._id });
