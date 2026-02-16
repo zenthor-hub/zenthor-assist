@@ -12,6 +12,8 @@ interface PageWrapperProps {
   children: ReactNode;
   actions?: ReactNode;
   maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl" | "full";
+  /** When true, children fill the remaining height via flex instead of scrolling. */
+  fillHeight?: boolean;
   className?: string;
 }
 
@@ -20,6 +22,7 @@ export function PageWrapper({
   title,
   actions,
   maxWidth = "2xl",
+  fillHeight = false,
   className,
 }: PageWrapperProps) {
   const isMobile = useIsMobile();
@@ -62,12 +65,18 @@ export function PageWrapper({
         </div>
       </header>
 
-      <div className="scrollbar-thin flex-1 overflow-y-auto">
-        <div className="mx-auto w-full">
+      <div
+        className={cn(
+          "flex-1",
+          fillHeight ? "flex flex-col overflow-hidden" : "scrollbar-thin overflow-y-auto",
+        )}
+      >
+        <div className={cn("mx-auto w-full", fillHeight && "flex min-h-0 flex-1 flex-col")}>
           <div
             className={cn(
               "mx-auto w-full px-4 py-6 sm:px-6 sm:py-8 lg:px-8",
               getMaxWidthClass(),
+              fillHeight && "flex min-h-0 flex-1 flex-col",
               className,
             )}
           >

@@ -318,6 +318,7 @@ ${snippet}`;
   return (
     <PageWrapper
       title={<T>{title || "Untitled note"}</T>}
+      fillHeight
       actions={
         <div className="flex items-center gap-1">
           {saveState !== "idle" && (
@@ -374,7 +375,7 @@ ${snippet}`;
         </div>
       }
     >
-      <div className="grid gap-6 lg:min-h-[calc(100vh-7rem)] lg:grid-cols-[1.3fr_1fr]">
+      <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[1.3fr_1fr]">
         {/* ── Editor panel ── */}
         <div className="flex min-h-0 flex-col gap-3">
           {/* Title + metadata */}
