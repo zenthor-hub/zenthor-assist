@@ -75,6 +75,29 @@ interface Message {
   content: string;
 }
 
+function isLikelyNewNoteRequest(messages: Message[]) {
+  let latestUserMessage: Message | undefined;
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i]?.role === "user") {
+      latestUserMessage = messages[i];
+      break;
+    }
+  }
+
+  if (!latestUserMessage) return false;
+
+  const content = latestUserMessage.content.toLowerCase();
+  if (/(this note|current note|existing note)/i.test(content)) {
+    return false;
+  }
+
+  if (/\/create-note\b|#create-note\b/i.test(content)) {
+    return true;
+  }
+
+  return /\b(?:create|make|draft|write|generate)\b.*\b(?:new\s+)?note\b/i.test(content);
+}
+
 interface ToolCallRecord {
   name: string;
   input: unknown;
@@ -148,6 +171,7 @@ function buildSystemPrompt(
   if (!noteContext) return `${prompt}${NOTE_TOOL_CONFIRMATION_PROMPT}`;
 
   const commandHints = [
+    "/create-note — create a brand-new note (use note_create)",
     "/organize — restructure sections",
     "/rewrite — rewrite the current note",
     "/rewrite this whole note — rewrite the entire note",
@@ -162,6 +186,7 @@ function buildSystemPrompt(
   const noteIdLine = noteContext.noteId ? `Current note ID: ${noteContext.noteId}\n` : "";
   const commandPolicy =
     "When the latest user message is about editing text in the current note, treat it as an edit intent.\n" +
+    'When the user explicitly asks to create a new note (including phrasing like "create a note", "new note", "draft a note", "write me notes", "build a note"), ignore current note context and use note_create.\n' +
     "When slash commands are used, treat them as explicit edit intents:\n" +
     "- /rewrite ... or /rewrite whole note ... → intent: rewrite (full note)\n" +
     "- /rewrite this note ... or /rewrite entire note ... → intent: rewrite (full note)\n" +
@@ -576,11 +601,14 @@ export async function generateResponse(
   const contextMessageCount = options?.contextMessageCount ?? conversationMessages.length;
   const contextTokenEstimate =
     options?.contextTokenEstimate ?? estimateContextTokens(conversationMessages);
+  const resolvedNoteContext = isLikelyNewNoteRequest(conversationMessages)
+    ? undefined
+    : options?.noteContext;
   const systemPrompt = buildSystemPrompt(
     skills,
     options?.agentConfig,
     options?.channel,
-    options?.noteContext,
+    resolvedNoteContext,
   );
 
   logModelGenerationStarted("non_streaming", {
@@ -698,11 +726,14 @@ export async function generateResponseStreaming(
   const contextMessageCount = options?.contextMessageCount ?? conversationMessages.length;
   const contextTokenEstimate =
     options?.contextTokenEstimate ?? estimateContextTokens(conversationMessages);
+  const resolvedNoteContext = isLikelyNewNoteRequest(conversationMessages)
+    ? undefined
+    : options?.noteContext;
   const streamSystemPrompt = buildSystemPrompt(
     skills,
     options?.agentConfig,
     options?.channel,
-    options?.noteContext,
+    resolvedNoteContext,
   );
 
   logModelGenerationStarted("streaming", {
