@@ -84,14 +84,77 @@ function cleanText(value: unknown): string {
   return String(value ?? "").trim();
 }
 
-function logEmptyNoteContent(
+interface NoteToolContext {
+  conversationId: Id<"conversations">;
+  jobId?: Id<"agentQueue">;
+}
+
+interface NoteToolInvocation {
+  [key: string]: unknown;
+  invocationId: string;
+  startedAt: number;
+  toolName: string;
+  conversationId: Id<"conversations">;
+  jobId?: Id<"agentQueue">;
+}
+
+function makeInvocationId(toolName: string) {
+  return `${toolName}:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function beginNoteToolInvocation(
   toolName: string,
-  conversationId: Id<"conversations">,
-  content: string,
+  context: NoteToolContext,
+  extra?: Record<string, unknown>,
 ) {
+  const invocation: NoteToolInvocation = {
+    invocationId: makeInvocationId(toolName),
+    startedAt: Date.now(),
+    toolName,
+    conversationId: context.conversationId,
+    ...(context.jobId ? { jobId: context.jobId } : {}),
+  };
+  if (extra) {
+    Object.assign(invocation, extra);
+  }
+  void logger.info("agent.notes.tool.request.started", invocation);
+  return invocation;
+}
+
+function finalizeNoteToolInvocation(
+  invocation: NoteToolInvocation,
+  outcome: "succeeded" | "validation_failed" | "failed",
+  extra?: Record<string, unknown>,
+) {
+  const payload: NoteToolInvocation & { outcome: string; durationMs: number } = {
+    ...invocation,
+    outcome,
+    durationMs: Date.now() - invocation.startedAt,
+  };
+  if (extra) {
+    Object.assign(payload, extra);
+  }
+  void logger.info("agent.notes.tool.request.outcome", payload);
+}
+
+function logNoteToolError(toolName: string, context: NoteToolContext, error: unknown) {
+  void logger.exception("agent.notes.tool.request.exception", error, {
+    toolName,
+    conversationId: context.conversationId,
+    ...(context.jobId ? { jobId: context.jobId } : {}),
+  });
+}
+
+function summarizeForLog(value: string, maxLength = 260) {
+  const normalized = value.replace(/\s+/g, " ").trim();
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength)}…` : normalized;
+}
+
+function logEmptyNoteContent(toolName: string, context: NoteToolContext, content: string) {
   void logger.warn("agent.notes.tool.empty_content", {
     toolName,
-    conversationId,
+    conversationId: context.conversationId,
+    ...(context.jobId ? { jobId: context.jobId } : {}),
     rawLength: content.length,
     renderedPreview: content.trim().slice(0, 200),
   });
@@ -201,6 +264,7 @@ function resolveNoteFolderId(
   conversationId: Id<"conversations">,
   toolName: string,
   folderId?: string,
+  context?: Pick<NoteToolContext, "jobId">,
 ): FolderIdResolution {
   const normalized = normalizeNoteFolderId(folderId);
   if (!normalized.wasSanitized) return { value: normalized.value };
@@ -210,6 +274,7 @@ function resolveNoteFolderId(
     conversationId,
     reason: normalized.reason ?? "invalid-format",
     rawFolderId: normalized.rawValue ?? folderId,
+    ...(context?.jobId ? { jobId: context.jobId } : {}),
   });
 
   const warning =
@@ -224,6 +289,7 @@ function resolveNoteId(
   conversationId: Id<"conversations">,
   toolName: string,
   noteId: string,
+  context?: Pick<NoteToolContext, "jobId">,
 ): NoteIdResolution {
   const normalized = cleanText(noteId);
   if (!normalized) {
@@ -235,6 +301,7 @@ function resolveNoteId(
       toolName,
       conversationId,
       rawNoteId: noteId,
+      ...(context?.jobId ? { jobId: context.jobId } : {}),
     });
     return {
       value: undefined,
@@ -438,13 +505,13 @@ function hasRenderableText(html: string) {
 function buildRenderableNoteContent(
   content: string,
   toolName: string,
-  conversationId: Id<"conversations">,
+  context: NoteToolContext,
   emptyMessage = EMPTY_NOTE_TOOL_MESSAGE,
 ) {
   const htmlContent = createNoteContent(content);
   if (hasRenderableText(htmlContent)) return { htmlContent };
 
-  logEmptyNoteContent(toolName, conversationId, content);
+  logEmptyNoteContent(toolName, context, content);
   return { error: emptyMessage };
 }
 
@@ -540,17 +607,25 @@ function getServiceError(message: string): string {
   return `Could not complete note action: ${message}`;
 }
 
-export function createNoteTools(conversationId: Id<"conversations">) {
+export function createNoteTools(context: NoteToolContext) {
+  const { conversationId, jobId } = context;
+
   return {
     note_list: tool({
       description: "List notes visible in this conversation's workspace.",
       inputSchema: listNotesInput,
       execute: async ({ folderId, isArchived, limit }) => {
+        const invocation = beginNoteToolInvocation("note_list", context, {
+          folderIdLength: folderId?.length ?? 0,
+          isArchived,
+          limit,
+        });
         try {
           const { value: resolvedFolderId, warning } = resolveNoteFolderId(
             conversationId,
             "note_list",
             folderId,
+            { jobId },
           );
           const client = getConvexClient();
           const notes = await client.query(api.notes.listForConversation, {
@@ -561,8 +636,17 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             limit,
           });
           const result = notes.length ? notes.map(toNoteResult).join("\n\n") : "No notes found.";
+          finalizeNoteToolInvocation(invocation, "succeeded", {
+            noteCount: notes.length,
+            isArchived,
+            ...(warning ? { warning } : {}),
+          });
           return warning ? `${result}\n\n${warning}` : result;
         } catch (error) {
+          finalizeNoteToolInvocation(invocation, "failed", {
+            reason: error instanceof Error ? error.message : String(error),
+          });
+          logNoteToolError("note_list", context, error);
           return getServiceError(error instanceof Error ? error.message : String(error));
         }
       },
@@ -571,10 +655,17 @@ export function createNoteTools(conversationId: Id<"conversations">) {
       description: "Get a note by ID from this user's workspace.",
       inputSchema: getNoteInput,
       execute: async ({ noteId }) => {
+        const invocation = beginNoteToolInvocation("note_get", context, {
+          noteIdLength: noteId.length,
+        });
         try {
-          const resolvedNoteId = resolveNoteId(conversationId, "note_get", noteId);
+          const resolvedNoteId = resolveNoteId(conversationId, "note_get", noteId, { jobId });
           if (!resolvedNoteId.value) {
-            return getServiceError(resolvedNoteId.error ?? "Invalid note ID.");
+            const errorMessage = resolvedNoteId.error ?? "Invalid note ID.";
+            finalizeNoteToolInvocation(invocation, "validation_failed", {
+              reason: errorMessage,
+            });
+            return getServiceError(errorMessage);
           }
 
           const client = getConvexClient();
@@ -584,11 +675,26 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             id: resolvedNoteId.value,
           });
 
-          if (!note) return "Note not found.";
+          if (!note) {
+            finalizeNoteToolInvocation(invocation, "failed", {
+              reason: "Note not found.",
+              noteId: resolvedNoteId.value,
+            });
+            return "Note not found.";
+          }
           const plainContent = cleanText(stripHtmlTags(note.content));
           const contentSection = plainContent || "(empty — no content)";
+          finalizeNoteToolInvocation(invocation, "succeeded", {
+            noteId: note._id,
+            contentLength: plainContent.length,
+            contentPreview: summarizeForLog(contentSection, 320),
+          });
           return `Title: ${note.title}\nID: ${note._id}\nArchived: ${note.isArchived}${note.folderId ? `\nFolder: ${note.folderId}` : ""}\nContent:\n${contentSection}`;
         } catch (error) {
+          finalizeNoteToolInvocation(invocation, "failed", {
+            reason: error instanceof Error ? error.message : String(error),
+          });
+          logNoteToolError("note_get", context, error);
           return getServiceError(error instanceof Error ? error.message : String(error));
         }
       },
@@ -597,19 +703,25 @@ export function createNoteTools(conversationId: Id<"conversations">) {
       description: "Create a new note in the user's workspace.",
       inputSchema: createNoteInput,
       execute: async ({ title, content, folderId, source }) => {
+        const invocation = beginNoteToolInvocation("note_create", context, {
+          titleLength: title.length,
+          contentLength: content.length,
+          source,
+          contentPreview: summarizeForLog(content),
+        });
         try {
           const { value: resolvedFolderId, warning } = resolveNoteFolderId(
             conversationId,
             "note_create",
             folderId,
+            { jobId },
           );
           const normalizedTitle = sanitizeNoteToolOutput(title);
-          const renderableContent = buildRenderableNoteContent(
-            content,
-            "note_create",
-            conversationId,
-          );
+          const renderableContent = buildRenderableNoteContent(content, "note_create", context);
           if ("error" in renderableContent) {
+            finalizeNoteToolInvocation(invocation, "validation_failed", {
+              reason: renderableContent.error,
+            });
             return renderableContent.error;
           }
           const client = getConvexClient();
@@ -621,9 +733,19 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             folderId: resolvedFolderId,
             source: source ?? "chat-generated",
           });
+          finalizeNoteToolInvocation(invocation, "succeeded", {
+            noteId: id,
+            contentLength: renderableContent.htmlContent.length,
+            titleLength: normalizedTitle.length,
+            ...(warning ? { warning } : {}),
+          });
           const result = noteCreatedResult(id, normalizedTitle, source ?? "chat-generated");
           return warning ? `${result}\n\n${warning}` : result;
         } catch (error) {
+          finalizeNoteToolInvocation(invocation, "failed", {
+            reason: error instanceof Error ? error.message : String(error),
+          });
+          logNoteToolError("note_create", context, error);
           return getServiceError(error instanceof Error ? error.message : String(error));
         }
       },
@@ -632,22 +754,39 @@ export function createNoteTools(conversationId: Id<"conversations">) {
       description: "Update an existing note's title, content, folder, or archive status.",
       inputSchema: updateNoteInput,
       execute: async ({ noteId, title, content, folderId, isArchived, metadata }) => {
+        const invocation = beginNoteToolInvocation("note_update", context, {
+          noteIdLength: noteId.length,
+          titleLength: title?.length,
+          contentLength: content?.length,
+          isArchived,
+          hasMetadata: metadata !== undefined,
+          folderIdLength: folderId?.length,
+        });
         try {
-          const resolvedNoteId = resolveNoteId(conversationId, "note_update", noteId);
+          const resolvedNoteId = resolveNoteId(conversationId, "note_update", noteId, { jobId });
           if (!resolvedNoteId.value) {
-            return getServiceError(resolvedNoteId.error ?? "Invalid note ID.");
+            const errorMessage = resolvedNoteId.error ?? "Invalid note ID.";
+            finalizeNoteToolInvocation(invocation, "validation_failed", {
+              reason: errorMessage,
+            });
+            return getServiceError(errorMessage);
           }
 
           const { value: resolvedFolderId, warning } = resolveNoteFolderId(
             conversationId,
             "note_update",
             folderId,
+            { jobId },
           );
           const renderableContent =
             content !== undefined
-              ? buildRenderableNoteContent(content, "note_update", conversationId)
+              ? buildRenderableNoteContent(content, "note_update", context)
               : undefined;
           if (renderableContent && "error" in renderableContent) {
+            finalizeNoteToolInvocation(invocation, "validation_failed", {
+              noteId: resolvedNoteId.value,
+              reason: renderableContent.error,
+            });
             return renderableContent.error;
           }
           const client = getConvexClient();
@@ -670,9 +809,23 @@ export function createNoteTools(conversationId: Id<"conversations">) {
           const fieldsSummary = updatedFields.length
             ? ` (updated: ${updatedFields.join(", ")})`
             : "";
+          finalizeNoteToolInvocation(invocation, "succeeded", {
+            noteId: resolvedNoteId.value,
+            updatedFields: updatedFields.join(","),
+            contentLength:
+              renderableContent && "htmlContent" in renderableContent
+                ? renderableContent.htmlContent.length
+                : undefined,
+            ...(warning ? { warning } : {}),
+          });
           const result = `Updated note ${noteId}${fieldsSummary}.`;
           return warning ? `${result}\n\n${warning}` : result;
         } catch (error) {
+          finalizeNoteToolInvocation(invocation, "failed", {
+            reason: error instanceof Error ? error.message : String(error),
+            noteId,
+          });
+          logNoteToolError("note_update", context, error);
           return getServiceError(error instanceof Error ? error.message : String(error));
         }
       },
@@ -681,16 +834,25 @@ export function createNoteTools(conversationId: Id<"conversations">) {
       description: "Move a note to a different folder.",
       inputSchema: moveNoteInput,
       execute: async ({ noteId, folderId }) => {
+        const invocation = beginNoteToolInvocation("note_move", context, {
+          noteIdLength: noteId.length,
+          folderIdLength: folderId?.length,
+        });
         try {
-          const resolvedNoteId = resolveNoteId(conversationId, "note_move", noteId);
+          const resolvedNoteId = resolveNoteId(conversationId, "note_move", noteId, { jobId });
           if (!resolvedNoteId.value) {
-            return getServiceError(resolvedNoteId.error ?? "Invalid note ID.");
+            const errorMessage = resolvedNoteId.error ?? "Invalid note ID.";
+            finalizeNoteToolInvocation(invocation, "validation_failed", {
+              reason: errorMessage,
+            });
+            return getServiceError(errorMessage);
           }
 
           const { value: resolvedFolderId, warning } = resolveNoteFolderId(
             conversationId,
             "note_move",
             folderId,
+            { jobId },
           );
           const client = getConvexClient();
           await client.mutation(api.notes.moveToFolderForConversation, {
@@ -699,9 +861,19 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             id: resolvedNoteId.value,
             folderId: resolvedFolderId,
           });
+          finalizeNoteToolInvocation(invocation, "succeeded", {
+            noteId: resolvedNoteId.value,
+            folderId: resolvedFolderId,
+            ...(warning ? { warning } : {}),
+          });
           const result = `Moved note ${noteId}.`;
           return warning ? `${result}\n\n${warning}` : result;
         } catch (error) {
+          finalizeNoteToolInvocation(invocation, "failed", {
+            reason: error instanceof Error ? error.message : String(error),
+            noteId,
+          });
+          logNoteToolError("note_move", context, error);
           return getServiceError(error instanceof Error ? error.message : String(error));
         }
       },
@@ -710,10 +882,18 @@ export function createNoteTools(conversationId: Id<"conversations">) {
       description: "Archive or unarchive a note.",
       inputSchema: archiveNoteInput,
       execute: async ({ noteId, isArchived }) => {
+        const invocation = beginNoteToolInvocation("note_archive", context, {
+          noteIdLength: noteId.length,
+          isArchived,
+        });
         try {
-          const resolvedNoteId = resolveNoteId(conversationId, "note_archive", noteId);
+          const resolvedNoteId = resolveNoteId(conversationId, "note_archive", noteId, { jobId });
           if (!resolvedNoteId.value) {
-            return getServiceError(resolvedNoteId.error ?? "Invalid note ID.");
+            const errorMessage = resolvedNoteId.error ?? "Invalid note ID.";
+            finalizeNoteToolInvocation(invocation, "validation_failed", {
+              reason: errorMessage,
+            });
+            return getServiceError(errorMessage);
           }
 
           const client = getConvexClient();
@@ -723,8 +903,17 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             id: resolvedNoteId.value,
             isArchived,
           });
+          finalizeNoteToolInvocation(invocation, "succeeded", {
+            noteId: resolvedNoteId.value,
+            isArchived,
+          });
           return isArchived ? `Archived note ${noteId}.` : `Restored note ${noteId}.`;
         } catch (error) {
+          finalizeNoteToolInvocation(invocation, "failed", {
+            reason: error instanceof Error ? error.message : String(error),
+            noteId,
+          });
+          logNoteToolError("note_archive", context, error);
           return getServiceError(error instanceof Error ? error.message : String(error));
         }
       },
@@ -733,11 +922,17 @@ export function createNoteTools(conversationId: Id<"conversations">) {
       description: "Create a new note from current conversation history.",
       inputSchema: generateFromConversationInput,
       execute: async ({ title, folderId, source, messageLimit }) => {
+        const invocation = beginNoteToolInvocation("note_generate_from_conversation", context, {
+          titleLength: title.length,
+          source,
+          messageLimit,
+        });
         try {
           const { value: resolvedFolderId, warning } = resolveNoteFolderId(
             conversationId,
             "note_generate_from_conversation",
             folderId,
+            { jobId },
           );
           const normalizedTitle = sanitizeNoteToolOutput(title);
           const client = getConvexClient();
@@ -761,10 +956,14 @@ export function createNoteTools(conversationId: Id<"conversations">) {
           const renderableContent = buildRenderableNoteContent(
             `## Source conversation\n${body || "(No messages)"}`,
             "note_generate_from_conversation",
-            conversationId,
+            context,
             "Could not complete note action: generated note content is empty.",
           );
           if ("error" in renderableContent) {
+            finalizeNoteToolInvocation(invocation, "validation_failed", {
+              reason: renderableContent.error,
+              messageCount: messages.length,
+            });
             return renderableContent.error;
           }
           const id = await client.mutation(api.notes.createForConversation, {
@@ -775,9 +974,20 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             folderId: resolvedFolderId,
             source: source ?? "chat-generated",
           });
+          finalizeNoteToolInvocation(invocation, "succeeded", {
+            noteId: id,
+            contentLength: renderableContent.htmlContent.length,
+            source: source ?? "chat-generated",
+            messageCount: messages.length,
+            ...(warning ? { warning } : {}),
+          });
           const result = noteCreatedResult(id, normalizedTitle, source ?? "chat-generated");
           return warning ? `${result}\n\n${warning}` : result;
         } catch (error) {
+          finalizeNoteToolInvocation(invocation, "failed", {
+            reason: error instanceof Error ? error.message : String(error),
+          });
+          logNoteToolError("note_generate_from_conversation", context, error);
           return getServiceError(error instanceof Error ? error.message : String(error));
         }
       },
@@ -787,10 +997,21 @@ export function createNoteTools(conversationId: Id<"conversations">) {
         "Propose note content transformations for editor workflows (organize, rewrite, expand, summarize, extract, translate, clean-style).",
       inputSchema: noteTransformInput,
       execute: async ({ noteId, intent, tone, language }) => {
+        const invocation = beginNoteToolInvocation("note_transform", context, {
+          noteIdLength: noteId.length,
+          intent,
+          toneLength: tone?.length,
+          language: language ?? "",
+          languageLength: language?.length,
+        });
         try {
-          const resolvedNoteId = resolveNoteId(conversationId, "note_transform", noteId);
+          const resolvedNoteId = resolveNoteId(conversationId, "note_transform", noteId, { jobId });
           if (!resolvedNoteId.value) {
-            return getServiceError(resolvedNoteId.error ?? "Invalid note ID.");
+            const errorMessage = resolvedNoteId.error ?? "Invalid note ID.";
+            finalizeNoteToolInvocation(invocation, "validation_failed", {
+              reason: errorMessage,
+            });
+            return getServiceError(errorMessage);
           }
 
           const client = getConvexClient();
@@ -799,22 +1020,46 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             conversationId,
             id: resolvedNoteId.value,
           });
-          if (!note) return "Note not found.";
+          if (!note) {
+            const reason = "Note not found.";
+            finalizeNoteToolInvocation(invocation, "validation_failed", {
+              noteId: resolvedNoteId.value,
+              reason,
+            });
+            return reason;
+          }
 
           if (!hasRenderableText(note.content)) {
+            const reason = `Note "${note.title}" (${noteId}) is empty — there is no content to transform. Use note_update with a "content" field to add content directly.`;
+            finalizeNoteToolInvocation(invocation, "validation_failed", {
+              noteId: resolvedNoteId.value,
+              reason,
+            });
             return `Note "${note.title}" (${noteId}) is empty — there is no content to transform. Use note_update with a "content" field to add content directly.`;
           }
 
           const result = applyIntentTransform(note.content, intent, tone, language);
           const htmlResult = toHtmlFromPlainText(result.resultText);
-          return JSON.stringify({
+          const output = JSON.stringify({
             noteId,
             title: note.title,
             intent,
             resultText: htmlResult,
             operations: result.operations,
           });
+          finalizeNoteToolInvocation(invocation, "succeeded", {
+            noteId: resolvedNoteId.value,
+            intent,
+            operations: result.operations,
+            outputLength: output.length,
+          });
+          return output;
         } catch (error) {
+          finalizeNoteToolInvocation(invocation, "failed", {
+            reason: error instanceof Error ? error.message : String(error),
+            noteId,
+          });
+          logNoteToolError("note_transform", context, error);
           return getServiceError(error instanceof Error ? error.message : String(error));
         }
       },
@@ -824,20 +1069,35 @@ export function createNoteTools(conversationId: Id<"conversations">) {
         "Apply a machine-generated note transform result to persist content changes (use after a transform proposal).",
       inputSchema: applyTransformInput,
       execute: async ({ noteId, resultText, operations }) => {
+        const invocation = beginNoteToolInvocation("note_apply_transform", context, {
+          noteIdLength: noteId.length,
+          resultTextLength: resultText.length,
+          operationsLength: operations?.length,
+        });
         try {
-          const resolvedNoteId = resolveNoteId(conversationId, "note_apply_transform", noteId);
+          const resolvedNoteId = resolveNoteId(conversationId, "note_apply_transform", noteId, {
+            jobId,
+          });
           if (!resolvedNoteId.value) {
-            return getServiceError(resolvedNoteId.error ?? "Invalid note ID.");
+            const errorMessage = resolvedNoteId.error ?? "Invalid note ID.";
+            finalizeNoteToolInvocation(invocation, "validation_failed", {
+              reason: errorMessage,
+            });
+            return getServiceError(errorMessage);
           }
 
           const client = getConvexClient();
           const renderableContent = buildRenderableNoteContent(
             resultText,
             "note_apply_transform",
-            conversationId,
+            context,
             "Could not complete note action: transform result is empty.",
           );
           if ("error" in renderableContent) {
+            finalizeNoteToolInvocation(invocation, "validation_failed", {
+              noteId: resolvedNoteId.value,
+              reason: renderableContent.error,
+            });
             return renderableContent.error;
           }
           await client.mutation(api.notes.applyAiPatchForConversation, {
@@ -848,8 +1108,18 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             operations,
             model: "agent-notes-tools",
           });
+          finalizeNoteToolInvocation(invocation, "succeeded", {
+            noteId: resolvedNoteId.value,
+            contentLength: renderableContent.htmlContent.length,
+            operations: operations ?? "",
+          });
           return `Applied transform for ${noteId}.`;
         } catch (error) {
+          finalizeNoteToolInvocation(invocation, "failed", {
+            reason: error instanceof Error ? error.message : String(error),
+            noteId,
+          });
+          logNoteToolError("note_apply_transform", context, error);
           return getServiceError(error instanceof Error ? error.message : String(error));
         }
       },
@@ -859,20 +1129,35 @@ export function createNoteTools(conversationId: Id<"conversations">) {
         "Apply an AI-generated note update payload, intended for explicit AI confirmation flows.",
       inputSchema: applyTransformInput,
       execute: async ({ noteId, resultText, operations }) => {
+        const invocation = beginNoteToolInvocation("note_update_from_ai", context, {
+          noteIdLength: noteId.length,
+          resultTextLength: resultText.length,
+          operationsLength: operations?.length,
+        });
         try {
-          const resolvedNoteId = resolveNoteId(conversationId, "note_update_from_ai", noteId);
+          const resolvedNoteId = resolveNoteId(conversationId, "note_update_from_ai", noteId, {
+            jobId,
+          });
           if (!resolvedNoteId.value) {
-            return getServiceError(resolvedNoteId.error ?? "Invalid note ID.");
+            const errorMessage = resolvedNoteId.error ?? "Invalid note ID.";
+            finalizeNoteToolInvocation(invocation, "validation_failed", {
+              reason: errorMessage,
+            });
+            return getServiceError(errorMessage);
           }
 
           const client = getConvexClient();
           const renderableContent = buildRenderableNoteContent(
             resultText,
             "note_update_from_ai",
-            conversationId,
+            context,
             "Could not complete note action: AI update content is empty.",
           );
           if ("error" in renderableContent) {
+            finalizeNoteToolInvocation(invocation, "validation_failed", {
+              noteId: resolvedNoteId.value,
+              reason: renderableContent.error,
+            });
             return renderableContent.error;
           }
           await client.mutation(api.notes.applyAiPatchForConversation, {
@@ -883,8 +1168,18 @@ export function createNoteTools(conversationId: Id<"conversations">) {
             operations,
             model: "agent-notes-tools",
           });
+          finalizeNoteToolInvocation(invocation, "succeeded", {
+            noteId: resolvedNoteId.value,
+            contentLength: renderableContent.htmlContent.length,
+            operations: operations ?? "",
+          });
           return `Applied AI update for ${noteId}.`;
         } catch (error) {
+          finalizeNoteToolInvocation(invocation, "failed", {
+            reason: error instanceof Error ? error.message : String(error),
+            noteId,
+          });
+          logNoteToolError("note_update_from_ai", context, error);
           return getServiceError(error instanceof Error ? error.message : String(error));
         }
       },

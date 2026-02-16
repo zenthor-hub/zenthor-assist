@@ -44,6 +44,6 @@ export const tools = {
   finance_create_transfer: financeCreateTransfer,
 };
 
-export function getNoteTools(conversationId: Parameters<typeof createNoteTools>[0]) {
-  return createNoteTools(conversationId);
+export function getNoteTools(context: Parameters<typeof createNoteTools>[0]) {
+  return createNoteTools(context);
 }

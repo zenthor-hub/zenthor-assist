@@ -1,4 +1,5 @@
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
+import type { Id } from "@zenthor-assist/backend/convex/_generated/dataModel";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { createNoteTools } from "./notes";
@@ -17,7 +18,7 @@ type SetupResult = {
   mockLoggerWarn: ReturnType<typeof vi.fn>;
 };
 
-const conversationId = "conv-note-1" as Parameters<typeof createNoteTools>[0];
+const conversationId = "conv-note-1" as Id<"conversations">;
 const validNoteIdOne = "a".repeat(32);
 const validNoteIdTwo = "b".repeat(32);
 const validNoteIdThree = "c".repeat(32);
@@ -59,7 +60,10 @@ async function setupTools(overrides?: { serviceSecret?: string }): Promise<Setup
   const { createNoteTools } = await import("./notes");
 
   return {
-    tools: createNoteTools(conversationId),
+    tools: createNoteTools({
+      conversationId,
+      jobId: "job-note-1" as unknown as Id<"agentQueue">,
+    }),
     mockQuery,
     mockMutation,
     mockLoggerWarn,
