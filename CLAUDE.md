@@ -23,7 +23,8 @@ cd apps/backend && bun run dev
 cd apps/backend && bun run dev:setup
 cd apps/web && bun run dev
 cd apps/agent && bun run dev:core
-# or: bun run dev (role `all`, includes WhatsApp runtime)
+cd apps/agent && bun run dev:telegram
+# or: cd apps/agent && bun run dev (role `all`, includes WhatsApp runtime)
 ```
 
 ## Validation Strategy
@@ -37,7 +38,7 @@ cd apps/agent && bun run dev:core
 
 - Monorepo: Bun workspaces + Turborepo.
 - Apps:
-  - `apps/web`: Next.js 16 App Router + Clerk + Convex + shadcn/ui + AI Elements.
+  - `apps/web`: Next.js 16 App Router (`typedRoutes`, `reactCompiler`) + Clerk + Convex + shadcn/ui + AI Elements + gt-next (i18n).
   - `apps/backend`: Convex functions/schema (`convex/_generated` is generated).
   - `apps/agent`: Bun runtime for job processing + plugin/tool orchestration + optional WhatsApp runtime.
 - Packages:
@@ -119,10 +120,13 @@ The authenticated app follows a Vercel-inspired minimal aesthetic. All new pages
 ### Backend notes
 
 - **Convex URL domains**: `.convex.cloud` is for the client/functions API (queries, mutations). `.convex.site` is for HTTP actions (httpRouter endpoints like webhooks). Never use `.convex.cloud` for webhook callback URLs.
+- **TypeScript**: `apps/backend` uses `@typescript/native-preview` with Convex `tsgo` (`convex.json`). Avoid adding a `tsc` subcommand to the backend package — the native wrapper interprets it as an input file and triggers `TS5042`.
+- **Convex ID hard rule**: All Convex arguments for document IDs must use `v.id("tableName")` and typed `Id<"tableName">`. Never use `v.string()` for Convex document IDs at API boundaries.
 - Schema in `apps/backend/convex/schema.ts`.
 - HTTP router in `apps/backend/convex/http.ts` exposes webhooks at `.convex.site` paths:
   - `/clerk/webhook` (POST) — Clerk user sync
   - `/whatsapp-cloud/webhook` (GET/POST) — Meta WhatsApp Cloud API
+  - `/telegram/webhook` (POST) — Telegram bot updates
 - Cron orchestration in `apps/backend/convex/crons.ts` handles stale-job requeue, scheduled tasks, and cleanups.
 - Optional Todoist OAuth/task integration lives in `apps/backend/convex/todoist.ts`.
 - Public function auth wrappers are in `apps/backend/convex/auth/`:
@@ -139,7 +143,9 @@ The authenticated app follows a Vercel-inspired minimal aesthetic. All new pages
   - `apps/agent/src/index.core.ts`
   - `apps/agent/src/index.whatsapp-ingress.ts`
   - `apps/agent/src/index.whatsapp-egress.ts`
+  - `apps/agent/src/index.whatsapp-cloud.ts`
 - WhatsApp Cloud egress runtime in `apps/agent/src/whatsapp-cloud/` — lease-aware outbound delivery via Meta Cloud API. Run with `AGENT_ROLE=whatsapp-cloud`.
+- Telegram runtime in `apps/agent/src/telegram/` — bot webhook processing + outbound delivery. Run with `AGENT_ROLE=telegram`.
 - **Service boundary rule:** `agent-core` MUST NEVER call the WhatsApp Cloud API directly or import from `whatsapp-cloud/`. To send anything to WhatsApp, enqueue via `api.delivery.enqueueOutbound` with the appropriate `metadata.kind`. The `agent-whatsapp-cloud` runtime dispatches on `kind` in its outbound loop. See `AGENTS.md` "Service Boundary" for full details.
 - Main loop in `apps/agent/src/agent/loop.ts`:
   - claims queue jobs with lock + heartbeat,
@@ -179,12 +185,18 @@ Required:
 Common optional:
 
 - `AI_LITE_MODEL`, `AI_MODEL`, `AI_FALLBACK_MODEL`, `AI_CONTEXT_WINDOW`, `AI_EMBEDDING_MODEL`
-- `AGENT_ROLE` (`all | core | whatsapp | whatsapp-ingress | whatsapp-egress | whatsapp-cloud`), `ENABLE_WHATSAPP`, `WORKER_ID`
+- `AGENT_ROLE` (`all | core | whatsapp | whatsapp-ingress | whatsapp-egress | whatsapp-cloud | telegram`), `ENABLE_WHATSAPP`, `WORKER_ID`
 - `AGENT_SECRET` (recommended for all roles; required in production)
 - `AGENT_JOB_LOCK_MS`, `AGENT_JOB_HEARTBEAT_MS`
 - `WHATSAPP_ACCOUNT_ID`, `WHATSAPP_PHONE`, `WHATSAPP_LEASE_TTL_MS`, `WHATSAPP_AUTH_MODE`, `WHATSAPP_HEARTBEAT_MS`
 - `GROQ_API_KEY` (recommended for `core`/`all` — required for WhatsApp voice note transcription)
 - `BLOB_READ_WRITE_TOKEN` (recommended for `core`/`all` — used for audio blob storage)
+
+Telegram env (required for `telegram` role):
+
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_WEBHOOK_SECRET`
+- `TELEGRAM_ACCOUNT_ID` (optional; defaults to `default`)
 
 WhatsApp Cloud API env (required for `whatsapp-cloud` role):
 
@@ -210,6 +222,7 @@ Observability:
 - `TODOIST_CLIENT_SECRET` (optional, required for Todoist OAuth)
 - `TODOIST_OAUTH_REDIRECT_URI` (optional, required for Todoist OAuth)
 - `TODOIST_OAUTH_SCOPE` (optional, defaults to `data:read_write`)
+- `TELEGRAM_WEBHOOK_SECRET` (required for Telegram webhook verification)
 - `WHATSAPP_CLOUD_APP_SECRET` (optional; enables webhook signature verification)
 - `WHATSAPP_CLOUD_VERIFY_TOKEN` (optional; webhook verification handshake token)
 - `WHATSAPP_CLOUD_PHONE_NUMBER_ID` (optional; scopes webhook ingestion to a specific phone)
