@@ -5,8 +5,8 @@ Yes, you can deploy `apps/agent` on **Railway**, and it’s a good fit for your 
 ## Recommended setup
 
 1. **Service 1:** `agent-core` (`AGENT_ROLE=core`, `ENABLE_WHATSAPP=false`)
-2. **Service 2:** `agent-whatsapp` (`AGENT_ROLE=whatsapp`, `ENABLE_WHATSAPP=true`, replicas = 1 per phone/account)
-3. If still using local WhatsApp auth files, mount a Railway **Volume** to persist `.whatsapp-auth` (Railway app path is `/app`, so mount accordingly).
+2. **Service 2:** `agent-whatsapp-cloud` (`AGENT_ROLE=whatsapp-cloud`, replicas = 1 per WhatsApp Cloud account)
+3. If still using local WhatsApp auth files, mount a Railway **Volume** for `.whatsapp-auth` and keep the volume path aligned with your service working directory.
 
 ## CI/CD recommendation on Railway
 

@@ -138,10 +138,10 @@ If only core is running (`ENABLE_WHATSAPP=false`):
 
 ### E) Telegram End-to-End Works
 
-1. Ensure Telegram webhook is configured:
+1. Ensure Telegram webhook is configured (endpoint must use the Convex **site** URL, not `.convex.cloud`):
 
 ```bash
-curl -X POST "https://<your-telegram-service-domain>/telegram/webhook" \
+	curl -X POST "https://<your-convex-site-url>.convex.site/telegram/webhook" \
   -H "Content-Type: application/json" \
   -H "x-telegram-bot-api-secret-token: $TELEGRAM_WEBHOOK_SECRET" \
   -d '{

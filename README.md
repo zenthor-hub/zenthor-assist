@@ -136,12 +136,15 @@ Convex env (deployment):
 - `AGENT_SECRET=<same-as-agents>`
 - `TELEGRAM_WEBHOOK_SECRET=<same-as-agent-telegram>`
 - Clerk vars (`CLERK_JWT_ISSUER_DOMAIN`, `CLERK_WEBHOOK_SECRET`, `CLERK_SECRET_KEY`)
+- Use `CONVEX_SITE_URL` (ends in `.convex.site`) for webhook registration.
 
 Telegram webhook registration:
 
 ```bash
-https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=<convex-url>/telegram/webhook&secret_token=<TELEGRAM_WEBHOOK_SECRET>
+https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=<convex-site-url>/telegram/webhook&secret_token=<TELEGRAM_WEBHOOK_SECRET>
 ```
+
+`CONVEX_URL` is still `.convex.cloud` and is used for client/API calls only.
 
 #### One-click paste: all service env blocks
 

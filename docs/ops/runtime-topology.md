@@ -25,15 +25,15 @@ This note is the source of truth for deciding how to run `apps/agent` in dev and
 ### Local development
 
 1. Run `AGENT_ROLE=core ENABLE_WHATSAPP=false`.
-2. Run `AGENT_ROLE=whatsapp ENABLE_WHATSAPP=true`.
+2. Run `AGENT_ROLE=whatsapp ENABLE_WHATSAPP=true` (legacy Baileys path) or `AGENT_ROLE=whatsapp-cloud` (Cloud API path).
 3. Run `AGENT_ROLE=telegram TELEGRAM_BOT_TOKEN=<token>`.
 
 ### Production
 
 1. Deploy a dedicated `core` worker service.
-2. Deploy a dedicated `whatsapp` worker service.
+2. Deploy a dedicated `whatsapp-cloud` worker service.
 3. Deploy a dedicated `telegram` worker service.
-4. Keep one active WhatsApp owner per account/phone (`WHATSAPP_ACCOUNT_ID`).
+4. Keep one active WhatsApp Cloud outbound owner for the account (`cloud-api`).
 
 ## Concurrency and Ownership Rules
 
@@ -56,13 +56,13 @@ Proceed with rollout when all are true:
 Do not proceed if any are true:
 
 1. Two WhatsApp runtimes can send for the same `WHATSAPP_ACCOUNT_ID`.
-2. Lease heartbeat frequently drops under normal network conditions.
+2. Lease heartbeat for `agent-whatsapp-cloud` frequently drops under normal network conditions.
 3. Telegram runtime is missing required token/secrets in its target environment.
 4. `AGENT_ROLE=all` is being used as the production shape.
 
 ## Railway Deployment
 
-- Agent services (`agent-core`, `agent-whatsapp-cloud`, `agent-whatsapp`, `agent-telegram`) are deployed on Railway.
+- Agent services (`agent-core`, `agent-whatsapp-cloud`, `agent-telegram`) are deployed on Railway.
 - Keep env vars scoped per **service + environment**. A value set on `agent-core` (development) does not automatically apply to `agent-whatsapp-cloud` (development), nor to production.
 - Sync shared runtime vars across the relevant services explicitly (`AGENT_SECRET`, `AXIOM_TOKEN`, `AXIOM_DATASET`, `OBS_*`, provider/model vars, and any channel-specific credentials).
 - Deployments are triggered automatically by GitHub pushes — do not deploy directly via Railway MCP unless explicitly asked.
@@ -71,7 +71,7 @@ Do not proceed if any are true:
 
 ## Notes for AI Agents and Contributors
 
-- Default recommendation is always split runtime (`core` + `whatsapp` + `telegram`), same repo.
+- Default recommendation is always split runtime (`core` + `whatsapp-cloud` + `telegram`), same repo.
 - Prefer `AGENT_ROLE=all` only for quick local smoke tests.
 - If asked to scale WhatsApp for the same phone/account, the correct answer is no active-active for that account; use failover via lease, not active-active.
 - If asked to split ingress and egress into separate live services, verify ownership/partitioning design first.
