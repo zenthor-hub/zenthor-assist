@@ -143,6 +143,70 @@ Telegram webhook registration:
 https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=<convex-url>/telegram/webhook&secret_token=<TELEGRAM_WEBHOOK_SECRET>
 ```
 
+#### One-click paste: all service env blocks
+
+```text
+# ---- agent-core ----
+AGENT_ROLE=core
+ENABLE_WHATSAPP=false
+CONVEX_URL=<your-convex-url>
+AI_GATEWAY_API_KEY=<gateway-key>
+AGENT_SECRET=<same-as-convex>
+WORKER_ID=agent-core-<env>
+
+# ---- agent-whatsapp-cloud ----
+AGENT_ROLE=whatsapp-cloud
+CONVEX_URL=<your-convex-url>
+AGENT_SECRET=<same-as-convex>
+WHATSAPP_CLOUD_ACCESS_TOKEN=<whatsapp-cloud-access-token>
+WHATSAPP_CLOUD_PHONE_NUMBER_ID=<phone-number-id>
+WORKER_ID=agent-whatsapp-cloud-<env>
+
+# ---- agent-telegram ----
+AGENT_ROLE=telegram
+CONVEX_URL=<your-convex-url>
+AGENT_SECRET=<same-as-convex>
+TELEGRAM_BOT_TOKEN=<telegram-bot-token>
+TELEGRAM_ACCOUNT_ID=default
+WORKER_ID=agent-telegram-<env>
+TELEGRAM_WEBHOOK_SECRET=<telegram-webhook-secret>
+```
+
+For per-environment copy/paste files, use:
+
+- `.env.railway.example` (template with required and recommended fields per service).
+
+#### One command/paste helper: generate `tmp/railway.env`
+
+```bash
+cat > tmp/railway.env <<'EOF'
+# agent-core
+AGENT_ROLE=core
+ENABLE_WHATSAPP=false
+CONVEX_URL=<your-convex-url>
+AI_GATEWAY_API_KEY=<gateway-key>
+AGENT_SECRET=<same-as-convex>
+WORKER_ID=agent-core-<env>
+
+# agent-whatsapp-cloud
+AGENT_ROLE=whatsapp-cloud
+CONVEX_URL=<your-convex-url>
+AGENT_SECRET=<same-as-convex>
+WHATSAPP_CLOUD_ACCESS_TOKEN=<whatsapp-cloud-access-token>
+WHATSAPP_CLOUD_PHONE_NUMBER_ID=<phone-number-id>
+WORKER_ID=agent-whatsapp-cloud-<env>
+
+# agent-telegram
+AGENT_ROLE=telegram
+CONVEX_URL=<your-convex-url>
+AGENT_SECRET=<same-as-convex>
+TELEGRAM_BOT_TOKEN=<telegram-bot-token>
+TELEGRAM_ACCOUNT_ID=default
+WORKER_ID=agent-telegram-<env>
+TELEGRAM_WEBHOOK_SECRET=<telegram-webhook-secret>
+EOF
+```
+
 ## Release process
 
 This repository now uses workspace-scoped release artifacts and changelogs.
