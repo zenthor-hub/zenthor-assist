@@ -41,11 +41,11 @@ bun run dev:setup
   - `CONVEX_URL`
   - `AI_GATEWAY_API_KEY` (required for `core`/`all` roles; not needed for `whatsapp-cloud`)
   - `AGENT_SECRET` (must match backend `AGENT_SECRET` for service-authenticated calls)
-  - `AGENT_ROLE` — one of `all | core | whatsapp | whatsapp-ingress | whatsapp-egress | whatsapp-cloud | telegram | telegram-egress`
+  - `AGENT_ROLE` — one of `all | core | whatsapp | whatsapp-ingress | whatsapp-egress | whatsapp-cloud | telegram`
   - `GROQ_API_KEY` (recommended for `core`/`all` — WhatsApp voice note transcription)
   - `BLOB_READ_WRITE_TOKEN` (recommended for `core`/`all` — audio blob storage)
   - For `whatsapp-cloud` role: `WHATSAPP_CLOUD_ACCESS_TOKEN`, `WHATSAPP_CLOUD_PHONE_NUMBER_ID`
-  - For `telegram`/`telegram-egress` roles: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_ACCOUNT_ID`
+  - For `telegram` role: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_ACCOUNT_ID`
 - Convex Dashboard env:
   - `CLERK_JWT_ISSUER_DOMAIN`
   - `CLERK_WEBHOOK_SECRET`
@@ -88,6 +88,60 @@ cd apps/agent && bun run dev:core
 - Do not assume a value configured on `agent-core` is also set on `agent-whatsapp-cloud`.
 - Keep shared secrets/telemetry vars synced across relevant services (`AGENT_SECRET`, `AXIOM_TOKEN`, `AXIOM_DATASET`, `OBS_*`, model/provider vars).
 - Local `apps/agent/.env.local` is a source of truth for development, but deployment values still need to be explicitly synced to each Railway service/environment.
+
+### Railway env checklist (copy/paste)
+
+- `agent-core`
+
+```env
+AGENT_ROLE=core
+ENABLE_WHATSAPP=false
+CONVEX_URL=<your-convex-url>
+AI_GATEWAY_API_KEY=<gateway-key>
+AGENT_SECRET=<same-as-convex>
+WORKER_ID=agent-core-<env>
+```
+
+- `agent-whatsapp-cloud`
+
+```env
+AGENT_ROLE=whatsapp-cloud
+CONVEX_URL=<your-convex-url>
+AGENT_SECRET=<same-as-convex>
+WHATSAPP_CLOUD_ACCESS_TOKEN=<whatsapp-cloud-access-token>
+WHATSAPP_CLOUD_PHONE_NUMBER_ID=<phone-number-id>
+WORKER_ID=agent-whatsapp-cloud-<env>
+```
+
+- `agent-telegram`
+
+```env
+AGENT_ROLE=telegram
+CONVEX_URL=<your-convex-url>
+AGENT_SECRET=<same-as-convex>
+TELEGRAM_BOT_TOKEN=<telegram-bot-token>
+TELEGRAM_ACCOUNT_ID=default
+WORKER_ID=agent-telegram-<env>
+TELEGRAM_WEBHOOK_SECRET=<telegram-webhook-secret>
+```
+
+Start command examples:
+
+- `agent-core`: `AGENT_ROLE=core bun run start:core`
+- `agent-whatsapp-cloud`: `bun run start:whatsapp-cloud`
+- `agent-telegram`: `AGENT_ROLE=telegram bun run start:telegram`
+
+Convex env (deployment):
+
+- `AGENT_SECRET=<same-as-agents>`
+- `TELEGRAM_WEBHOOK_SECRET=<same-as-agent-telegram>`
+- Clerk vars (`CLERK_JWT_ISSUER_DOMAIN`, `CLERK_WEBHOOK_SECRET`, `CLERK_SECRET_KEY`)
+
+Telegram webhook registration:
+
+```bash
+https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=<convex-url>/telegram/webhook&secret_token=<TELEGRAM_WEBHOOK_SECRET>
+```
 
 ## Release process
 
@@ -140,14 +194,12 @@ and creates a GitHub Release with generated notes.
   - `cd apps/web && bun run dev`
 - Agent:
   - `cd apps/agent && bun run dev`
-  - `cd apps/agent && bun run dev:core`
-  - `cd apps/agent && bun run dev:telegram`
-  - `cd apps/agent && bun run dev:whatsapp`
-  - `cd apps/agent && bun run dev:telegram-egress`
-  - `cd apps/agent && bun run start:core`
-  - `cd apps/agent && bun run start:telegram`
-  - `cd apps/agent && bun run start:telegram-egress`
-  - `cd apps/agent && bun run start:whatsapp`
+- `cd apps/agent && bun run dev:core`
+- `cd apps/agent && bun run dev:telegram`
+- `cd apps/agent && bun run dev:whatsapp`
+- `cd apps/agent && bun run start:core`
+- `cd apps/agent && bun run start:telegram`
+- `cd apps/agent && bun run start:whatsapp`
 
 ## Project Structure
 

@@ -4,7 +4,7 @@ This runbook is a quick smoke-test guide for the split runtime setup:
 
 - `core` worker handles AI processing.
 - `whatsapp` worker owns WhatsApp socket + outbound delivery.
-- `telegram` worker handles Telegram outbound queue consumption and consumes webhook inbound messages.
+- `telegram` worker handles both Telegram webhook ingest and outbound queue consumption in a single service.
 - Convex remains the source of truth for queue/state.
 
 Decision reference:

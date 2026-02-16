@@ -10,16 +10,15 @@ This note is the source of truth for deciding how to run `apps/agent` in dev and
 
 ## Roles and Purpose
 
-| Role               | What it does                                                               | Scale guidance                             |
-| ------------------ | -------------------------------------------------------------------------- | ------------------------------------------ |
-| `core`             | Subscribes to agent jobs and runs AI/tool execution                        | Can scale horizontally                     |
-| `whatsapp`         | Owns WhatsApp connection, receives inbound messages, sends outbound queue  | One active owner per `WHATSAPP_ACCOUNT_ID` |
-| `whatsapp-cloud`   | Handles WhatsApp Cloud API ingress/egress                                  | Dedicated channel runtime                  |
-| `whatsapp-ingress` | WhatsApp receive path only                                                 | Advanced/debug usage                       |
-| `whatsapp-egress`  | WhatsApp send path only                                                    | Advanced/debug usage                       |
-| `telegram`         | Reads Telegram inbound webhook writes and performs Telegram outbound sends | Scale workers by account/channel           |
-| `telegram-egress`  | Telegram send path only                                                    | Advanced/debug usage                       |
-| `all`              | Runs `core` + `whatsapp` in one process                                    | Local/dev only                             |
+| Role               | What it does                                                                | Scale guidance                             |
+| ------------------ | --------------------------------------------------------------------------- | ------------------------------------------ |
+| `core`             | Subscribes to agent jobs and runs AI/tool execution                         | Can scale horizontally                     |
+| `whatsapp`         | Owns WhatsApp connection, receives inbound messages, sends outbound queue   | One active owner per `WHATSAPP_ACCOUNT_ID` |
+| `whatsapp-cloud`   | Handles WhatsApp Cloud API ingress/egress                                   | Dedicated channel runtime                  |
+| `whatsapp-ingress` | WhatsApp receive path only                                                  | Advanced/debug usage                       |
+| `whatsapp-egress`  | WhatsApp send path only                                                     | Advanced/debug usage                       |
+| `telegram`         | Handles Telegram inbound webhook + outbound send queue for a single service | Scale workers by account/channel           |
+| `all`              | Runs `core` + `whatsapp` in one process                                     | Local/dev only                             |
 
 ## Recommended Deployment Patterns
 
