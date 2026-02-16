@@ -309,4 +309,13 @@ event == "whatsapp.inbound.dedupe_skipped" | summarize count() by bin(_time, 1h)
 
 // Model fallback frequency
 event == "agent.model.fallback.used" | summarize count() by originalModel, fallbackModel
+
+// Note-tool request lifecycle for a specific job
+event == "agent.notes.tool.request.started" and jobId == "job-123" | order by _time desc | project _time, toolName, outcome, durationMs, error
+
+// Tool-call summary for a suspect job
+event == "agent.loop.tool_calls" and jobId == "job-123" | project _time, generationMode, noteToolCalls, noteCreationSuccessCount, noteCreationFailureCount, noteTools
+
+// Empty or malformed note bodies (prevents creation)
+event in ("agent.notes.tool.empty_content", "agent.notes.tool.request.outcome") and conversationId == "conv-abc" | order by _time desc
 ```
