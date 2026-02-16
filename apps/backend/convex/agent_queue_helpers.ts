@@ -19,12 +19,18 @@ export interface ConversationJobInfo {
   _id: string;
   status: string;
   lockedUntil?: number;
+  isInternal?: boolean;
+  parentJobId?: string;
 }
 
 export interface HeartbeatJobInfo {
   status: string;
   processorId?: string;
   lockedUntil?: number;
+}
+
+export interface ActiveJobGuardOptions {
+  allowConcurrentInternalJobs?: boolean;
 }
 
 /**
@@ -61,11 +67,15 @@ export function hasActiveJobForConversation(
   jobs: ConversationJobInfo[],
   excludeJobId: string,
   now: number,
+  options: ActiveJobGuardOptions = {},
 ): boolean {
+  const { allowConcurrentInternalJobs = false } = options;
+
   return jobs.some(
     (j) =>
       j._id !== excludeJobId &&
       j.status === "processing" &&
+      !(allowConcurrentInternalJobs && j.isInternal) &&
       (j.lockedUntil ? now <= j.lockedUntil : true),
   );
 }

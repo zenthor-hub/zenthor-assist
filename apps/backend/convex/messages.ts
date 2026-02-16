@@ -247,6 +247,31 @@ export const addSummaryMessage = serviceMutation({
   },
 });
 
+export const addSystemMessage = serviceMutation({
+  args: {
+    conversationId: v.id("conversations"),
+    content: v.string(),
+    noteId: v.optional(v.id("notes")),
+    channel: v.optional(v.union(v.literal("whatsapp"), v.literal("web"), v.literal("telegram"))),
+  },
+  returns: v.id("messages"),
+  handler: async (ctx, args) => {
+    const conversation = await ctx.db.get(args.conversationId);
+    if (!conversation) {
+      throw new ConvexError("Conversation not found");
+    }
+
+    return await ctx.db.insert("messages", {
+      conversationId: args.conversationId,
+      noteId: args.noteId,
+      role: "system",
+      content: args.content,
+      channel: args.channel ?? conversation.channel,
+      status: "sent",
+    });
+  },
+});
+
 export const createPlaceholder = serviceMutation({
   args: {
     conversationId: v.id("conversations"),

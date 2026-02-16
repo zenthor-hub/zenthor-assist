@@ -18,6 +18,11 @@ const agentQueueDoc = v.object({
   messageId: v.id("messages"),
   conversationId: v.id("conversations"),
   agentId: v.optional(v.id("agents")),
+  parentJobId: v.optional(v.id("agentQueue")),
+  rootJobId: v.optional(v.id("agentQueue")),
+  isInternal: v.optional(v.boolean()),
+  delegationDepth: v.optional(v.number()),
+  result: v.optional(v.string()),
   status: v.union(
     v.literal("pending"),
     v.literal("processing"),
@@ -159,6 +164,47 @@ export const getPendingJobs = serviceQuery({
   },
 });
 
+export const getAgentJob = serviceQuery({
+  args: { jobId: v.id("agentQueue") },
+  returns: v.union(agentQueueDoc, v.null()),
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.jobId);
+  },
+});
+
+export const createInternalJob = serviceMutation({
+  args: {
+    parentJobId: v.id("agentQueue"),
+    conversationId: v.id("conversations"),
+    messageId: v.id("messages"),
+  },
+  returns: v.union(v.id("agentQueue"), v.null()),
+  handler: async (ctx, args) => {
+    const parentJob = await ctx.db.get(args.parentJobId);
+    const systemMessage = await ctx.db.get(args.messageId);
+    const conversation = await ctx.db.get(args.conversationId);
+
+    if (!parentJob || !systemMessage || !conversation) return null;
+    if (systemMessage.conversationId !== args.conversationId) return null;
+    if (parentJob.conversationId !== args.conversationId) return null;
+
+    const delegationDepth = (parentJob.delegationDepth ?? 0) + 1;
+    const rootJobId = parentJob.rootJobId ?? args.parentJobId;
+
+    return await ctx.db.insert("agentQueue", {
+      messageId: args.messageId,
+      conversationId: args.conversationId,
+      agentId: parentJob.agentId,
+      parentJobId: args.parentJobId,
+      rootJobId,
+      isInternal: true,
+      delegationDepth,
+      status: "pending",
+      attemptCount: 0,
+    });
+  },
+});
+
 export const claimJob = serviceMutation({
   args: {
     jobId: v.id("agentQueue"),
@@ -209,7 +255,13 @@ export const claimJob = serviceMutation({
       .withIndex("by_conversationId", (q) => q.eq("conversationId", job.conversationId))
       .collect();
 
-    if (hasActiveJobForConversation(conversationJobs, args.jobId, now)) return null;
+    const canRunConcurrentInternalJobs = job.isInternal === true;
+    if (
+      hasActiveJobForConversation(conversationJobs, args.jobId, now, {
+        allowConcurrentInternalJobs: canRunConcurrentInternalJobs,
+      })
+    )
+      return null;
 
     await ctx.db.patch(args.jobId, {
       status: "processing",
@@ -226,6 +278,7 @@ export const completeJob = serviceMutation({
   args: {
     jobId: v.id("agentQueue"),
     modelUsed: v.optional(v.string()),
+    result: v.optional(v.string()),
   },
   returns: v.boolean(),
   handler: async (ctx, args) => {
@@ -235,6 +288,7 @@ export const completeJob = serviceMutation({
     await ctx.db.patch(args.jobId, {
       status: "completed",
       modelUsed: args.modelUsed,
+      result: args.result,
       processorId: undefined,
       lockedUntil: undefined,
     });

@@ -238,6 +238,11 @@ export default defineSchema({
     messageId: v.id("messages"),
     conversationId: v.id("conversations"),
     agentId: v.optional(v.id("agents")),
+    parentJobId: v.optional(v.id("agentQueue")),
+    rootJobId: v.optional(v.id("agentQueue")),
+    isInternal: v.optional(v.boolean()),
+    delegationDepth: v.optional(v.number()),
+    result: v.optional(v.string()),
     status: v.union(
       v.literal("pending"),
       v.literal("processing"),
@@ -254,7 +259,10 @@ export default defineSchema({
     lastHeartbeatAt: v.optional(v.number()),
   })
     .index("by_status", ["status"])
-    .index("by_conversationId", ["conversationId"]),
+    .index("by_conversationId", ["conversationId"])
+    .index("by_parentJobId", ["parentJobId"])
+    .index("by_rootJobId", ["rootJobId"])
+    .index("by_rootJobId_status", ["rootJobId", "status"]),
 
   agents: defineTable({
     name: v.string(),
