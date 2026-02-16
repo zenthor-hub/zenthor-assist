@@ -4,13 +4,14 @@ import { api } from "@zenthor-assist/backend/convex/_generated/api";
 import type { Id } from "@zenthor-assist/backend/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import { T, useGT } from "gt-next";
-import { Archive, PenLine, Pin, PinOff, Save } from "lucide-react";
+import { AlertCircle, Archive, Check, Loader2, PenLine, Pin, PinOff, Save } from "lucide-react";
 import { use, useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { ChatArea } from "@/components/chat/chat-area";
 import Loader from "@/components/loader";
-import { NoteEditor } from "@/components/notes/note-editor";
+import { NoteEditor, type NoteEditorHandle } from "@/components/notes/note-editor";
+import { normalizeEditorMarkup } from "@/components/notes/note-editor-utils";
 import { PageWrapper } from "@/components/page-wrapper";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,6 +44,8 @@ type FolderItem = {
   color: string;
 };
 
+type SaveState = "idle" | "saving" | "saved" | "error";
+
 function getFolderName(folders: FolderItem[], folderId?: Id<"noteFolders">) {
   return folders.find((folder) => folder._id === folderId)?.name ?? "Unfiled";
 }
@@ -64,20 +67,31 @@ export default function NoteWorkspacePage({ params }: { params: Promise<{ noteId
   const updateNote = useMutation(api.notes.update);
   const archiveNote = useMutation(api.notes.archive);
 
+  const editorRef = useRef<NoteEditorHandle>(null);
   const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
   const [selectedFolderId, setSelectedFolderId] = useState<"none" | Id<"noteFolders">>("none");
   const [isPinned, setIsPinned] = useState(false);
   const [conversationId, setConversationId] = useState<Id<"conversations"> | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>("idle");
+  const [dirtyTick, setDirtyTick] = useState(0);
   const [isInitializingThread, setIsInitializingThread] = useState(false);
+
   const hasUnsavedChanges = useRef(false);
+  const hydratedNoteId = useRef<string | null>(null);
+  const editVersion = useRef(0);
+  const lastAiActionAt = useRef<number | undefined>(undefined);
+
+  const handleDirty = useCallback(() => {
+    editVersion.current++;
+    hasUnsavedChanges.current = true;
+    setDirtyTick((n) => n + 1);
+  }, []);
 
   const chatQuickActionTemplate = useCallback(
     (action: "summarize" | "rewrite" | "expand" | "extract", selectedText: string) => {
       const snippet =
         selectedText.length > 800 ? `${selectedText.slice(0, 800)}…` : selectedText.trim();
-      const titlePrefix = `Selected section in note “${title || note?.title || t("Untitled note")}”:`;
+      const titlePrefix = `Selected section in note "${title || note?.title || t("Untitled note")}":`;
 
       if (action === "summarize") {
         return `${titlePrefix}
@@ -133,16 +147,40 @@ ${snippet}`;
     [conversationId, note, sendToNoteChat, chatQuickActionTemplate, t],
   );
 
+  // Hydrate editor from server state
   useEffect(() => {
     if (!note) return;
-    setTitle(note.title);
-    setContent(note.content);
+
+    // Always sync conversationId when it appears from the server
+    if (note.conversationId) setConversationId(note.conversationId);
+
+    const isNewNote = hydratedNoteId.current !== note._id;
+
+    if (isNewNote) {
+      // Full hydration for a different note
+      hydratedNoteId.current = note._id;
+      hasUnsavedChanges.current = false;
+      lastAiActionAt.current = note.lastAiActionAt;
+      setTitle(note.title);
+      setSelectedFolderId(note.folderId ?? "none");
+      setIsPinned(note.isPinned === true);
+      editorRef.current?.setContent(note.content);
+      return;
+    }
+
+    // Same note — sync metadata
     setSelectedFolderId(note.folderId ?? "none");
     setIsPinned(note.isPinned === true);
-    hasUnsavedChanges.current = false;
-    if (note.conversationId) setConversationId(note.conversationId);
+
+    // Detect external AI patch
+    if (note.lastAiActionAt !== lastAiActionAt.current && !hasUnsavedChanges.current) {
+      lastAiActionAt.current = note.lastAiActionAt;
+      setTitle(note.title);
+      editorRef.current?.setContent(note.content);
+    }
   }, [note]);
 
+  // Ensure conversation thread exists
   useEffect(() => {
     if (!note || conversationId || note.conversationId) return;
     let cancelled = false;
@@ -167,35 +205,45 @@ ${snippet}`;
     };
   }, [conversationId, ensureThread, note, t]);
 
+  // Autosave with debounce
   useEffect(() => {
-    if (!note) return;
-    if (!hasUnsavedChanges.current) {
-      return;
-    }
+    if (!note || !hasUnsavedChanges.current) return;
 
     const timer = window.setTimeout(async () => {
-      if (note.title === title && note.content === content) {
+      const nextContent = normalizeEditorMarkup(editorRef.current?.getContent() ?? "");
+      const currentContent = normalizeEditorMarkup(note.content);
+
+      if (note.title === title && currentContent === nextContent) {
         hasUnsavedChanges.current = false;
         return;
       }
-      setIsSaving(true);
+
+      setSaveState("saving");
+      const versionAtSave = editVersion.current;
       try {
         await updateNote({
           id: note._id,
           title,
-          content,
+          content: nextContent,
         });
-        hasUnsavedChanges.current = false;
+        if (editVersion.current === versionAtSave) {
+          hasUnsavedChanges.current = false;
+        }
+        setSaveState("saved");
+        // Auto-clear "saved" after 3s
+        window.setTimeout(() => {
+          setSaveState((s) => (s === "saved" ? "idle" : s));
+        }, 3000);
       } catch {
         toast.error(t("Failed to save note"));
-      } finally {
-        setIsSaving(false);
+        setSaveState("error");
       }
-    }, 600);
+    }, 1000);
+
     return () => {
       window.clearTimeout(timer);
     };
-  }, [content, note, t, title, updateNote]);
+  }, [dirtyTick, note, t, title, updateNote]);
 
   async function toggleArchive() {
     if (!note) return;
@@ -272,8 +320,10 @@ ${snippet}`;
             <Input
               value={title}
               onChange={(event) => {
+                editVersion.current++;
                 hasUnsavedChanges.current = true;
                 setTitle(event.target.value);
+                setDirtyTick((n) => n + 1);
               }}
             />
             <div className="flex items-center gap-2">
@@ -332,20 +382,40 @@ ${snippet}`;
           </div>
 
           <NoteEditor
+            ref={editorRef}
             className="h-[45vh] lg:h-[calc(100%-5.5rem)]"
-            value={content}
-            onChange={(nextContent) => {
-              hasUnsavedChanges.current = true;
-              setContent(nextContent);
-            }}
+            initialContent={note.content}
+            onDirty={handleDirty}
             onAiAction={handleSectionAiAction}
             placeholder={t("Write your note")}
           />
 
           <div className="mt-3 flex items-center gap-2">
-            <Button size="xs" disabled={isSaving}>
-              <Save className="size-3.5" />
-              {isSaving ? <T>Saving...</T> : <T>Saved</T>}
+            <Button size="xs" disabled={saveState === "saving"}>
+              {saveState === "saving" && (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" />
+                  <T>Saving...</T>
+                </>
+              )}
+              {saveState === "saved" && (
+                <>
+                  <Check className="size-3.5" />
+                  <T>Saved</T>
+                </>
+              )}
+              {saveState === "error" && (
+                <>
+                  <AlertCircle className="size-3.5" />
+                  <T>Save failed</T>
+                </>
+              )}
+              {saveState === "idle" && (
+                <>
+                  <Save className="size-3.5" />
+                  <T>Save</T>
+                </>
+              )}
             </Button>
             <Button size="xs" variant="outline" onClick={toggleArchive}>
               {note.isArchived ? (
@@ -368,9 +438,11 @@ ${snippet}`;
               size="xs"
               variant="outline"
               onClick={() => {
-                setTitle(`${title || t("Untitled note")} (AI draft)`);
-                setContent("");
+                editVersion.current++;
                 hasUnsavedChanges.current = true;
+                setTitle(`${title || t("Untitled note")} (AI draft)`);
+                editorRef.current?.setContent("");
+                setDirtyTick((n) => n + 1);
               }}
             >
               <PenLine className="size-3.5" />
