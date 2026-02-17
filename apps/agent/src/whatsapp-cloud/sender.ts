@@ -246,7 +246,10 @@ export async function sendTypingIndicator(phone: string): Promise<void> {
       messaging_product: "whatsapp",
       recipient_type: "individual",
       to: phone,
-      typing_indicator: { type: "text" },
+      type: "action",
+      action: {
+        typing_indicator: { type: "text" },
+      },
     }),
     signal: AbortSignal.timeout(5_000),
   });
