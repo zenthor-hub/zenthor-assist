@@ -90,44 +90,47 @@ const inputSchema = z.object({
   to: z.string().optional().describe('End date string or "now" (for diff)'),
   timezone: z.string().optional().describe("IANA timezone for display (default UTC)"),
 });
+export type DateCalcInput = z.infer<typeof inputSchema>;
+
+export async function executeDateCalc(input: DateCalcInput): Promise<string> {
+  try {
+    switch (input.operation) {
+      case "add": {
+        if (!input.date) return "Error: 'date' is required for add operation";
+        if (input.amount === null || input.amount === undefined)
+          return "Error: 'amount' is required for add operation";
+        if (!input.unit) return "Error: 'unit' is required for add operation";
+        const base = resolveDate(input.date);
+        const result = addToDate(base, input.amount, input.unit);
+        const tz = input.timezone ?? "UTC";
+        const formatted = result.toLocaleString("en-US", {
+          timeZone: tz,
+          dateStyle: "full",
+          timeStyle: "long",
+        });
+        return `${input.date} + ${input.amount} ${input.unit} = ${formatted}\nISO: ${result.toISOString()}`;
+      }
+      case "diff": {
+        if (!input.from) return "Error: 'from' is required for diff operation";
+        if (!input.to) return "Error: 'to' is required for diff operation";
+        const from = resolveDate(input.from);
+        const to = resolveDate(input.to);
+        return diffDates(from, to);
+      }
+      case "info": {
+        if (!input.date) return "Error: 'date' is required for info operation";
+        const date = resolveDate(input.date);
+        return dateInfo(date, input.timezone);
+      }
+    }
+  } catch (err) {
+    return `Error: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
 
 export const dateCalc = tool({
   description:
     'Perform date arithmetic: add/subtract time from a date, calculate the difference between two dates, or get date info (day of week, week number, quarter, leap year, unix timestamp). Use "now" for the current date/time.',
   inputSchema,
-  execute: async (input) => {
-    try {
-      switch (input.operation) {
-        case "add": {
-          if (!input.date) return "Error: 'date' is required for add operation";
-          if (input.amount === null || input.amount === undefined)
-            return "Error: 'amount' is required for add operation";
-          if (!input.unit) return "Error: 'unit' is required for add operation";
-          const base = resolveDate(input.date);
-          const result = addToDate(base, input.amount, input.unit);
-          const tz = input.timezone ?? "UTC";
-          const formatted = result.toLocaleString("en-US", {
-            timeZone: tz,
-            dateStyle: "full",
-            timeStyle: "long",
-          });
-          return `${input.date} + ${input.amount} ${input.unit} = ${formatted}\nISO: ${result.toISOString()}`;
-        }
-        case "diff": {
-          if (!input.from) return "Error: 'from' is required for diff operation";
-          if (!input.to) return "Error: 'to' is required for diff operation";
-          const from = resolveDate(input.from);
-          const to = resolveDate(input.to);
-          return diffDates(from, to);
-        }
-        case "info": {
-          if (!input.date) return "Error: 'date' is required for info operation";
-          const date = resolveDate(input.date);
-          return dateInfo(date, input.timezone);
-        }
-      }
-    } catch (err) {
-      return `Error: ${err instanceof Error ? err.message : String(err)}`;
-    }
-  },
+  execute: async (input) => executeDateCalc(input),
 });

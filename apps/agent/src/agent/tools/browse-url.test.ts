@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { browseUrl } from "./browse-url";
+import { executeBrowseUrl } from "./browse-url";
 
 const mockLookup = vi.hoisted(() => vi.fn());
 
@@ -8,10 +8,9 @@ vi.mock("node:dns/promises", () => ({
   lookup: mockLookup,
 }));
 
-// Helper to invoke the tool's execute function directly
+// Helper to invoke the exported typed executor directly
 async function exec(url: string): Promise<string> {
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any -- accessing internal execute for testing
-  return (browseUrl as any).execute({ url });
+  return executeBrowseUrl({ url });
 }
 
 const mockFetch = vi.fn<typeof globalThis.fetch>();

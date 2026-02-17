@@ -1,11 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { dateCalc } from "./date-calc";
+import { executeDateCalc, type DateCalcInput } from "./date-calc";
 
-// Helper to invoke the tool's execute function directly
-async function exec(input: Record<string, unknown>): Promise<string> {
-  // oxlint-disable-next-line typescript-eslint/no-explicit-any -- accessing internal execute for testing
-  return (dateCalc as any).execute(input);
+async function exec(input: DateCalcInput): Promise<string> {
+  return executeDateCalc(input);
 }
 
 describe("dateCalc", () => {
