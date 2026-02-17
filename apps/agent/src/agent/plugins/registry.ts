@@ -22,6 +22,19 @@ const coreTimePlugin: RuntimePlugin = {
     riskLevel: "low",
     source: "builtin",
     description: "Provides current time information",
+    toolDescriptors: {
+      get_current_time: {
+        name: "get_current_time",
+        strict: true,
+        inputExamples: [
+          {
+            input: {
+              timezone: "America/Sao_Paulo",
+            },
+          },
+        ],
+      },
+    },
   },
   tools: {
     get_current_time: currentTime,
@@ -40,6 +53,32 @@ const coreMemoryPlugin: RuntimePlugin = {
     kind: "builtin",
     source: "builtin",
     description: "Agent memory storage and retrieval",
+    toolDescriptors: {
+      memory_search: {
+        name: "memory_search",
+        strict: true,
+        inputExamples: [
+          {
+            input: {
+              query: "Project deadline for Q1 launch",
+              limit: 5,
+            },
+          },
+        ],
+      },
+      memory_store: {
+        name: "memory_store",
+        strict: true,
+        inputExamples: [
+          {
+            input: {
+              content:
+                "User prefers concise summaries and wants reminders in Portuguese when needed.",
+            },
+          },
+        ],
+      },
+    },
   },
   tools: {
     memory_search: memorySearch,
@@ -62,6 +101,22 @@ const coreSchedulePlugin: RuntimePlugin = {
     },
     source: "builtin",
     description: "Schedule tasks for future execution",
+    toolDescriptors: {
+      schedule_task: {
+        name: "schedule_task",
+        strict: true,
+        inputExamples: [
+          {
+            input: {
+              name: "Weekly stand-up check",
+              description: "Remind user to review progress notes",
+              intervalMinutes: 10080,
+              payload: "Check weekly stand-up action items.",
+            },
+          },
+        ],
+      },
+    },
   },
   tools: {
     schedule_task: scheduleTask,
@@ -88,6 +143,18 @@ const coreTasksPlugin: RuntimePlugin = {
           outputShape: "string",
           requiresStructuredOutput: true,
         },
+        strict: true,
+        inputExamples: [
+          {
+            input: {
+              title: "Prepare weekly review notes",
+              description: "Compile notes from the week and send summary",
+              dueDate: "2026-02-20",
+              priority: 2,
+              labels: ["work", "planning"],
+            },
+          },
+        ],
       },
       task_list: {
         name: "task_list",
@@ -95,6 +162,15 @@ const coreTasksPlugin: RuntimePlugin = {
           outputShape: "string",
           requiresStructuredOutput: true,
         },
+        strict: true,
+        inputExamples: [
+          {
+            input: {
+              status: "in_progress",
+              limit: 10,
+            },
+          },
+        ],
       },
       task_update: {
         name: "task_update",
@@ -102,6 +178,16 @@ const coreTasksPlugin: RuntimePlugin = {
           outputShape: "string",
           requiresStructuredOutput: true,
         },
+        strict: true,
+        inputExamples: [
+          {
+            input: {
+              taskId: "example-task-id",
+              status: "done",
+              priority: 3,
+            },
+          },
+        ],
       },
       task_complete: {
         name: "task_complete",
@@ -109,6 +195,14 @@ const coreTasksPlugin: RuntimePlugin = {
           outputShape: "string",
           requiresStructuredOutput: true,
         },
+        strict: true,
+        inputExamples: [
+          {
+            input: {
+              taskId: "example-task-id",
+            },
+          },
+        ],
       },
       task_delete: {
         name: "task_delete",
@@ -116,6 +210,14 @@ const coreTasksPlugin: RuntimePlugin = {
           outputShape: "string",
           requiresStructuredOutput: true,
         },
+        strict: true,
+        inputExamples: [
+          {
+            input: {
+              taskId: "example-task-id",
+            },
+          },
+        ],
       },
     },
   },
@@ -140,6 +242,19 @@ const coreWebBrowsePlugin: RuntimePlugin = {
     kind: "integration",
     source: "builtin",
     description: "Fetch and extract readable text from web pages",
+    toolDescriptors: {
+      browse_url: {
+        name: "browse_url",
+        strict: true,
+        inputExamples: [
+          {
+            input: {
+              url: "https://vercel.com/blog/ai-sdk-6",
+            },
+          },
+        ],
+      },
+    },
   },
   tools: {
     browse_url: browseUrl,
@@ -158,6 +273,19 @@ const coreCalculatorPlugin: RuntimePlugin = {
     kind: "builtin",
     source: "builtin",
     description: "Evaluate mathematical expressions",
+    toolDescriptors: {
+      calculate: {
+        name: "calculate",
+        strict: true,
+        inputExamples: [
+          {
+            input: {
+              expression: "2^10 + 5 * sqrt(25) - 3",
+            },
+          },
+        ],
+      },
+    },
   },
   tools: {
     calculate,
@@ -176,6 +304,22 @@ const coreDateCalcPlugin: RuntimePlugin = {
     kind: "builtin",
     source: "builtin",
     description: "Date arithmetic, difference, and info operations",
+    toolDescriptors: {
+      date_calc: {
+        name: "date_calc",
+        strict: true,
+        inputExamples: [
+          {
+            input: {
+              operation: "add",
+              date: "now",
+              amount: 3,
+              unit: "days",
+            },
+          },
+        ],
+      },
+    },
   },
   tools: {
     date_calc: dateCalc,
@@ -194,6 +338,22 @@ const coreSubagentPlugin: RuntimePlugin = {
     kind: "integration",
     source: "builtin",
     description: "Delegates a focused task to a temporary internal subagent queue",
+    toolDescriptors: {
+      delegate_to_subagent: {
+        name: "delegate_to_subagent",
+        strict: true,
+        inputExamples: [
+          {
+            input: {
+              objective:
+                "Summarize the latest conversation into 3 action items with owners and dates.",
+              context: "Focus on tasks related to product planning.",
+              timeoutMs: 120000,
+            },
+          },
+        ],
+      },
+    },
   },
   tools: {
     delegate_to_subagent: delegateToSubagent,
