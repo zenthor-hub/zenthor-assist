@@ -48,6 +48,22 @@ function makeConvexCreds(overrides: Record<string, unknown> = {}) {
 function setupCoreMocks(envOverrides: Record<string, unknown> = {}) {
   vi.doMock("@zenthor-assist/env/agent", () => mockEnv(envOverrides));
   vi.doMock("../../observability/logger", () => mockLogger());
+  setupMockFs();
+}
+
+function setupMockFs() {
+  vi.doMock("node:fs/promises", () => ({
+    access: vi.fn(async () => {
+      throw new Error("ENOENT");
+    }),
+    readFile: vi.fn(async () => {
+      throw new Error("ENOENT");
+    }),
+    writeFile: vi.fn(async () => {}),
+    mkdir: vi.fn(async () => {}),
+    rename: vi.fn(async () => {}),
+    rm: vi.fn(async () => {}),
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -75,14 +91,6 @@ describe("getValidCredentials (Convex persistence)", () => {
       browserOAuthFlow: vi.fn(),
       deviceOAuthFlow: vi.fn(),
     }));
-    // Mock fs to avoid file system access
-    vi.doMock("node:fs", () => ({
-      existsSync: () => false,
-      readFileSync: vi.fn(),
-      writeFileSync: vi.fn(),
-      mkdirSync: vi.fn(),
-    }));
-
     const { getValidCredentials } = await import("./token-manager");
     const result = await getValidCredentials();
 
@@ -110,13 +118,6 @@ describe("getValidCredentials (Convex persistence)", () => {
       browserOAuthFlow: vi.fn(),
       deviceOAuthFlow: vi.fn(),
     }));
-    vi.doMock("node:fs", () => ({
-      existsSync: () => false,
-      readFileSync: vi.fn(),
-      writeFileSync: vi.fn(),
-      mkdirSync: vi.fn(),
-    }));
-
     const { getValidCredentials } = await import("./token-manager");
     const result = await getValidCredentials();
 
@@ -155,13 +156,6 @@ describe("getValidCredentials (Convex persistence)", () => {
       browserOAuthFlow: vi.fn(),
       deviceOAuthFlow: vi.fn(),
     }));
-    vi.doMock("node:fs", () => ({
-      existsSync: () => false,
-      readFileSync: vi.fn(),
-      writeFileSync: vi.fn(),
-      mkdirSync: vi.fn(),
-    }));
-
     const { getValidCredentials } = await import("./token-manager");
     const result = await getValidCredentials();
 
@@ -203,13 +197,6 @@ describe("getValidCredentials (Convex persistence)", () => {
       browserOAuthFlow: vi.fn(),
       deviceOAuthFlow: vi.fn(),
     }));
-    vi.doMock("node:fs", () => ({
-      existsSync: () => false,
-      readFileSync: vi.fn(),
-      writeFileSync: vi.fn(),
-      mkdirSync: vi.fn(),
-    }));
-
     const { getValidCredentials } = await import("./token-manager");
     const result = await getValidCredentials();
 
@@ -258,13 +245,6 @@ describe("getValidCredentials (Convex persistence)", () => {
       browserOAuthFlow: vi.fn(),
       deviceOAuthFlow: vi.fn(),
     }));
-    vi.doMock("node:fs", () => ({
-      existsSync: () => false,
-      readFileSync: vi.fn(),
-      writeFileSync: vi.fn(),
-      mkdirSync: vi.fn(),
-    }));
-
     const { getValidCredentials } = await import("./token-manager");
     const result = await getValidCredentials();
 
@@ -292,13 +272,6 @@ describe("getValidCredentials (Convex persistence)", () => {
       browserOAuthFlow: vi.fn(),
       deviceOAuthFlow: vi.fn(),
     }));
-    vi.doMock("node:fs", () => ({
-      existsSync: () => false,
-      readFileSync: vi.fn(),
-      writeFileSync: vi.fn(),
-      mkdirSync: vi.fn(),
-    }));
-
     const { getValidCredentials } = await import("./token-manager");
     const result = await getValidCredentials();
 
@@ -325,13 +298,6 @@ describe("getValidCredentials (Convex persistence)", () => {
       browserOAuthFlow: vi.fn(),
       deviceOAuthFlow: vi.fn(),
     }));
-    vi.doMock("node:fs", () => ({
-      existsSync: () => false,
-      readFileSync: vi.fn(),
-      writeFileSync: vi.fn(),
-      mkdirSync: vi.fn(),
-    }));
-
     const { getValidCredentials } = await import("./token-manager");
     const result = await getValidCredentials();
 
@@ -362,13 +328,6 @@ describe("clearCredentials (Convex persistence)", () => {
       browserOAuthFlow: vi.fn(),
       deviceOAuthFlow: vi.fn(),
     }));
-    vi.doMock("node:fs", () => ({
-      existsSync: () => false,
-      readFileSync: vi.fn(),
-      writeFileSync: vi.fn(),
-      mkdirSync: vi.fn(),
-    }));
-
     const { clearCredentials } = await import("./token-manager");
     await clearCredentials();
 
@@ -393,13 +352,6 @@ describe("clearCredentials (Convex persistence)", () => {
       browserOAuthFlow: vi.fn(),
       deviceOAuthFlow: vi.fn(),
     }));
-    vi.doMock("node:fs", () => ({
-      existsSync: () => false,
-      readFileSync: vi.fn(),
-      writeFileSync: vi.fn(),
-      mkdirSync: vi.fn(),
-    }));
-
     const { clearCredentials } = await import("./token-manager");
 
     // Should not throw

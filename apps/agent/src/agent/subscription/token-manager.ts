@@ -15,7 +15,7 @@
  *  6. OAuth login (if auto-login is enabled)
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
@@ -114,10 +114,14 @@ async function saveConvexCredentials(creds: SubscriptionCredentials): Promise<vo
 const AUTH_DIR = resolve(process.cwd(), ".auth");
 const CACHE_PATH = resolve(AUTH_DIR, "openai-subscription.json");
 
-function loadCachedCredentials(): SubscriptionCredentials | null {
+function getCacheTempPath(): string {
+  return `${CACHE_PATH}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
+}
+
+async function loadCachedCredentials(): Promise<SubscriptionCredentials | null> {
   try {
-    if (!existsSync(CACHE_PATH)) return null;
-    const raw = readFileSync(CACHE_PATH, "utf-8");
+    await access(CACHE_PATH);
+    const raw = await readFile(CACHE_PATH, "utf-8");
     const parsed = JSON.parse(raw) as SubscriptionCredentials;
     if (!parsed.accessToken || !parsed.refreshToken) return null;
     return parsed;
@@ -126,16 +130,17 @@ function loadCachedCredentials(): SubscriptionCredentials | null {
   }
 }
 
-function saveCachedCredentials(creds: SubscriptionCredentials): void {
+async function saveCachedCredentials(creds: SubscriptionCredentials): Promise<void> {
+  const tempPath = getCacheTempPath();
   try {
-    if (!existsSync(AUTH_DIR)) {
-      mkdirSync(AUTH_DIR, { recursive: true });
-    }
-    writeFileSync(CACHE_PATH, JSON.stringify(creds, null, 2), "utf-8");
+    await mkdir(AUTH_DIR, { recursive: true });
+    await writeFile(tempPath, JSON.stringify(creds, null, 2), "utf-8");
+    await rename(tempPath, CACHE_PATH);
   } catch (err) {
     void logger.lineWarn("[token-manager] Failed to save cached credentials to file", {
       error: err instanceof Error ? err.message : String(err),
     });
+    await rm(tempPath, { force: true }).catch(() => {});
   }
 }
 
@@ -171,7 +176,7 @@ async function applyTokenResponse(
     accountId,
   };
   cachedCreds = creds;
-  saveCachedCredentials(creds);
+  await saveCachedCredentials(creds);
   await saveConvexCredentials(creds);
   return creds;
 }
@@ -182,7 +187,7 @@ async function applyTokenResponse(
  */
 async function applyCredentials(creds: SubscriptionCredentials): Promise<SubscriptionCredentials> {
   cachedCreds = creds;
-  saveCachedCredentials(creds);
+  await saveCachedCredentials(creds);
   await saveConvexCredentials(creds);
   return creds;
 }
@@ -225,7 +230,7 @@ export async function getValidCredentials(): Promise<SubscriptionCredentials> {
   const convexCreds = await loadConvexCredentials();
   if (convexCreds && !isExpired(convexCreds)) {
     cachedCreds = convexCreds;
-    saveCachedCredentials(convexCreds);
+    await saveCachedCredentials(convexCreds);
     return convexCreds;
   }
 
@@ -237,7 +242,7 @@ export async function getValidCredentials(): Promise<SubscriptionCredentials> {
   }
 
   // 4. Local file cache
-  const fileCreds = loadCachedCredentials();
+  const fileCreds = await loadCachedCredentials();
   if (fileCreds && !isExpired(fileCreds)) {
     // Promote file creds to Convex
     return applyCredentials(fileCreds);
@@ -272,7 +277,7 @@ export async function getValidCredentials(): Promise<SubscriptionCredentials> {
         // A different refresh token exists — try it
         if (!isExpired(freshConvexCreds)) {
           cachedCreds = freshConvexCreds;
-          saveCachedCredentials(freshConvexCreds);
+          await saveCachedCredentials(freshConvexCreds);
           return freshConvexCreds;
         }
         // Token is expired but has a different refresh token — try refreshing again
@@ -316,9 +321,7 @@ export async function forceLogin(): Promise<SubscriptionCredentials> {
 export async function clearCredentials(): Promise<void> {
   cachedCreds = null;
   try {
-    if (existsSync(CACHE_PATH)) {
-      writeFileSync(CACHE_PATH, "{}", "utf-8");
-    }
+    await rm(CACHE_PATH, { force: true });
   } catch {
     // Ignore file cleanup errors
   }
