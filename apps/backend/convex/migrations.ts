@@ -1,6 +1,7 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
 import { resolveRoleForEmail } from "./auth";
 
@@ -139,5 +140,98 @@ export const backfillWhatsAppOnboarding = internalMutation({
       createdOnboarding,
       alreadyHadOnboarding,
     };
+  },
+});
+
+type TableSummary = { table: string; deleted: number };
+
+type DeletableRow = { _id: unknown };
+
+async function clearTable(
+  ctx: MutationCtx,
+  rows: Promise<readonly DeletableRow[]>,
+  tableName: string,
+  dryRun: boolean,
+): Promise<TableSummary> {
+  const docs = await rows;
+  if (!dryRun) {
+    for (const doc of docs) {
+      await ctx.db.delete(doc._id as never);
+    }
+  }
+  return { table: tableName, deleted: docs.length };
+}
+
+async function wipeAllData(
+  ctx: MutationCtx,
+  dryRun: boolean,
+): Promise<{
+  dryRun: boolean;
+  totalDeleted: number;
+  tables: TableSummary[];
+}> {
+  const tableJobs = [
+    clearTable(ctx, ctx.db.query("users").collect(), "users", dryRun),
+    clearTable(ctx, ctx.db.query("contacts").collect(), "contacts", dryRun),
+    clearTable(ctx, ctx.db.query("phoneVerifications").collect(), "phoneVerifications", dryRun),
+    clearTable(ctx, ctx.db.query("conversations").collect(), "conversations", dryRun),
+    clearTable(ctx, ctx.db.query("messages").collect(), "messages", dryRun),
+    clearTable(ctx, ctx.db.query("noteFolders").collect(), "noteFolders", dryRun),
+    clearTable(ctx, ctx.db.query("notes").collect(), "notes", dryRun),
+    clearTable(ctx, ctx.db.query("userPreferences").collect(), "userPreferences", dryRun),
+    clearTable(ctx, ctx.db.query("userOnboarding").collect(), "userOnboarding", dryRun),
+    clearTable(ctx, ctx.db.query("skills").collect(), "skills", dryRun),
+    clearTable(ctx, ctx.db.query("todoistConnections").collect(), "todoistConnections", dryRun),
+    clearTable(ctx, ctx.db.query("todoistOauthStates").collect(), "todoistOauthStates", dryRun),
+    clearTable(ctx, ctx.db.query("whatsappSession").collect(), "whatsappSession", dryRun),
+    clearTable(ctx, ctx.db.query("whatsappAccounts").collect(), "whatsappAccounts", dryRun),
+    clearTable(ctx, ctx.db.query("whatsappLeases").collect(), "whatsappLeases", dryRun),
+    clearTable(ctx, ctx.db.query("agentQueue").collect(), "agentQueue", dryRun),
+    clearTable(ctx, ctx.db.query("agents").collect(), "agents", dryRun),
+    clearTable(ctx, ctx.db.query("memories").collect(), "memories", dryRun),
+    clearTable(ctx, ctx.db.query("scheduledTasks").collect(), "scheduledTasks", dryRun),
+    clearTable(ctx, ctx.db.query("toolApprovals").collect(), "toolApprovals", dryRun),
+    clearTable(ctx, ctx.db.query("outboundMessages").collect(), "outboundMessages", dryRun),
+    clearTable(ctx, ctx.db.query("pluginDefinitions").collect(), "pluginDefinitions", dryRun),
+    clearTable(ctx, ctx.db.query("pluginInstalls").collect(), "pluginInstalls", dryRun),
+    clearTable(ctx, ctx.db.query("pluginPolicies").collect(), "pluginPolicies", dryRun),
+    clearTable(ctx, ctx.db.query("tasks").collect(), "tasks", dryRun),
+    clearTable(ctx, ctx.db.query("taskProjects").collect(), "taskProjects", dryRun),
+    clearTable(ctx, ctx.db.query("taskSections").collect(), "taskSections", dryRun),
+    clearTable(ctx, ctx.db.query("inboundDedupe").collect(), "inboundDedupe", dryRun),
+    clearTable(ctx, ctx.db.query("providerCredentials").collect(), "providerCredentials", dryRun),
+  ];
+
+  const summaries = await Promise.all(tableJobs);
+  const totalDeleted = summaries.reduce((sum, row) => sum + row.deleted, 0);
+
+  return {
+    dryRun,
+    totalDeleted,
+    tables: summaries,
+  };
+}
+
+export const wipeEnvironment = internalMutation({
+  args: {
+    confirmToken: v.string(),
+    dryRun: v.optional(v.boolean()),
+  },
+  returns: v.object({
+    dryRun: v.boolean(),
+    totalDeleted: v.number(),
+    tables: v.array(
+      v.object({
+        table: v.string(),
+        deleted: v.number(),
+      }),
+    ),
+  }),
+  handler: async (ctx, args) => {
+    if (args.confirmToken !== "WIPE_ENVIRONMENT_2026") {
+      throw new ConvexError("Invalid confirm token. Use WIPE_ENVIRONMENT_2026");
+    }
+
+    return await wipeAllData(ctx, args.dryRun ?? false);
   },
 });
