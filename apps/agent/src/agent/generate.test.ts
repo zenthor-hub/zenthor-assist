@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isLikelyNewNoteRequest } from "./generate";
+import { isLikelyNewNoteRequest, mergeStreamingTextChunk } from "./generate";
 
 describe("isLikelyNewNoteRequest", () => {
   it("returns false for explicit rewrite workflows", () => {
@@ -44,5 +44,34 @@ describe("isLikelyNewNoteRequest", () => {
     ]);
 
     expect(result).toBe(false);
+  });
+});
+
+describe("mergeStreamingTextChunk", () => {
+  it("concatenates delta chunks", () => {
+    let value = "";
+    value = mergeStreamingTextChunk(value, "Hel");
+    expect(value).toBe("Hel");
+    value = mergeStreamingTextChunk(value, "lo");
+    expect(value).toBe("Hello");
+    value = mergeStreamingTextChunk(value, " world");
+    expect(value).toBe("Hello world");
+  });
+
+  it("deduplicates cumulative chunks", () => {
+    let value = "";
+    value = mergeStreamingTextChunk(value, "Hello");
+    expect(value).toBe("Hello");
+    value = mergeStreamingTextChunk(value, "Hello");
+    expect(value).toBe("Hello");
+    value = mergeStreamingTextChunk(value, "Hello world");
+    expect(value).toBe("Hello world");
+  });
+
+  it("reads nested stream chunk shapes", () => {
+    let value = "";
+    value = mergeStreamingTextChunk(value, { textDelta: "H" });
+    value = mergeStreamingTextChunk(value, { text: "Hello", type: "text" });
+    expect(value).toBe("Hello");
   });
 });

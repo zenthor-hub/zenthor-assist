@@ -1,6 +1,12 @@
+import { env } from "@zenthor-assist/env/agent";
+
 import { getProviderMode } from "./agent/ai-gateway";
 import { startAgentLoop } from "./agent/loop";
-import { getRecommendedEnvForRole, getRequiredEnvForRole } from "./env-requirements";
+import {
+  getModelCompatibilityErrors,
+  getRecommendedEnvForRole,
+  getRequiredEnvForRole,
+} from "./env-requirements";
 import { logger } from "./observability/logger";
 import { initSentry } from "./observability/sentry";
 import { startTelegramRuntime } from "./telegram/runtime";
@@ -40,6 +46,20 @@ async function main() {
       );
       void logger.warn("agent.missing_recommended_env", { key, role });
     }
+  }
+
+  const modelCompatibilityErrors = getModelCompatibilityErrors(role, providerMode, {
+    liteModel: env.AI_LITE_MODEL,
+    standardModel: env.AI_MODEL,
+    fallbackModel: env.AI_FALLBACK_MODEL,
+  });
+  if (modelCompatibilityErrors.length > 0) {
+    for (const reason of modelCompatibilityErrors) {
+      await logger.lineError(`[main] Invalid model configuration: ${reason}`, { reason });
+      void logger.error("agent.invalid_model_config", { reason, role, providerMode });
+    }
+    await logger.lineError("[main] Refusing to start due to AI SDK provider/model incompatibility");
+    process.exit(1);
   }
 
   if (role === "core" || role === "all") {

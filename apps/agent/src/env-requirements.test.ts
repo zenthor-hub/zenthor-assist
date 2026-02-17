@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { getRecommendedEnvForRole, getRequiredEnvForRole } from "./env-requirements";
+import {
+  getModelCompatibilityErrors,
+  getRecommendedEnvForRole,
+  getRequiredEnvForRole,
+} from "./env-requirements";
 
 // ---------------------------------------------------------------------------
 // getRequiredEnvForRole
@@ -129,5 +133,37 @@ describe("getRecommendedEnvForRole", () => {
     const recommended = getRecommendedEnvForRole("whatsapp-cloud");
     expect(recommended).not.toContain("GROQ_API_KEY");
     expect(recommended).not.toContain("BLOB_READ_WRITE_TOKEN");
+  });
+});
+
+describe("getModelCompatibilityErrors", () => {
+  it("returns openai subscription errors for non-openai model ids in core role", () => {
+    const errors = getModelCompatibilityErrors("core", "openai_subscription", {
+      liteModel: "xai/grok-4.1-fast-reasoning",
+      standardModel: "anthropic/claude-sonnet-4-5-20250929",
+      fallbackModel: "openai/gpt-5.3-codex",
+    });
+
+    expect(errors).toHaveLength(2);
+    expect(errors[0]).toMatch(/OpenAI-compatible/);
+    expect(errors[1]).toMatch(/OpenAI-compatible/);
+  });
+
+  it("skips compatibility checks when provider mode is gateway", () => {
+    const errors = getModelCompatibilityErrors("core", "gateway", {
+      liteModel: "xai/grok-4.1-fast-reasoning",
+      standardModel: "anthropic/claude-sonnet-4-5-20250929",
+      fallbackModel: "openai/gpt-5.3-codex",
+    });
+    expect(errors).toEqual([]);
+  });
+
+  it("skips compatibility checks for non-runtime roles", () => {
+    const errors = getModelCompatibilityErrors("whatsapp-ingress", "openai_subscription", {
+      liteModel: "xai/grok-4.1-fast-reasoning",
+      standardModel: "anthropic/claude-sonnet-4-5-20250929",
+      fallbackModel: "gpt-5.3-codex",
+    });
+    expect(errors).toEqual([]);
   });
 });

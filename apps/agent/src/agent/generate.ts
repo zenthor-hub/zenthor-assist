@@ -332,7 +332,10 @@ interface ResolvedModelConfig {
   resolveMode: "agent_config_override" | "manual_model_override" | "router";
 }
 
-function resolveModels(options?: GenerateOptions): ResolvedModelConfig {
+function resolveModels(
+  options: GenerateOptions | undefined,
+  providerMode: ProviderMode = "gateway",
+): ResolvedModelConfig {
   // Explicit agent config takes priority (skip routing)
   if (options?.agentConfig?.model) {
     const fallbacks: string[] = [];
@@ -361,11 +364,14 @@ function resolveModels(options?: GenerateOptions): ResolvedModelConfig {
   }
 
   // Use router for dynamic selection
-  const route = selectModel({
-    channel: options?.channel ?? "web",
-    toolCount: options?.toolCount ?? 0,
-    messageCount: options?.messageCount ?? 0,
-  });
+  const route = selectModel(
+    {
+      channel: options?.channel ?? "web",
+      toolCount: options?.toolCount ?? 0,
+      messageCount: options?.messageCount ?? 0,
+    },
+    providerMode,
+  );
   return {
     primaryModel: route.primary,
     fallbackModels: route.fallbacks,
@@ -483,6 +489,36 @@ function processModelResult(contentMessages: {
     content: contentMessages.text,
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
   };
+}
+
+function extractStreamingTextChunk(chunk: unknown): string | undefined {
+  if (typeof chunk === "string") return chunk;
+
+  if (!chunk || typeof chunk !== "object") return undefined;
+
+  const value = chunk as Record<string, unknown>;
+
+  return (
+    (typeof value.text === "string" ? value.text : undefined) ??
+    (typeof value.textDelta === "string" ? value.textDelta : undefined) ??
+    (typeof value.delta === "string" ? value.delta : undefined) ??
+    (typeof value.content === "string" ? value.content : undefined)
+  );
+}
+
+export function mergeStreamingTextChunk(accumulatedText: string, chunk: unknown): string {
+  const chunkText = extractStreamingTextChunk(chunk);
+  if (!chunkText) return accumulatedText;
+
+  if (chunkText.startsWith(accumulatedText)) {
+    return chunkText;
+  }
+
+  if (accumulatedText.startsWith(chunkText)) {
+    return accumulatedText;
+  }
+
+  return `${accumulatedText}${chunkText}`;
 }
 
 function validateRequiredFields(value: unknown, requiredFields?: string[]): string[] {
@@ -668,7 +704,10 @@ function buildSharedGenerationContext(
   options: GenerateOptions | undefined,
   provider: AIProvider,
 ): SharedGenerationContext {
-  const { primaryModel, fallbackModels, tier, reason, resolveMode } = resolveModels(options);
+  const { primaryModel, fallbackModels, tier, reason, resolveMode } = resolveModels(
+    options,
+    provider.mode,
+  );
   const contextMessageCount = options?.contextMessageCount ?? conversationMessages.length;
   const contextTokenEstimate =
     options?.contextTokenEstimate ?? estimateContextTokens(conversationMessages);
@@ -840,8 +879,8 @@ async function executeModelCall(
     const streamResult = streamText(callOptions);
     let accumulated = "";
     for await (const chunk of streamResult.textStream) {
+      accumulated = mergeStreamingTextChunk(accumulated, chunk);
       if (mode === "streaming") {
-        accumulated += chunk;
         options.callbacks?.onChunk(accumulated);
       }
     }

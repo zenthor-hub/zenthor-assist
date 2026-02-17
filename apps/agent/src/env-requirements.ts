@@ -4,6 +4,13 @@
  */
 
 import type { ProviderMode } from "./agent/ai-gateway";
+import { getProviderModelCompatibilityErrors } from "./agent/model-router";
+
+export interface AgentModelConfig {
+  liteModel: string;
+  standardModel: string;
+  fallbackModel?: string;
+}
 
 // ---------------------------------------------------------------------------
 // Required env vars (fatal if missing)
@@ -58,4 +65,18 @@ export function getRecommendedEnvForRole(role: string): string[] {
     recommended.push("GROQ_API_KEY", "BLOB_READ_WRITE_TOKEN");
   }
   return recommended;
+}
+
+export function getModelCompatibilityErrors(
+  role: string,
+  providerMode: ProviderMode,
+  modelConfig: AgentModelConfig,
+): string[] {
+  if (role !== "core" && role !== "all") return [];
+
+  return getProviderModelCompatibilityErrors(providerMode, {
+    liteModel: modelConfig.liteModel,
+    standardModel: modelConfig.standardModel,
+    fallbackModel: modelConfig.fallbackModel,
+  });
 }

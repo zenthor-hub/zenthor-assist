@@ -12,7 +12,7 @@ vi.mock("../observability/logger", () => ({
   logger: { info: vi.fn(), warn: vi.fn() },
 }));
 
-import { selectModel } from "./model-router";
+import { getModelCompatibilityError, selectModel } from "./model-router";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -102,5 +102,32 @@ describe("selectModel", () => {
       expect(result.primary).not.toBe("anthropic/claude-opus-4-6");
       expect(result.fallbacks).toContain("anthropic/claude-opus-4-6");
     }
+  });
+
+  it("checks provider compatibility for openai_subscription mode", () => {
+    expect(() =>
+      selectModel({ channel: "web", toolCount: 2, messageCount: 3 }, "openai_subscription"),
+    ).toThrow("OpenAI-compatible");
+  });
+});
+
+describe("model compatibility checks", () => {
+  it("accepts openai model IDs when provider is openai_subscription", () => {
+    expect(getModelCompatibilityError("openai_subscription", "openai/gpt-5.3-codex")).toBeNull();
+    expect(getModelCompatibilityError("openai_subscription", "gpt-5.3-codex")).toBeNull();
+  });
+
+  it("rejects non-openai provider prefixes in openai_subscription mode", () => {
+    expect(
+      getModelCompatibilityError("openai_subscription", "xai/grok-4.1-fast-reasoning"),
+    ).toMatch(/OpenAI-compatible model IDs/);
+    expect(
+      getModelCompatibilityError("openai_subscription", "anthropic/claude-sonnet-4-5-20250929"),
+    ).toMatch(/OpenAI-compatible model IDs/);
+  });
+
+  it("allows non-openai model IDs for gateway mode", () => {
+    expect(getModelCompatibilityError("gateway", "xai/grok-4.1-fast-reasoning")).toBeNull();
+    expect(getModelCompatibilityError("gateway", "anthropic/claude-opus-4-6")).toBeNull();
   });
 });

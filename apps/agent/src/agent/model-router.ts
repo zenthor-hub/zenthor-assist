@@ -1,11 +1,18 @@
 import { env } from "@zenthor-assist/env/agent";
 
 import { logger } from "../observability/logger";
+import type { ProviderMode } from "./ai-gateway";
 
 export interface RouteContext {
   channel: "web" | "whatsapp" | "telegram";
   toolCount: number;
   messageCount: number;
+}
+
+export interface ModelSelectionConfig {
+  liteModel: string;
+  standardModel: string;
+  fallbackModel?: string;
 }
 
 export type ModelTier = "lite" | "standard" | "power";
@@ -15,6 +22,50 @@ export interface RouteResult {
   fallbacks: string[];
   tier: ModelTier;
   reason: string;
+}
+
+export function getProviderModelCompatibilityErrors(
+  providerMode: ProviderMode,
+  models: ModelSelectionConfig,
+): string[] {
+  if (providerMode !== "openai_subscription") return [];
+
+  const rawErrors = [
+    getModelCompatibilityError(providerMode, models.liteModel),
+    getModelCompatibilityError(providerMode, models.standardModel),
+    ...(models.fallbackModel
+      ? [getModelCompatibilityError(providerMode, models.fallbackModel)]
+      : []),
+  ];
+
+  const errors = rawErrors.filter((error): error is string => error !== null);
+  return [...new Set(errors)];
+}
+
+export function getModelCompatibilityError(mode: ProviderMode, modelId: string): string | null {
+  if (mode !== "openai_subscription") return null;
+
+  const trimmed = modelId.trim();
+  if (!trimmed) {
+    return `OpenAI subscription mode requires a non-empty model id, but received ${JSON.stringify(modelId)}.`;
+  }
+
+  if (!trimmed.includes("/")) {
+    return null;
+  }
+
+  const provider = trimmed.split("/")[0] ?? "";
+  if (provider !== "openai") {
+    return `OpenAI subscription mode requires OpenAI-compatible model IDs, but received "${trimmed}".`;
+  }
+
+  return null;
+}
+
+function resolveModelForMode(mode: ProviderMode, modelId: string): string {
+  const problem = getModelCompatibilityError(mode, modelId);
+  if (problem) throw new Error(problem);
+  return modelId;
 }
 
 /** Thresholds for escalating from lite → standard tier. */
@@ -30,10 +81,15 @@ function isComplexTask(ctx: RouteContext): boolean {
   return ctx.toolCount >= TOOL_THRESHOLD || ctx.messageCount >= MESSAGE_THRESHOLD;
 }
 
-export function selectModel(ctx: RouteContext): RouteResult {
-  const lite = env.AI_LITE_MODEL;
-  const standard = env.AI_MODEL;
-  const power = env.AI_FALLBACK_MODEL;
+export function selectModel(
+  ctx: RouteContext,
+  providerMode: ProviderMode = "gateway",
+): RouteResult {
+  const lite = resolveModelForMode(providerMode, env.AI_LITE_MODEL);
+  const standard = resolveModelForMode(providerMode, env.AI_MODEL);
+  const power = env.AI_FALLBACK_MODEL
+    ? resolveModelForMode(providerMode, env.AI_FALLBACK_MODEL)
+    : undefined;
 
   const buildFallbacks = (...models: (string | undefined)[]): string[] =>
     models.filter((m): m is string => Boolean(m));
