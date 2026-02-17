@@ -320,6 +320,8 @@ export interface ComposeAssistantResponseResult {
   content: string;
 }
 
+const NO_OUTPUT_FALLBACK = "Sorry, I could not generate a response right now. Please try again.";
+
 export function composeAssistantResponse(
   options: ComposeAssistantResponseOptions,
 ): ComposeAssistantResponseResult {
@@ -329,16 +331,20 @@ export function composeAssistantResponse(
     options.channel,
     noteCreationOutcomes,
   );
-  const toolFallback =
-    options.assistantContent.trim() === ""
-      ? buildNoteToolFallbackReply(options.toolCalls)
-      : undefined;
+  const hasAssistantText = options.assistantContent.trim() !== "";
+  const fallbackFromNoOutput = hasAssistantText ? undefined : NO_OUTPUT_FALLBACK;
+  const toolFallback = !hasAssistantText
+    ? buildNoteToolFallbackReply(options.toolCalls)
+    : undefined;
   const assistantContent = options.assistantContent;
+  const resolvedAssistantContent = hasAssistantText
+    ? assistantContent
+    : (fallbackFromNoOutput ?? "");
   const baseContent = noteCreationMessage
     ? noteCreationMessage
     : options.channel === "whatsapp"
-      ? sanitizeForWhatsApp(toolFallback ?? assistantContent)
-      : (toolFallback ?? assistantContent);
+      ? sanitizeForWhatsApp(toolFallback ?? resolvedAssistantContent)
+      : (toolFallback ?? resolvedAssistantContent);
 
   let content = baseContent;
   if (options.channel === "whatsapp" && !noteCreationMessage) {

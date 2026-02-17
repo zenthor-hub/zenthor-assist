@@ -52,6 +52,8 @@ interface ConversationMediaMessage {
   };
 }
 
+const FAILURE_REPLY_CONTENT = "Sorry, I couldn't generate a response right now. Please try again.";
+
 export {
   buildNoteCreationReply,
   buildNoteToolFallbackReply,
@@ -104,6 +106,61 @@ export function startAgentLoop() {
       const startedAt = Date.now();
       let placeholderId: Id<"messages"> | undefined;
       let leaseHandle: ReturnType<typeof createJobLeaseHandle> | undefined;
+      let contextChannel: "web" | "whatsapp" | "telegram" = "web";
+      let replyContactPhone: string | undefined;
+      let replyAccountId: string | undefined;
+      let isInternalJob = false;
+      let assistantMessagePersisted = false;
+
+      const sendFailureReply = async () => {
+        if (
+          isInternalJob ||
+          contextChannel === "web" ||
+          assistantMessagePersisted ||
+          !replyContactPhone
+        ) {
+          return;
+        }
+
+        try {
+          const assistantMessageId = await client.mutation(api.messages.addAssistantMessage, {
+            serviceKey,
+            conversationId: job.conversationId,
+            content: FAILURE_REPLY_CONTENT,
+            channel: contextChannel,
+            toolCalls: [],
+            modelUsed: undefined,
+          });
+          assistantMessagePersisted = true;
+
+          await client
+            .mutation(api.delivery.enqueueOutbound, {
+              serviceKey,
+              channel: contextChannel,
+              accountId:
+                replyAccountId ??
+                (contextChannel === "telegram"
+                  ? env.TELEGRAM_ACCOUNT_ID
+                  : env.WHATSAPP_ACCOUNT_ID) ??
+                "default",
+              conversationId: job.conversationId,
+              messageId: assistantMessageId,
+              to: replyContactPhone,
+              content: FAILURE_REPLY_CONTENT,
+              metadata: {
+                kind: "assistant_message",
+              },
+            })
+            .catch(() => {});
+        } catch (error) {
+          void logger.warn("agent.failure_reply_failed", {
+            jobId: job._id,
+            channel: contextChannel,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      };
+
       try {
         const claimed = await client.mutation(api.agent.claimJob, {
           serviceKey,
@@ -299,6 +356,9 @@ export function startAgentLoop() {
 
         const channel = context.conversation.channel as "web" | "whatsapp" | "telegram";
         const compactedContextTokenEstimate = estimateContextTokens(compactedMessages);
+        contextChannel = channel;
+        replyContactPhone = context.contact?.phone;
+        replyAccountId = context.conversation.accountId;
 
         // Enqueue typing indicator for messaging channels (processed by their outbound runtimes)
         if ((channel === "whatsapp" || channel === "telegram") && context.contact?.phone) {
@@ -402,7 +462,7 @@ export function startAgentLoop() {
           },
         );
 
-        const isInternalJob = job.isInternal === true;
+        isInternalJob = job.isInternal === true;
         const isWeb = context.conversation.channel === "web";
         let modelUsed: string | undefined;
         let internalResult: string | undefined;
@@ -594,6 +654,7 @@ export function startAgentLoop() {
             toolCalls: response.toolCalls,
             modelUsed,
           });
+          assistantMessagePersisted = true;
 
           if (channel === "whatsapp" && context.contact?.phone && assistantMessageId) {
             await client.mutation(api.delivery.enqueueOutbound, {
@@ -758,6 +819,8 @@ export function startAgentLoop() {
             continue;
           }
         }
+
+        await sendFailureReply();
 
         await client
           .mutation(api.agent.failJob, {
