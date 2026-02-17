@@ -672,6 +672,15 @@ export function startAgentLoop() {
 
         // Check lease before completing (avoid overwriting a requeued job)
         if (checkLease("pre_complete")) {
+          if (placeholderId) {
+            await client
+              .mutation(api.messages.failPlaceholder, {
+                serviceKey,
+                messageId: placeholderId,
+                errorMessage: "Processing was interrupted. Please try again.",
+              })
+              .catch(() => {});
+          }
           continue;
         }
 
