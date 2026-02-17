@@ -72,6 +72,7 @@ const noteDoc = v.object({
   lastAiActionAt: v.optional(v.number()),
   lastAiModel: v.optional(v.string()),
   metadata: v.optional(v.any()),
+  deletedAt: v.optional(v.number()),
   createdAt: v.number(),
   updatedAt: v.number(),
 });
@@ -91,7 +92,10 @@ export const list = authQuery({
 
     const notes = await baseQuery
       .filter((q) =>
-        q.eq(q.field("isArchived"), args.isArchived === undefined ? false : args.isArchived),
+        q.and(
+          q.eq(q.field("isArchived"), args.isArchived === undefined ? false : args.isArchived),
+          q.eq(q.field("deletedAt"), undefined),
+        ),
       )
       .order("desc")
       .take(limit);
@@ -116,7 +120,12 @@ export const listForConversation = serviceQuery({
     let query = ctx.db
       .query("notes")
       .withIndex("by_conversationId", (q) => q.eq("conversationId", args.conversationId))
-      .filter((q) => q.eq(q.field("isArchived"), args.isArchived ?? false));
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("isArchived"), args.isArchived ?? false),
+          q.eq(q.field("deletedAt"), undefined),
+        ),
+      );
 
     if (args.folderId) {
       query = query.filter((q) => q.eq(q.field("folderId"), args.folderId));
@@ -231,7 +240,7 @@ export const deleteNote = authMutation({
   handler: async (ctx, args) => {
     const note = await ctx.db.get(args.id);
     if (!note || note.userId !== ctx.auth.user._id) return null;
-    await ctx.db.delete(args.id);
+    await ctx.db.patch(args.id, { deletedAt: Date.now(), updatedAt: Date.now() });
     return null;
   },
 });
@@ -250,6 +259,67 @@ export const archive = authMutation({
       isArchived: args.isArchived ?? true,
       updatedAt: Date.now(),
     });
+    return null;
+  },
+});
+
+export const listTrashed = authQuery({
+  args: { limit: v.optional(v.number()) },
+  returns: v.array(noteDoc),
+  handler: async (ctx, args) => {
+    const limit = Math.min(args.limit ?? 80, 200);
+    const notes = await ctx.db
+      .query("notes")
+      .withIndex("by_userId_deletedAt", (q) => q.eq("userId", ctx.auth.user._id))
+      .filter((q) => q.neq(q.field("deletedAt"), undefined))
+      .order("desc")
+      .take(limit);
+
+    return notes.sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0));
+  },
+});
+
+export const restoreNote = authMutation({
+  args: { id: v.id("notes") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const note = await ctx.db.get(args.id);
+    if (!note || note.userId !== ctx.auth.user._id) return null;
+    if (!note.deletedAt) return null;
+
+    await ctx.db.patch(args.id, { deletedAt: undefined, updatedAt: Date.now() });
+    return null;
+  },
+});
+
+export const permanentlyDelete = authMutation({
+  args: { id: v.id("notes") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const note = await ctx.db.get(args.id);
+    if (!note || note.userId !== ctx.auth.user._id) return null;
+    if (!note.deletedAt) {
+      throw new ConvexError("Note must be in trash before permanent deletion");
+    }
+
+    await ctx.db.delete(args.id);
+    return null;
+  },
+});
+
+export const emptyTrash = authMutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const trashed = await ctx.db
+      .query("notes")
+      .withIndex("by_userId_deletedAt", (q) => q.eq("userId", ctx.auth.user._id))
+      .filter((q) => q.neq(q.field("deletedAt"), undefined))
+      .collect();
+
+    for (const note of trashed) {
+      await ctx.db.delete(note._id);
+    }
     return null;
   },
 });
@@ -484,7 +554,7 @@ export const deleteForConversation = serviceMutation({
     const note = await getConversationBoundNote(ctx, args.id, args.conversationId);
     if (!note) return null;
 
-    await ctx.db.delete(note._id);
+    await ctx.db.patch(note._id, { deletedAt: Date.now(), updatedAt: Date.now() });
     return null;
   },
 });

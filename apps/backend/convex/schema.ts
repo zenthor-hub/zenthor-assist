@@ -116,6 +116,7 @@ export default defineSchema({
     lastAiActionAt: v.optional(v.number()),
     lastAiModel: v.optional(v.string()),
     metadata: v.optional(v.any()),
+    deletedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -124,7 +125,8 @@ export default defineSchema({
     .index("by_userId_isArchived", ["userId", "isArchived"])
     .index("by_userId_updatedAt", ["userId", "updatedAt"])
     .index("by_updatedAt", ["updatedAt"])
-    .index("by_conversationId", ["conversationId"]),
+    .index("by_conversationId", ["conversationId"])
+    .index("by_userId_deletedAt", ["userId", "deletedAt"]),
 
   userPreferences: defineTable({
     userId: v.id("users"),
