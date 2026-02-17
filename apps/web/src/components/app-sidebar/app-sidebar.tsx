@@ -182,26 +182,16 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const flatFolders = useMemo(() => flattenTreeWithDepth(folderTree.roots), [folderTree]);
 
   // Filter notes by search query
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- activeNotes ref from useQuery
-  const filteredActiveNotes = useMemo(() => {
-    if (!noteSearch.trim()) return activeNotes;
-    const q = noteSearch.trim().toLowerCase();
-    return activeNotes.filter((n) => (n.title ?? "").toLowerCase().includes(q));
-  }, [activeNotes, noteSearch]);
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- archivedNotes ref from useQuery
-  const filteredArchivedNotes = useMemo(() => {
-    if (!noteSearch.trim()) return archivedNotes;
-    const q = noteSearch.trim().toLowerCase();
-    return archivedNotes.filter((n) => (n.title ?? "").toLowerCase().includes(q));
-  }, [archivedNotes, noteSearch]);
-
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- trashedNotes ref from useQuery
-  const filteredTrashedNotes = useMemo(() => {
-    if (!noteSearch.trim()) return trashedNotes;
-    const q = noteSearch.trim().toLowerCase();
-    return trashedNotes.filter((n) => (n.title ?? "").toLowerCase().includes(q));
-  }, [trashedNotes, noteSearch]);
+  const normalizedSearchQuery = noteSearch.trim().toLowerCase();
+  const filteredActiveNotes = normalizedSearchQuery
+    ? activeNotes.filter((n) => (n.title ?? "").toLowerCase().includes(normalizedSearchQuery))
+    : activeNotes;
+  const filteredArchivedNotes = normalizedSearchQuery
+    ? archivedNotes.filter((n) => (n.title ?? "").toLowerCase().includes(normalizedSearchQuery))
+    : archivedNotes;
+  const filteredTrashedNotes = normalizedSearchQuery
+    ? trashedNotes.filter((n) => (n.title ?? "").toLowerCase().includes(normalizedSearchQuery))
+    : trashedNotes;
 
   // Only rebuilds when filtered notes change (grouping)
   const noteGrouping = useMemo(
