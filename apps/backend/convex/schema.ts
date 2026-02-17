@@ -93,6 +93,7 @@ export default defineSchema({
 
   noteFolders: defineTable({
     userId: v.id("users"),
+    parentId: v.optional(v.id("noteFolders")),
     name: v.string(),
     color: v.string(),
     position: v.number(),
@@ -100,7 +101,8 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_userId", ["userId"])
-    .index("by_userId_position", ["userId", "position"]),
+    .index("by_userId_position", ["userId", "position"])
+    .index("by_parentId", ["parentId"]),
 
   notes: defineTable({
     userId: v.id("users"),
