@@ -15,7 +15,7 @@ import {
   PinOff,
   Sparkles,
 } from "lucide-react";
-import { use, useCallback, useEffect, useRef, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { ChatArea } from "@/components/chat/chat-area";
@@ -38,6 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { buildFolderTree, flattenTreeWithDepth } from "@/lib/folder-tree";
 
 type NoteItem = {
   _id: Id<"notes">;
@@ -57,6 +58,8 @@ type FolderItem = {
   _id: Id<"noteFolders">;
   name: string;
   color: string;
+  parentId?: Id<"noteFolders">;
+  position: number;
 };
 
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -72,7 +75,13 @@ export default function NoteWorkspacePage({ params }: { params: Promise<{ noteId
     | NoteItem
     | null
     | undefined;
-  const folders = useQuery(api.noteFolders.list, {}) ?? [];
+  const rawFolders = useQuery(api.noteFolders.list, {});
+  const folders = (rawFolders ?? []) as FolderItem[];
+  const flatFolders = useMemo(() => {
+    const tree = buildFolderTree(folders, []);
+    return flattenTreeWithDepth(tree.roots);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- rawFolders is stable from useQuery
+  }, [rawFolders]);
   const ensureThread = useMutation(api.notes.ensureThread);
   const sendToNoteChat = useMutation(api.messages.send);
   const updateNote = useMutation(api.notes.update);
@@ -413,9 +422,9 @@ ${snippet}`;
                   <SelectItem value="none">
                     <T>Unfiled</T>
                   </SelectItem>
-                  {folders.map((folder) => (
+                  {flatFolders.map(({ folder, depth }) => (
                     <SelectItem key={folder._id} value={folder._id}>
-                      {folder.name}
+                      <span style={{ paddingLeft: `${depth * 12}px` }}>{folder.name}</span>
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -1,6 +1,7 @@
 "use client";
 
 import { api } from "@zenthor-assist/backend/convex/_generated/api";
+import type { Id } from "@zenthor-assist/backend/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import { T, useGT } from "gt-next";
 import {
@@ -48,8 +49,11 @@ import {
   SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import { buildFolderTree } from "@/lib/folder-tree";
 import { cn } from "@/lib/utils";
 
+import { FolderTreeItem } from "./folder-tree-item";
+import { MoveFolderDialog } from "./move-folder-dialog";
 import { NavUser } from "./nav-user";
 import { ThemeSwitcher } from "./theme-switcher";
 
@@ -75,6 +79,7 @@ interface SidebarFolder {
   name: string;
   color: string;
   position: number;
+  parentId?: string;
 }
 
 const PRESET_FOLDER_COLORS = [
@@ -141,23 +146,21 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const archiveNote = useMutation(api.notes.archive);
   const folders = (useQuery(api.noteFolders.list) ?? []) as SidebarFolder[];
   const createFolder = useMutation(api.noteFolders.create);
+  const removeFolder = useMutation(api.noteFolders.remove);
   const [showNewFolderForm, setShowNewFolderForm] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [newFolderColor, setNewFolderColor] = useState(PRESET_FOLDER_COLORS[0]!);
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
+  const [subfoldingParentId, setSubfoldingParentId] = useState<string | null>(null);
+  const [, setRenamingFolderId] = useState<string | null>(null);
+  const [movingFolderId, setMovingFolderId] = useState<string | null>(null);
   const newFolderInputRef = useRef<HTMLInputElement>(null);
 
-  const folderGroups = useMemo(() => {
-    const groups = new Map<string, SidebarNote[]>();
-    for (const note of activeNotes) {
-      const key = note.folderId ?? "unfiled";
-      const list = groups.get(key) ?? [];
-      list.push(note);
-      groups.set(key, list);
-    }
-    return groups;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- activeNotes ref from useQuery
-  }, [activeNotes]);
+  const folderTree = useMemo(
+    () => buildFolderTree(folders, activeNotes),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- folders/activeNotes refs from useQuery
+    [folders, activeNotes],
+  );
 
   function toggleFolder(folderId: string) {
     setCollapsedFolders((prev) => {
@@ -175,14 +178,34 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const name = newFolderName.trim();
     if (!name) return;
     try {
-      await createFolder({ name, color: newFolderColor });
+      await createFolder({
+        name,
+        color: newFolderColor,
+        parentId: subfoldingParentId ? (subfoldingParentId as Id<"noteFolders">) : undefined,
+      });
       setNewFolderName("");
       setNewFolderColor(PRESET_FOLDER_COLORS[0]!);
       setShowNewFolderForm(false);
+      setSubfoldingParentId(null);
       toast.success(t("Folder created"));
     } catch {
       toast.error(t("Failed to create folder"));
     }
+  }
+
+  async function handleDeleteFolder(folderId: string) {
+    try {
+      await removeFolder({ id: folderId as Id<"noteFolders"> });
+      toast.success(t("Folder removed"));
+    } catch {
+      toast.error(t("Failed to remove folder"));
+    }
+  }
+
+  function handleNewSubfolder(parentId: string) {
+    setSubfoldingParentId(parentId);
+    setShowNewFolderForm(true);
+    setTimeout(() => newFolderInputRef.current?.focus(), 0);
   }
 
   useEffect(() => {
@@ -453,6 +476,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   <SidebarMenuButton
                     tooltip={t("New folder")}
                     onClick={() => {
+                      setSubfoldingParentId(null);
                       setShowNewFolderForm((prev) => !prev);
                       if (!showNewFolderForm) {
                         setTimeout(() => newFolderInputRef.current?.focus(), 0);
@@ -469,6 +493,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarGroupContent>
             {showNewFolderForm && (
               <div className="mx-3 mt-2 flex flex-col gap-2 rounded-lg border p-2">
+                {subfoldingParentId && (
+                  <span className="text-muted-foreground text-[11px]">
+                    <T>Subfolder of {folderTree.folderMap.get(subfoldingParentId)?.name ?? "…"}</T>
+                  </span>
+                )}
                 <input
                   ref={newFolderInputRef}
                   type="text"
@@ -476,7 +505,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   onChange={(e) => setNewFolderName(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") handleCreateFolder();
-                    if (e.key === "Escape") setShowNewFolderForm(false);
+                    if (e.key === "Escape") {
+                      setShowNewFolderForm(false);
+                      setSubfoldingParentId(null);
+                    }
                   }}
                   placeholder={t("Folder name")}
                   className="text-foreground placeholder:text-muted-foreground bg-transparent text-xs outline-none"
@@ -507,7 +539,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShowNewFolderForm(false)}
+                    onClick={() => {
+                      setShowNewFolderForm(false);
+                      setSubfoldingParentId(null);
+                    }}
                     className="text-muted-foreground hover:text-foreground"
                   >
                     <X className="size-3.5" />
@@ -517,62 +552,23 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             )}
             <SidebarGroupContent className="mt-2">
               <SidebarMenu>
-                {folders.length > 0 ? (
+                {folderTree.roots.length > 0 ? (
                   <>
-                    {folders.map((folder) => {
-                      const notes = folderGroups.get(folder._id) ?? [];
-                      const isOpen = !collapsedFolders.has(folder._id);
-                      return (
-                        <Collapsible
-                          key={folder._id}
-                          open={isOpen}
-                          onOpenChange={() => toggleFolder(folder._id)}
-                        >
-                          <SidebarMenuItem>
-                            <CollapsibleTrigger asChild>
-                              <SidebarMenuButton tooltip={folder.name}>
-                                <span
-                                  className="size-2 shrink-0 rounded-full"
-                                  style={{ backgroundColor: folder.color }}
-                                />
-                                <span className="truncate">{folder.name}</span>
-                                <ChevronRight
-                                  className={cn(
-                                    "text-muted-foreground ml-auto size-3.5 shrink-0 transition-transform",
-                                    isOpen && "rotate-90",
-                                  )}
-                                />
-                              </SidebarMenuButton>
-                            </CollapsibleTrigger>
-                            <CollapsibleContent>
-                              <SidebarMenuSub>
-                                {notes.map((note) => {
-                                  const isActive = pathname === `/notes/${note._id}`;
-                                  const noteTitle = note.title || t("Untitled note");
-                                  return (
-                                    <SidebarMenuSubItem key={note._id}>
-                                      <SidebarMenuSubButton asChild size="sm" isActive={isActive}>
-                                        <Link href={`/notes/${note._id}`}>
-                                          <span className="truncate">{noteTitle}</span>
-                                        </Link>
-                                      </SidebarMenuSubButton>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => handleArchiveNote(e, note._id, true)}
-                                        className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground absolute top-0.5 right-1 flex size-5 items-center justify-center rounded-md opacity-0 group-focus-within/menu-sub-item:opacity-100 group-hover/menu-sub-item:opacity-100"
-                                      >
-                                        <Archive className="size-3" />
-                                      </button>
-                                    </SidebarMenuSubItem>
-                                  );
-                                })}
-                              </SidebarMenuSub>
-                            </CollapsibleContent>
-                          </SidebarMenuItem>
-                        </Collapsible>
-                      );
-                    })}
-                    {(folderGroups.get("unfiled") ?? []).length > 0 && (
+                    {folderTree.roots.map((folder) => (
+                      <FolderTreeItem
+                        key={folder._id}
+                        folder={folder}
+                        notesByFolder={folderTree.notesByFolder}
+                        collapsedFolders={collapsedFolders}
+                        onToggle={toggleFolder}
+                        onArchiveNote={(e, noteId) => handleArchiveNote(e, noteId, true)}
+                        onNewSubfolder={handleNewSubfolder}
+                        onRename={setRenamingFolderId}
+                        onMove={setMovingFolderId}
+                        onDelete={(id) => void handleDeleteFolder(id)}
+                      />
+                    ))}
+                    {folderTree.unfiledNotes.length > 0 && (
                       <Collapsible
                         open={!collapsedFolders.has("unfiled")}
                         onOpenChange={() => toggleFolder("unfiled")}
@@ -594,7 +590,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                           </CollapsibleTrigger>
                           <CollapsibleContent>
                             <SidebarMenuSub>
-                              {(folderGroups.get("unfiled") ?? []).map((note) => {
+                              {folderTree.unfiledNotes.map((note) => {
                                 const isActive = pathname === `/notes/${note._id}`;
                                 const noteTitle = note.title || t("Untitled note");
                                 return (
@@ -649,6 +645,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 )}
               </SidebarMenu>
             </SidebarGroupContent>
+            <MoveFolderDialog
+              folderId={movingFolderId}
+              folderMap={folderTree.folderMap}
+              onClose={() => setMovingFolderId(null)}
+            />
             {archivedNotes.length > 0 ? (
               <>
                 <SidebarGroupContent className="mt-4 px-3">

@@ -34,12 +34,14 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { buildFolderTree, flattenTreeWithDepth } from "@/lib/folder-tree";
 
 type NoteFolder = {
   _id: Id<"noteFolders">;
   name: string;
   color: string;
   position: number;
+  parentId?: Id<"noteFolders">;
 };
 
 type NoteItem = {
@@ -116,6 +118,11 @@ export default function NotesPage() {
   const rawFolders = useQuery(api.noteFolders.list, {});
   const folders = (rawFolders ?? []) as NoteFolder[];
   const orderedFolders = [...folders].sort((a, b) => a.position - b.position);
+  const flatFolders = useMemo(() => {
+    const tree = buildFolderTree(folders, []);
+    return flattenTreeWithDepth(tree.roots);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- rawFolders is stable from useQuery
+  }, [rawFolders]);
   const queryArgs = useMemo(
     () => ({
       ...(selectedFolderId === "all" ? {} : { folderId: selectedFolderId }),
@@ -364,9 +371,9 @@ export default function NotesPage() {
                 <SelectItem value="none">
                   <T>Unfiled</T>
                 </SelectItem>
-                {orderedFolders.map((folder) => (
+                {flatFolders.map(({ folder, depth }) => (
                   <SelectItem key={folder._id} value={folder._id}>
-                    {folder.name}
+                    <span style={{ paddingLeft: `${depth * 12}px` }}>{folder.name}</span>
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -628,9 +635,9 @@ export default function NotesPage() {
                       <SelectItem value="none">
                         <T>Unfiled</T>
                       </SelectItem>
-                      {orderedFolders.map((folder) => (
+                      {flatFolders.map(({ folder, depth }) => (
                         <SelectItem key={folder._id} value={folder._id}>
-                          {folder.name}
+                          <span style={{ paddingLeft: `${depth * 12}px` }}>{folder.name}</span>
                         </SelectItem>
                       ))}
                     </SelectContent>
