@@ -3,7 +3,12 @@ import type { Tool } from "ai";
 import { generateText, stepCountIs, streamText } from "ai";
 
 import { logger } from "../observability/logger";
-import { getAIProvider } from "./ai-gateway";
+import {
+  getAIProvider,
+  getProviderOptions,
+  type AIProvider,
+  type ProviderMode,
+} from "./ai-gateway";
 import { runWithFallback } from "./model-fallback";
 import { type ModelTier, selectModel } from "./model-router";
 import type { PluginToolDescriptor, PluginToolDescriptorMap } from "./plugins/types";
@@ -19,22 +24,6 @@ const NOTE_TOOL_CONFIRMATION_PROMPT = `
 - Ask one concise clarification question at a time and wait for the user's answer before calling note tools.
 - Apply this broadly to note workflows whenever likely ambiguity could change the output.
 `;
-
-/**
- * The Codex endpoint requires system instructions via the `instructions`
- * field in the request body. The AI SDK normally maps `system` into the
- * input array as a system-role message, but Codex ignores that and
- * requires `instructions` explicitly via provider options.
- */
-function buildProviderOptions(
-  mode: string,
-  systemPrompt: string,
-): Record<string, Record<string, string | boolean>> | undefined {
-  if (mode !== "openai_subscription") return undefined;
-  return {
-    openai: { instructions: systemPrompt, store: false },
-  };
-}
 
 const BASE_SYSTEM_PROMPT = `You are a helpful personal AI assistant for Guilherme (gbarros). You can assist with questions, tasks, and general conversation. Be concise but friendly. When you don't know something, say so. Use tools when appropriate.
 
@@ -249,11 +238,18 @@ ${noteIdLine}
 ${commandPolicy}`;
 }
 
+const DEFAULT_TOOLS_CACHE = new Map<string, Record<string, Tool>>();
+
 function getDefaultTools(modelName: string): Record<string, Tool> {
-  return {
+  const cached = DEFAULT_TOOLS_CACHE.get(modelName);
+  if (cached) return cached;
+
+  const resolved = {
     ...tools,
     ...getWebSearchTool(modelName),
   };
+  DEFAULT_TOOLS_CACHE.set(modelName, resolved);
+  return resolved;
 }
 
 const SEARCH_TOOL_NAMES = ["web_search", "google_search", "internet_search"] as const;
@@ -622,20 +618,63 @@ function logToolContractViolations(
   }
 }
 
-export async function generateResponse(
+type StreamMode = "non_streaming" | "streaming";
+
+interface SharedGenerationContext {
+  provider: AIProvider;
+  primaryModel: string;
+  fallbackModels: string[];
+  tier: ModelTier;
+  reason: string;
+  resolveMode: "agent_config_override" | "manual_model_override" | "router";
+  contextMessageCount: number;
+  contextTokenEstimate: number;
+  systemPrompt: string;
+  options?: GenerateOptions;
+  conversationMessages: Message[];
+}
+
+type ExecuteResult = Omit<GenerateResult, "modelUsed">;
+
+interface ResolvedModelExecutionContext {
+  modelName: string;
+  model: ReturnType<AIProvider["model"]>;
+  resolvedTools: Record<string, Tool>;
+  hasProviderSearchTool: boolean;
+}
+
+interface GenerationLogContext {
+  providerMode: string;
+  resolveMode: string;
+  routeTier: ModelTier;
+  routeReason: string;
+  options?: GenerateOptions;
+  context: {
+    contextMessageCount: number;
+    contextTokenEstimate: number;
+    shouldCompact?: boolean;
+    shouldBlock?: boolean;
+    activeToolCount: number;
+    systemPromptChars: number;
+  };
+  primaryModel: string;
+  fallbackModels: string[];
+  messageCount: number;
+}
+
+function buildSharedGenerationContext(
   conversationMessages: Message[],
-  skills?: Skill[],
-  options?: GenerateOptions,
-): Promise<GenerateResult> {
-  const startedAt = Date.now();
-  const provider = await getAIProvider();
-  const useStreaming = provider.mode === "openai_subscription";
+  skills: Skill[] | undefined,
+  options: GenerateOptions | undefined,
+  provider: AIProvider,
+): SharedGenerationContext {
   const { primaryModel, fallbackModels, tier, reason, resolveMode } = resolveModels(options);
   const contextMessageCount = options?.contextMessageCount ?? conversationMessages.length;
   const contextTokenEstimate =
     options?.contextTokenEstimate ?? estimateContextTokens(conversationMessages);
   const isNewNoteRequest = isLikelyNewNoteRequest(conversationMessages);
   const resolvedNoteContext = isNewNoteRequest ? undefined : options?.noteContext;
+
   if (options?.conversationId && options?.noteContext && isNewNoteRequest) {
     void logger.debug("agent.model.generate.note_context_reset", {
       conversationId: options.conversationId,
@@ -644,104 +683,224 @@ export async function generateResponse(
       reason: "new_note_request_detected",
     });
   }
-  const systemPrompt = buildSystemPrompt(
-    skills,
-    options?.agentConfig,
-    options?.channel,
-    resolvedNoteContext,
+
+  return {
+    provider,
+    primaryModel,
+    fallbackModels,
+    tier,
+    reason,
+    resolveMode,
+    contextMessageCount,
+    contextTokenEstimate,
+    systemPrompt: buildSystemPrompt(
+      skills,
+      options?.agentConfig,
+      options?.channel,
+      resolvedNoteContext,
+    ),
+    options,
+    conversationMessages,
+  };
+}
+
+function buildGenerationLogContext(
+  shared: SharedGenerationContext,
+  messageCount: number,
+): GenerationLogContext {
+  return {
+    providerMode: shared.provider.mode,
+    resolveMode: shared.resolveMode,
+    routeTier: shared.tier,
+    routeReason: shared.reason,
+    options: shared.options,
+    context: {
+      contextMessageCount: shared.contextMessageCount,
+      contextTokenEstimate: shared.contextTokenEstimate,
+      shouldCompact: shared.options?.shouldCompact,
+      shouldBlock: shared.options?.shouldBlock,
+      activeToolCount: shared.options?.toolCount ?? 0,
+      systemPromptChars: shared.systemPrompt.length,
+    },
+    primaryModel: shared.primaryModel,
+    fallbackModels: shared.fallbackModels,
+    messageCount,
+  };
+}
+
+function shouldUseStreamingModelCall(mode: StreamMode, providerMode: string): boolean {
+  return providerMode === "openai_subscription" || mode === "streaming";
+}
+
+function resolveModelExecutionContext(
+  shared: SharedGenerationContext,
+  modelName: string,
+): ResolvedModelExecutionContext {
+  const model = shared.provider.model(modelName);
+  const resolvedTools = resolveToolsForModel(modelName, shared.options?.toolsOverride);
+  const hasProviderSearchTool = SEARCH_TOOL_NAMES.some((name) => name in resolvedTools);
+
+  return {
+    modelName,
+    model,
+    resolvedTools,
+    hasProviderSearchTool,
+  };
+}
+
+async function executeModelWithValidation(
+  mode: StreamMode,
+  shared: SharedGenerationContext,
+  callbacks: StreamCallbacks | undefined,
+  executionContext: ResolvedModelExecutionContext,
+  toolsToUse: Record<string, Tool>,
+): Promise<ExecuteResult> {
+  const modelResult = await executeModelCall(mode, {
+    model: executionContext.model,
+    providerMode: shared.provider.mode,
+    systemPrompt: shared.systemPrompt,
+    conversationMessages: shared.conversationMessages,
+    toolsToUse,
+    callbacks,
+  });
+
+  const withValidation = applyToolContractValidation(
+    modelResult.toolCalls ?? [],
+    shared.options?.toolContracts,
+  );
+  logToolContractViolations(withValidation.violations, {
+    conversationId: shared.options?.conversationId,
+    jobId: shared.options?.jobId,
+    channel: shared.options?.channel,
+  });
+  return { ...modelResult, ...withValidation };
+}
+
+async function executeModelWithSearchFallback(
+  mode: StreamMode,
+  shared: SharedGenerationContext,
+  callbacks: StreamCallbacks | undefined,
+  executionContext: ResolvedModelExecutionContext,
+): Promise<ExecuteResult> {
+  try {
+    return await executeModelWithValidation(
+      mode,
+      shared,
+      callbacks,
+      executionContext,
+      executionContext.resolvedTools,
+    );
+  } catch (err) {
+    if (
+      !executionContext.hasProviderSearchTool ||
+      !shouldRetryWithoutProviderSearch(shared.provider.mode, err)
+    ) {
+      throw err;
+    }
+
+    void logger.warn("agent.model.search_tool.fallback", {
+      modelName: executionContext.modelName,
+      channel: shared.options?.channel,
+      mode: shared.provider.mode,
+    });
+
+    return executeModelWithValidation(
+      mode,
+      shared,
+      callbacks,
+      executionContext,
+      removeProviderSearchTools(executionContext.resolvedTools),
+    );
+  }
+}
+
+async function executeModelCall(
+  mode: StreamMode,
+  options: {
+    model: ReturnType<AIProvider["model"]>;
+    providerMode: ProviderMode;
+    systemPrompt: string;
+    conversationMessages: Message[];
+    toolsToUse: Record<string, Tool>;
+    callbacks?: StreamCallbacks;
+  },
+): Promise<ExecuteResult> {
+  const useStreaming = shouldUseStreamingModelCall(mode, options.providerMode);
+  const providerOptions = getProviderOptions(options.providerMode, options.systemPrompt);
+  const callOptions = {
+    model: options.model,
+    system: options.systemPrompt,
+    messages: options.conversationMessages,
+    tools: options.toolsToUse,
+    stopWhen: stepCountIs(10),
+    providerOptions,
+  };
+
+  if (useStreaming) {
+    const streamResult = streamText(callOptions);
+    let accumulated = "";
+    for await (const chunk of streamResult.textStream) {
+      if (mode === "streaming") {
+        accumulated += chunk;
+        options.callbacks?.onChunk(accumulated);
+      }
+    }
+
+    const steps = await streamResult.steps;
+    const text = await streamResult.text;
+    return processModelResult({ steps, text });
+  }
+
+  const gen = await generateText(callOptions);
+  return processModelResult({ steps: gen.steps, text: gen.text });
+}
+
+async function runGenerationWithFallback(
+  mode: StreamMode,
+  shared: SharedGenerationContext,
+  callbacks: StreamCallbacks | undefined,
+): Promise<{
+  result: ExecuteResult;
+  modelUsed: string;
+  fallbackAttempt: number;
+  attemptedModels: string[];
+}> {
+  return runWithFallback({
+    primaryModel: shared.primaryModel,
+    fallbackModels: shared.fallbackModels,
+    run: async (modelName) => {
+      const executionContext = resolveModelExecutionContext(shared, modelName);
+      return executeModelWithSearchFallback(mode, shared, callbacks, executionContext);
+    },
+  });
+}
+
+export async function generateResponse(
+  conversationMessages: Message[],
+  skills?: Skill[],
+  options?: GenerateOptions,
+): Promise<GenerateResult> {
+  const startedAt = Date.now();
+  const provider = await getAIProvider();
+  const shared = buildSharedGenerationContext(conversationMessages, skills, options, provider);
+  const logContext = buildGenerationLogContext(shared, conversationMessages.length);
+
+  logModelGenerationStarted("non_streaming", logContext);
+
+  const { result, modelUsed, fallbackAttempt, attemptedModels } = await runGenerationWithFallback(
+    "non_streaming",
+    shared,
+    undefined,
   );
 
-  logModelGenerationStarted("non_streaming", {
-    providerMode: provider.mode,
-    resolveMode,
-    routeTier: tier,
-    routeReason: reason,
-    options,
-    context: {
-      contextMessageCount,
-      contextTokenEstimate,
-      shouldCompact: options?.shouldCompact,
-      shouldBlock: options?.shouldBlock,
-      activeToolCount: options?.toolCount ?? 0,
-      systemPromptChars: systemPrompt.length,
-    },
-    primaryModel,
-    fallbackModels,
-    messageCount: conversationMessages.length,
-  });
-
-  const { result, modelUsed, fallbackAttempt, attemptedModels } = await runWithFallback({
-    primaryModel,
-    fallbackModels,
-    run: async (modelName) => {
-      const m = provider.model(modelName);
-      const resolvedTools = resolveToolsForModel(modelName, options?.toolsOverride);
-      const providerOptions = buildProviderOptions(provider.mode, systemPrompt);
-
-      const callOptions = {
-        model: m,
-        system: systemPrompt,
-        messages: conversationMessages,
-        stopWhen: stepCountIs(10),
-        providerOptions,
-      };
-
-      const execute = async (toolsToUse: Record<string, Tool>) => {
-        if (useStreaming) {
-          // Subscription endpoints require stream=true; consume the stream fully.
-          const stream = streamText({ ...callOptions, tools: toolsToUse });
-          const text = await stream.text;
-          const steps = await stream.steps;
-          return processModelResult({ steps, text });
-        }
-        const gen = await generateText({ ...callOptions, tools: toolsToUse });
-        return processModelResult({ steps: gen.steps, text: gen.text });
-      };
-
-      const executeWithValidation = async (toolsToUse: Record<string, Tool>) => {
-        const modelResult = await execute(toolsToUse);
-        const withValidation = applyToolContractValidation(
-          modelResult.toolCalls ?? [],
-          options?.toolContracts,
-        );
-        logToolContractViolations(withValidation.violations, {
-          conversationId: options?.conversationId,
-          jobId: options?.jobId,
-          channel: options?.channel,
-        });
-        return {
-          ...modelResult,
-          ...withValidation,
-        };
-      };
-
-      try {
-        return await executeWithValidation(resolvedTools);
-      } catch (err) {
-        const hasProviderSearchTool = SEARCH_TOOL_NAMES.some((name) => name in resolvedTools);
-        if (!hasProviderSearchTool || !shouldRetryWithoutProviderSearch(provider.mode, err)) {
-          throw err;
-        }
-
-        void logger.warn("agent.model.search_tool.fallback", {
-          modelName,
-          channel: options?.channel,
-          mode: provider.mode,
-        });
-
-        return executeWithValidation(removeProviderSearchTools(resolvedTools));
-      }
-    },
-  });
-
   logModelGenerationCompleted("non_streaming", {
-    providerMode: provider.mode,
-    routeTier: tier,
+    providerMode: shared.provider.mode,
+    routeTier: shared.tier,
     context: {
-      contextMessageCount,
-      contextTokenEstimate,
+      contextMessageCount: logContext.context.contextMessageCount,
+      contextTokenEstimate: logContext.context.contextTokenEstimate,
     },
-    options,
+    options: logContext.options,
     modelUsed,
     startedAt,
     fallbackAttempt,
@@ -762,119 +921,25 @@ export async function generateResponseStreaming(
 ): Promise<GenerateResult> {
   const startedAt = Date.now();
   const provider = await getAIProvider();
-  const { primaryModel, fallbackModels, tier, reason, resolveMode } = resolveModels(options);
-  const contextMessageCount = options?.contextMessageCount ?? conversationMessages.length;
-  const contextTokenEstimate =
-    options?.contextTokenEstimate ?? estimateContextTokens(conversationMessages);
-  const isNewNoteRequest = isLikelyNewNoteRequest(conversationMessages);
-  const resolvedNoteContext = isNewNoteRequest ? undefined : options?.noteContext;
-  if (options?.conversationId && options?.noteContext && isNewNoteRequest) {
-    void logger.debug("agent.model.generate.note_context_reset", {
-      conversationId: options.conversationId,
-      jobId: options.jobId,
-      channel: options.channel,
-      reason: "new_note_request_detected",
-    });
-  }
-  const streamSystemPrompt = buildSystemPrompt(
-    skills,
-    options?.agentConfig,
-    options?.channel,
-    resolvedNoteContext,
+  const shared = buildSharedGenerationContext(conversationMessages, skills, options, provider);
+  const logContext = buildGenerationLogContext(shared, conversationMessages.length);
+
+  logModelGenerationStarted("streaming", logContext);
+
+  const { result, modelUsed, fallbackAttempt, attemptedModels } = await runGenerationWithFallback(
+    "streaming",
+    shared,
+    callbacks,
   );
 
-  logModelGenerationStarted("streaming", {
-    providerMode: provider.mode,
-    resolveMode,
-    routeTier: tier,
-    routeReason: reason,
-    options,
-    context: {
-      contextMessageCount,
-      contextTokenEstimate,
-      shouldCompact: options?.shouldCompact,
-      shouldBlock: options?.shouldBlock,
-      activeToolCount: options?.toolCount ?? 0,
-      systemPromptChars: streamSystemPrompt.length,
-    },
-    primaryModel,
-    fallbackModels,
-    messageCount: conversationMessages.length,
-  });
-
-  const { result, modelUsed, fallbackAttempt, attemptedModels } = await runWithFallback({
-    primaryModel,
-    fallbackModels,
-    run: async (modelName) => {
-      const m = provider.model(modelName);
-      const resolvedTools = resolveToolsForModel(modelName, options?.toolsOverride);
-      const providerOptions = buildProviderOptions(provider.mode, streamSystemPrompt);
-
-      const executeStream = async (toolsToUse: Record<string, Tool>) => {
-        const streamResult = streamText({
-          model: m,
-          system: streamSystemPrompt,
-          messages: conversationMessages,
-          tools: toolsToUse,
-          stopWhen: stepCountIs(10),
-          providerOptions,
-        });
-
-        let accumulated = "";
-        for await (const chunk of streamResult.textStream) {
-          accumulated += chunk;
-          callbacks?.onChunk(accumulated);
-        }
-
-        const steps = await streamResult.steps;
-        const text = await streamResult.text;
-        return processModelResult({ steps, text });
-      };
-
-      const executeWithValidation = async (toolsToUse: Record<string, Tool>) => {
-        const modelResult = await executeStream(toolsToUse);
-        const withValidation = applyToolContractValidation(
-          modelResult.toolCalls ?? [],
-          options?.toolContracts,
-        );
-        logToolContractViolations(withValidation.violations, {
-          conversationId: options?.conversationId,
-          jobId: options?.jobId,
-          channel: options?.channel,
-        });
-        return {
-          ...modelResult,
-          ...withValidation,
-        };
-      };
-
-      try {
-        return await executeWithValidation(resolvedTools);
-      } catch (err) {
-        const hasProviderSearchTool = SEARCH_TOOL_NAMES.some((name) => name in resolvedTools);
-        if (!hasProviderSearchTool || !shouldRetryWithoutProviderSearch(provider.mode, err)) {
-          throw err;
-        }
-
-        void logger.warn("agent.model.search_tool.fallback", {
-          modelName,
-          channel: options?.channel,
-          mode: provider.mode,
-        });
-
-        return executeWithValidation(removeProviderSearchTools(resolvedTools));
-      }
-    },
-  });
-
   logModelGenerationCompleted("streaming", {
-    providerMode: provider.mode,
-    routeTier: tier,
+    providerMode: logContext.providerMode,
+    routeTier: logContext.routeTier,
     context: {
-      contextMessageCount,
-      contextTokenEstimate,
+      contextMessageCount: logContext.context.contextMessageCount,
+      contextTokenEstimate: logContext.context.contextTokenEstimate,
     },
-    options,
+    options: logContext.options,
     modelUsed,
     startedAt,
     fallbackAttempt,

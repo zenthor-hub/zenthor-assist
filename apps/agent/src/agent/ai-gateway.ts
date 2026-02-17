@@ -41,6 +41,16 @@ export function normalizeModelId(mode: ProviderMode, modelId: string): string {
   return slashIndex >= 0 ? modelId.slice(slashIndex + 1) : modelId;
 }
 
+export function getProviderOptions(
+  mode: ProviderMode,
+  systemPrompt: string,
+): Record<string, Record<string, string | boolean>> | undefined {
+  if (mode !== "openai_subscription") return undefined;
+  return {
+    openai: { instructions: systemPrompt, store: false },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Gateway provider (default, unchanged behavior)
 // ---------------------------------------------------------------------------

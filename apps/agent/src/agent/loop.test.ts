@@ -6,20 +6,7 @@ import {
   parseNoteCreationFromToolOutput,
   resolveNoteCreationOutcomes,
 } from "./loop";
-
-// sanitizeForWhatsApp is not exported, so we re-implement the logic here for testing.
-// This validates the formatting rules match the implementation in loop.ts.
-function sanitizeForWhatsApp(text: string): string {
-  return text
-    .replace(/\*\*(.+?)\*\*/g, "*$1*")
-    .replace(/__(.+?)__/g, "*$1*")
-    .replace(/^#{1,6}\s+(.+)$/gm, "*$1*")
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, "$1: $2")
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")
-    .replace(/^[-*_]{3,}$/gm, "───")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
+import { sanitizeForWhatsApp, stripModelAndToolFooter } from "./whatsapp-format";
 
 describe("sanitizeForWhatsApp", () => {
   it("converts **bold** to *bold*", () => {
@@ -74,6 +61,12 @@ describe("sanitizeForWhatsApp", () => {
 
   it("leaves plain text unchanged", () => {
     expect(sanitizeForWhatsApp("Just plain text")).toBe("Just plain text");
+  });
+});
+
+describe("stripModelAndToolFooter", () => {
+  it("removes model lines and trims trailing whitespace", () => {
+    expect(stripModelAndToolFooter("Hello there\n_Model: gpt\n")).toBe("Hello there");
   });
 });
 

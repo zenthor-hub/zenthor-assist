@@ -1,4 +1,4 @@
-interface ToolPolicy {
+export interface ToolPolicy {
   allow?: string[];
   deny?: string[];
   alsoAllow?: string[];
