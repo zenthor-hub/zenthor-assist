@@ -29,11 +29,11 @@
     "clean": "git clean -xdf .cache .turbo node_modules convex/_generated"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.38",
-    "@ai-sdk/gateway": "^3.0.29",
-    "@ai-sdk/google": "^3.0.22",
-    "@ai-sdk/openai": "^3.0.26",
-    "@ai-sdk/xai": "^3.0.48",
+    "@ai-sdk/anthropic": "^3.0.43",
+    "@ai-sdk/gateway": "^3.0.46",
+    "@ai-sdk/google": "^3.0.29",
+    "@ai-sdk/openai": "^3.0.28",
+    "@ai-sdk/xai": "^3.0.57",
     "@axiomhq/pino": "^1.4.0",
     "@sentry/bun": "^10.38.0",
     "@vercel/blob": "^2.2.0",
