@@ -21,6 +21,8 @@ export interface PluginToolDescriptor {
   name: string;
   description?: string;
   requiresApproval?: boolean;
+  strict?: boolean;
+  inputExamples?: Array<{ input: Record<string, unknown> }>;
   outputContract?: ToolOutputContract;
 }
 

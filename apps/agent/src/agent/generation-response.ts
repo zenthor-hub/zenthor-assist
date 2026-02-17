@@ -21,6 +21,13 @@ export interface ToolCallRecord {
   output?: unknown;
 }
 
+interface ModelTelemetry {
+  rawFinishReason?: string;
+  finishReason?: string;
+  usage?: unknown;
+  totalUsage?: unknown;
+}
+
 const NOTE_TOOL_NAMES = [
   "note_list",
   "note_get",
@@ -269,6 +276,7 @@ export function logToolCallSummary(
     shouldBlock: boolean;
     toolCount: number;
     contextTokenEstimate?: number;
+    modelTelemetry?: ModelTelemetry;
     toolContracts?: ToolContractContext;
   },
 ) {
@@ -284,6 +292,7 @@ export function logToolCallSummary(
     noteCreationFailureCount: outcomes.failures.length,
     noteCreationFailures: outcomes.failures,
     toolCountByName: summary.toolCountByName,
+    modelTelemetry: context.modelTelemetry,
   });
 }
 

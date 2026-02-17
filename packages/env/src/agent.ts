@@ -3,6 +3,18 @@ import { z } from "zod";
 const envSchema = z.object({
   CONVEX_URL: z.url(),
   AI_PROVIDER_MODE: z.enum(["gateway", "openai_subscription"]).optional().default("gateway"),
+  AI_TOOL_STRICT: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => value === "true"),
+  AI_TOOL_INPUT_EXAMPLES: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => value === "true"),
+  AI_SDK_TELEMETRY: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => value === "true"),
   AI_GATEWAY_API_KEY: z.string().min(1).optional(),
   AI_LITE_MODEL: z.string().default("xai/grok-4.1-fast-reasoning"),
   AI_MODEL: z.string().default("anthropic/claude-sonnet-4-5-20250929"),

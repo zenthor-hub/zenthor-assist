@@ -126,10 +126,18 @@ interface ToolCallRecord {
   output?: unknown;
 }
 
+interface ModelTelemetry {
+  rawFinishReason?: string;
+  finishReason?: string;
+  usage?: unknown;
+  totalUsage?: unknown;
+}
+
 interface GenerateResult {
   content: string;
   toolCalls?: ToolCallRecord[];
   modelUsed: string;
+  modelTelemetry?: ModelTelemetry;
 }
 
 interface ToolContractValidation {
@@ -279,9 +287,10 @@ function shouldRetryWithoutProviderSearch(mode: string, err: unknown): boolean {
 function resolveToolsForModel(
   modelName: string,
   toolsOverride?: Record<string, Tool>,
+  toolContracts?: PluginToolDescriptorMap,
 ): Record<string, Tool> {
   if (!toolsOverride) {
-    return getDefaultTools(modelName);
+    return applyToolGenerationPolicies(getDefaultTools(modelName), toolContracts);
   }
 
   const resolved: Record<string, Tool> = { ...toolsOverride };
@@ -298,7 +307,57 @@ function resolveToolsForModel(
     Object.assign(resolved, getWebSearchTool(modelName) as Record<string, Tool>);
   }
 
-  return resolved;
+  return applyToolGenerationPolicies(resolved, toolContracts);
+}
+
+function normalizeToolInputExamples(rawExamples: unknown): Array<{ input: unknown }> | undefined {
+  if (!Array.isArray(rawExamples)) return undefined;
+
+  const normalized: Array<{ input: unknown }> = [];
+  for (const example of rawExamples) {
+    if (!example || typeof example !== "object" || Array.isArray(example)) continue;
+    const candidate = example as { input?: unknown };
+    if (!Object.prototype.hasOwnProperty.call(candidate, "input")) continue;
+    if (candidate.input === undefined) continue;
+    normalized.push({ input: candidate.input });
+  }
+
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function applyToolGenerationPolicies(
+  tools: Record<string, Tool>,
+  toolContracts?: PluginToolDescriptorMap,
+): Record<string, Tool> {
+  const strictByDefault = env.AI_TOOL_STRICT ?? false;
+  const useInputExamples = env.AI_TOOL_INPUT_EXAMPLES ?? false;
+
+  if (!strictByDefault && !useInputExamples) {
+    return tools;
+  }
+
+  const withPolicies: Record<string, Tool> = {};
+
+  for (const [name, tool] of Object.entries(tools)) {
+    const descriptor = toolContracts?.[name];
+    const strict = descriptor?.strict ?? strictByDefault;
+    const inputExamples = useInputExamples
+      ? normalizeToolInputExamples(descriptor?.inputExamples)
+      : undefined;
+
+    if (!strict && !inputExamples) {
+      withPolicies[name] = tool;
+      continue;
+    }
+
+    withPolicies[name] = {
+      ...tool,
+      ...(strict ? { strict: true } : {}),
+      ...(inputExamples ? { inputExamples } : {}),
+    } as Tool;
+  }
+
+  return withPolicies;
 }
 
 interface GenerateOptions {
@@ -448,8 +507,11 @@ function logModelGenerationCompleted(
     startedAt: number;
     fallbackAttempt: number;
     attemptedModels: string[];
+    modelTelemetry?: ModelTelemetry;
   },
 ) {
+  const usage = payload.modelTelemetry?.usage;
+  const totalUsage = payload.modelTelemetry?.totalUsage;
   void logger.info("agent.model.generate.completed", {
     model: payload.modelUsed,
     modelUsed: payload.modelUsed,
@@ -463,8 +525,74 @@ function logModelGenerationCompleted(
     attemptedModels: payload.attemptedModels,
     contextMessageCount: payload.context.contextMessageCount,
     contextTokenEstimate: payload.context.contextTokenEstimate,
+    rawFinishReason: payload.modelTelemetry?.rawFinishReason,
+    finishReason: payload.modelTelemetry?.finishReason,
+    usage,
+    totalUsage,
     durationMs: Date.now() - payload.startedAt,
   });
+}
+
+function collectModelTelemetry(source: {
+  rawFinishReason?: unknown;
+  finishReason?: unknown;
+  usage?: unknown;
+  totalUsage?: unknown;
+}): ModelTelemetry {
+  return {
+    rawFinishReason:
+      typeof source.rawFinishReason === "string" ? source.rawFinishReason : undefined,
+    finishReason: typeof source.finishReason === "string" ? source.finishReason : undefined,
+    usage: source.usage,
+    totalUsage: source.totalUsage,
+  };
+}
+
+function buildTelemetryMetadata(
+  shared: SharedGenerationContext,
+  modelName: string,
+  mode: StreamMode,
+): Record<string, string | number | boolean> {
+  const metadata: Record<string, string | number | boolean> = {
+    mode,
+    model: modelName,
+    providerMode: shared.provider.mode,
+    routeTier: shared.tier,
+    routeReason: shared.reason,
+    resolveMode: shared.resolveMode,
+  };
+
+  if (shared.options?.conversationId) {
+    metadata.conversationId = `${shared.options.conversationId}`;
+  }
+
+  if (shared.options?.jobId) {
+    metadata.jobId = `${shared.options.jobId}`;
+  }
+
+  if (shared.options?.channel) {
+    metadata.channel = shared.options.channel;
+  }
+
+  if (typeof shared.options?.toolCount === "number") {
+    metadata.toolCount = shared.options.toolCount;
+  }
+
+  return metadata;
+}
+
+function buildTelemetryConfig(
+  shared: SharedGenerationContext,
+  modelName: string,
+  mode: StreamMode,
+) {
+  if (!env.AI_SDK_TELEMETRY) return undefined;
+
+  return {
+    isEnabled: true,
+    functionId: "agent.generate",
+    metadata: buildTelemetryMetadata(shared, modelName, mode),
+  };
 }
 
 function processModelResult(contentMessages: {
@@ -776,7 +904,11 @@ function resolveModelExecutionContext(
   modelName: string,
 ): ResolvedModelExecutionContext {
   const model = shared.provider.model(modelName);
-  const resolvedTools = resolveToolsForModel(modelName, shared.options?.toolsOverride);
+  const resolvedTools = resolveToolsForModel(
+    modelName,
+    shared.options?.toolsOverride,
+    shared.options?.toolContracts,
+  );
   const hasProviderSearchTool = SEARCH_TOOL_NAMES.some((name) => name in resolvedTools);
 
   return {
@@ -800,6 +932,7 @@ async function executeModelWithValidation(
     systemPrompt: shared.systemPrompt,
     conversationMessages: shared.conversationMessages,
     toolsToUse,
+    telemetryConfig: buildTelemetryConfig(shared, executionContext.modelName, mode),
     callbacks,
   });
 
@@ -862,6 +995,7 @@ async function executeModelCall(
     conversationMessages: Message[];
     toolsToUse: Record<string, Tool>;
     callbacks?: StreamCallbacks;
+    telemetryConfig?: ReturnType<typeof buildTelemetryConfig>;
   },
 ): Promise<ExecuteResult> {
   const useStreaming = shouldUseStreamingModelCall(mode, options.providerMode);
@@ -873,6 +1007,7 @@ async function executeModelCall(
     tools: options.toolsToUse,
     stopWhen: stepCountIs(10),
     providerOptions,
+    ...(options.telemetryConfig ? { experimental_telemetry: options.telemetryConfig } : {}),
   };
 
   if (useStreaming) {
@@ -887,11 +1022,28 @@ async function executeModelCall(
 
     const steps = await streamResult.steps;
     const text = await streamResult.text;
-    return processModelResult({ steps, text });
+    const telemetry = collectModelTelemetry({
+      usage: await streamResult.usage,
+      totalUsage: await streamResult.totalUsage,
+      finishReason: await streamResult.finishReason,
+      rawFinishReason: await streamResult.rawFinishReason,
+    });
+    return {
+      ...processModelResult({ steps, text }),
+      modelTelemetry: telemetry,
+    };
   }
 
   const gen = await generateText(callOptions);
-  return processModelResult({ steps: gen.steps, text: gen.text });
+  return {
+    ...processModelResult({ steps: gen.steps, text: gen.text }),
+    modelTelemetry: collectModelTelemetry({
+      usage: gen.usage,
+      totalUsage: gen.totalUsage,
+      finishReason: gen.finishReason,
+      rawFinishReason: gen.rawFinishReason,
+    }),
+  };
 }
 
 async function runGenerationWithFallback(
@@ -903,8 +1055,9 @@ async function runGenerationWithFallback(
   modelUsed: string;
   fallbackAttempt: number;
   attemptedModels: string[];
+  modelTelemetry?: ModelTelemetry;
 }> {
-  return runWithFallback({
+  const result = await runWithFallback({
     primaryModel: shared.primaryModel,
     fallbackModels: shared.fallbackModels,
     run: async (modelName) => {
@@ -912,6 +1065,11 @@ async function runGenerationWithFallback(
       return executeModelWithSearchFallback(mode, shared, callbacks, executionContext);
     },
   });
+
+  return {
+    ...result,
+    modelTelemetry: result.result.modelTelemetry,
+  };
 }
 
 export async function generateResponse(
@@ -926,11 +1084,8 @@ export async function generateResponse(
 
   logModelGenerationStarted("non_streaming", logContext);
 
-  const { result, modelUsed, fallbackAttempt, attemptedModels } = await runGenerationWithFallback(
-    "non_streaming",
-    shared,
-    undefined,
-  );
+  const { result, modelUsed, fallbackAttempt, attemptedModels, modelTelemetry } =
+    await runGenerationWithFallback("non_streaming", shared, undefined);
 
   logModelGenerationCompleted("non_streaming", {
     providerMode: shared.provider.mode,
@@ -940,6 +1095,7 @@ export async function generateResponse(
       contextTokenEstimate: logContext.context.contextTokenEstimate,
     },
     options: logContext.options,
+    modelTelemetry,
     modelUsed,
     startedAt,
     fallbackAttempt,
@@ -965,11 +1121,8 @@ export async function generateResponseStreaming(
 
   logModelGenerationStarted("streaming", logContext);
 
-  const { result, modelUsed, fallbackAttempt, attemptedModels } = await runGenerationWithFallback(
-    "streaming",
-    shared,
-    callbacks,
-  );
+  const { result, modelUsed, fallbackAttempt, attemptedModels, modelTelemetry } =
+    await runGenerationWithFallback("streaming", shared, callbacks);
 
   logModelGenerationCompleted("streaming", {
     providerMode: logContext.providerMode,
@@ -979,6 +1132,7 @@ export async function generateResponseStreaming(
       contextTokenEstimate: logContext.context.contextTokenEstimate,
     },
     options: logContext.options,
+    modelTelemetry,
     modelUsed,
     startedAt,
     fallbackAttempt,

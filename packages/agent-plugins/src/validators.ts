@@ -23,6 +23,14 @@ const pluginToolDescriptorSchema = z
     name: z.string().min(1),
     description: z.string().optional(),
     requiresApproval: z.boolean().optional(),
+    strict: z.boolean().optional(),
+    inputExamples: z
+      .array(
+        z.object({
+          input: z.record(z.unknown()),
+        }),
+      )
+      .optional(),
     outputContract: toolOutputContractSchema.optional(),
   })
   .strict();
