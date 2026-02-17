@@ -16,15 +16,30 @@ interface FlatNote {
   folderId?: string;
 }
 
-interface FolderTree {
+export interface SidebarNote extends FlatNote {
+  _creationTime?: number;
+  isPinned?: boolean;
+  isArchived: boolean;
+  deletedAt?: number;
+}
+
+export interface FolderWithDepth {
+  folder: FolderNode;
+  depth: number;
+}
+
+interface FolderTree<N extends FlatNote = FlatNote> {
   roots: FolderNode[];
   folderMap: Map<string, FolderNode>;
-  notesByFolder: Map<string, FlatNote[]>;
-  unfiledNotes: FlatNote[];
+  notesByFolder: Map<string, N[]>;
+  unfiledNotes: N[];
 }
 
 /** Build a hierarchical tree from a flat folder list + group notes by folderId. */
-export function buildFolderTree(folders: FlatFolder[], notes: FlatNote[]): FolderTree {
+export function buildFolderTree<N extends FlatNote>(
+  folders: FlatFolder[],
+  notes: N[],
+): FolderTree<N> {
   const folderMap = new Map<string, FolderNode>();
 
   // Create nodes
@@ -50,8 +65,8 @@ export function buildFolderTree(folders: FlatFolder[], notes: FlatNote[]): Folde
   }
 
   // Group notes by folderId
-  const notesByFolder = new Map<string, FlatNote[]>();
-  const unfiledNotes: FlatNote[] = [];
+  const notesByFolder = new Map<string, N[]>();
+  const unfiledNotes: N[] = [];
   for (const note of notes) {
     if (note.folderId) {
       const list = notesByFolder.get(note.folderId) ?? [];
@@ -63,6 +78,24 @@ export function buildFolderTree(folders: FlatFolder[], notes: FlatNote[]): Folde
   }
 
   return { roots, folderMap, notesByFolder, unfiledNotes };
+}
+
+/** Group notes by folderId (separate from tree structure for memoization). */
+export function groupNotesByFolder<N extends FlatNote>(
+  notes: N[],
+): { notesByFolder: Map<string, N[]>; unfiledNotes: N[] } {
+  const notesByFolder = new Map<string, N[]>();
+  const unfiledNotes: N[] = [];
+  for (const note of notes) {
+    if (note.folderId) {
+      const list = notesByFolder.get(note.folderId) ?? [];
+      list.push(note);
+      notesByFolder.set(note.folderId, list);
+    } else {
+      unfiledNotes.push(note);
+    }
+  }
+  return { notesByFolder, unfiledNotes };
 }
 
 /** Get all descendant folder IDs (for filtering out invalid move targets). */

@@ -1,8 +1,7 @@
 "use client";
 
-import { T, useGT } from "gt-next";
-import { Archive, ChevronRight, FolderInput, FolderPlus, Pencil, Trash2 } from "lucide-react";
-import Link from "next/link";
+import { T } from "gt-next";
+import { ChevronRight, FolderInput, FolderPlus, Pencil, Trash2 } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -24,27 +23,23 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import {
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
-} from "@/components/ui/sidebar";
-import type { FolderNode } from "@/lib/folder-tree";
+import { SidebarMenuButton, SidebarMenuItem, SidebarMenuSub } from "@/components/ui/sidebar";
+import type { FolderNode, FolderWithDepth, SidebarNote } from "@/lib/folder-tree";
 import { cn } from "@/lib/utils";
 
-interface SidebarNote {
-  _id: string;
-  title?: string;
-}
+import { NoteTreeItem } from "./note-tree-item";
 
 interface FolderTreeItemProps {
   folder: FolderNode;
   notesByFolder: Map<string, SidebarNote[]>;
   collapsedFolders: Set<string>;
   onToggle: (folderId: string) => void;
-  onArchiveNote: (e: React.MouseEvent, noteId: string) => void;
+  onRenameNote: (noteId: string, newTitle: string) => void;
+  onToggleNotePin: (noteId: string, isPinned: boolean) => void;
+  onMoveNoteToFolder: (noteId: string, folderId: string | undefined) => void;
+  onArchiveNote: (noteId: string, isArchived: boolean) => void;
+  onDeleteNote: (noteId: string) => void;
+  allFolders: FolderWithDepth[];
   onNewSubfolder: (parentId: string) => void;
   onRename: (folderId: string, newName: string) => void;
   onMove: (folderId: string) => void;
@@ -68,14 +63,18 @@ export function FolderTreeItem({
   notesByFolder,
   collapsedFolders,
   onToggle,
+  onRenameNote,
+  onToggleNotePin,
+  onMoveNoteToFolder,
   onArchiveNote,
+  onDeleteNote,
+  allFolders,
   onNewSubfolder,
   onRename,
   onMove,
   onDelete,
 }: FolderTreeItemProps) {
   const pathname = usePathname();
-  const t = useGT();
   const isOpen = !collapsedFolders.has(folder._id);
   const notes = notesByFolder.get(folder._id) ?? [];
   const hasChildren = folder.children.length > 0 || notes.length > 0;
@@ -88,8 +87,10 @@ export function FolderTreeItem({
 
   useEffect(() => {
     if (isRenaming) {
-      renameInputRef.current?.focus();
-      renameInputRef.current?.select();
+      requestAnimationFrame(() => {
+        renameInputRef.current?.focus();
+        renameInputRef.current?.select();
+      });
     }
   }, [isRenaming]);
 
@@ -118,7 +119,7 @@ export function FolderTreeItem({
           <ContextMenuTrigger asChild>
             <SidebarMenuItem>
               {isRenaming ? (
-                <div className="flex items-center gap-1.5 px-2 py-1">
+                <div className="flex h-9 items-center gap-2 px-3">
                   <span
                     className="size-2 shrink-0 rounded-full"
                     style={{ backgroundColor: folder.color }}
@@ -130,7 +131,7 @@ export function FolderTreeItem({
                     onChange={(e) => setRenameValue(e.target.value)}
                     onKeyDown={handleRenameKeyDown}
                     onBlur={handleRenameSubmit}
-                    className="text-sidebar-foreground min-w-0 flex-1 bg-transparent text-sm outline-none"
+                    className="text-sidebar-foreground bg-sidebar-accent ring-sidebar-ring min-w-0 flex-1 rounded-sm px-1.5 py-0.5 text-sm ring-1 outline-none"
                   />
                 </div>
               ) : (
@@ -165,34 +166,33 @@ export function FolderTreeItem({
                         notesByFolder={notesByFolder}
                         collapsedFolders={collapsedFolders}
                         onToggle={onToggle}
+                        onRenameNote={onRenameNote}
+                        onToggleNotePin={onToggleNotePin}
+                        onMoveNoteToFolder={onMoveNoteToFolder}
                         onArchiveNote={onArchiveNote}
+                        onDeleteNote={onDeleteNote}
+                        allFolders={allFolders}
                         onNewSubfolder={onNewSubfolder}
                         onRename={onRename}
                         onMove={onMove}
                         onDelete={onDelete}
                       />
                     ))}
-                    {notes.map((note) => {
-                      const isActive = pathname === `/notes/${note._id}`;
-                      const noteTitle = note.title || t("Untitled note");
-                      return (
-                        <SidebarMenuSubItem key={note._id}>
-                          <SidebarMenuSubButton asChild size="sm" isActive={isActive}>
-                            <Link href={`/notes/${note._id}`}>
-                              <span className="truncate">{noteTitle}</span>
-                            </Link>
-                          </SidebarMenuSubButton>
-                          <button
-                            type="button"
-                            aria-label={t("Archive note")}
-                            onClick={(e) => onArchiveNote(e, note._id)}
-                            className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground absolute top-0.5 right-1 flex size-5 items-center justify-center rounded-md opacity-0 group-focus-within/menu-sub-item:opacity-100 group-hover/menu-sub-item:opacity-100"
-                          >
-                            <Archive className="size-3" />
-                          </button>
-                        </SidebarMenuSubItem>
-                      );
-                    })}
+                    {notes.map((note) => (
+                      <NoteTreeItem
+                        key={note._id}
+                        note={note}
+                        isActive={pathname === `/notes/${note._id}`}
+                        folders={allFolders}
+                        currentFolderId={folder._id}
+                        variant="nested"
+                        onRename={onRenameNote}
+                        onTogglePin={onToggleNotePin}
+                        onMoveToFolder={onMoveNoteToFolder}
+                        onArchive={onArchiveNote}
+                        onDelete={onDeleteNote}
+                      />
+                    ))}
                   </SidebarMenuSub>
                 </CollapsibleContent>
               )}
