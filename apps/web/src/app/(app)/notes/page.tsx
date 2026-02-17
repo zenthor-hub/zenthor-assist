@@ -22,6 +22,16 @@ import { toast } from "sonner";
 
 import Loader from "@/components/loader";
 import { PageWrapper } from "@/components/page-wrapper";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,7 +44,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
-import { buildFolderTree, flattenTreeWithDepth } from "@/lib/folder-tree";
+import { buildFolderTree, flattenTreeWithDepth, getFolderBreadcrumb } from "@/lib/folder-tree";
 
 type NoteFolder = {
   _id: Id<"noteFolders">;
@@ -114,15 +124,17 @@ export default function NotesPage() {
   const [editingFolderId, setEditingFolderId] = useState<Id<"noteFolders"> | null>(null);
   const [editingFolderName, setEditingFolderName] = useState("");
   const [editingFolderColor, setEditingFolderColor] = useState(PRESET_FOLDER_COLORS[0]);
+  const [deletingFolderId, setDeletingFolderId] = useState<Id<"noteFolders"> | null>(null);
 
   const rawFolders = useQuery(api.noteFolders.list, {});
   const folders = (rawFolders ?? []) as NoteFolder[];
   const orderedFolders = [...folders].sort((a, b) => a.position - b.position);
-  const flatFolders = useMemo(() => {
-    const tree = buildFolderTree(folders, []);
-    return flattenTreeWithDepth(tree.roots);
+  const folderTree = useMemo(
+    () => buildFolderTree(folders, []),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- rawFolders is stable from useQuery
-  }, [rawFolders]);
+    [rawFolders],
+  );
+  const flatFolders = useMemo(() => flattenTreeWithDepth(folderTree.roots), [folderTree]);
   const queryArgs = useMemo(
     () => ({
       ...(selectedFolderId === "all" ? {} : { folderId: selectedFolderId }),
@@ -256,10 +268,6 @@ export default function NotesPage() {
   }
 
   async function handleDeleteFolder(folderId: Id<"noteFolders">) {
-    if (!confirm(t("Delete this folder and unfile its notes?"))) {
-      return;
-    }
-
     try {
       await removeFolder({ id: folderId });
       if (composerFolderId === folderId) {
@@ -268,6 +276,7 @@ export default function NotesPage() {
       if (selectedFolderId === folderId) {
         setSelectedFolderId("all");
       }
+      setDeletingFolderId(null);
       toast.success(t("Folder removed"));
     } catch {
       toast.error(t("Failed to remove folder"));
@@ -464,7 +473,19 @@ export default function NotesPage() {
                             className="mr-1 inline-block h-2 w-2 shrink-0 rounded-full"
                             style={{ backgroundColor: folder.color }}
                           />
-                          {folder.name}
+                          {folder.parentId ? (
+                            <span className="flex items-center gap-1">
+                              <span className="text-muted-foreground">
+                                {getFolderBreadcrumb(folderTree.folderMap, folder._id)
+                                  .slice(0, -1)
+                                  .join(" / ")}
+                                {" / "}
+                              </span>
+                              {folder.name}
+                            </span>
+                          ) : (
+                            folder.name
+                          )}
                         </Badge>
 
                         <div className="ml-auto flex items-center gap-1">
@@ -500,7 +521,7 @@ export default function NotesPage() {
                           <Button
                             size="xs"
                             variant="outline"
-                            onClick={() => void handleDeleteFolder(folder._id)}
+                            onClick={() => setDeletingFolderId(folder._id)}
                           >
                             <Trash2 className="size-3.5" />
                           </Button>
@@ -658,6 +679,40 @@ export default function NotesPage() {
           )}
         </div>
       </div>
+
+      <AlertDialog
+        open={!!deletingFolderId}
+        onOpenChange={(open) => !open && setDeletingFolderId(null)}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              <T>
+                Delete "
+                {deletingFolderId
+                  ? (folders.find((f) => f._id === deletingFolderId)?.name ?? "")
+                  : ""}
+                "?
+              </T>
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              <T>Notes in this folder will become unfiled. Child folders will be moved up.</T>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel size="sm">
+              <T>Cancel</T>
+            </AlertDialogCancel>
+            <AlertDialogAction
+              size="sm"
+              variant="destructive"
+              onClick={() => deletingFolderId && void handleDeleteFolder(deletingFolderId)}
+            >
+              <T>Delete</T>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageWrapper>
   );
 }

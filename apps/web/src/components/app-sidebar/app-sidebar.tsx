@@ -146,13 +146,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const archiveNote = useMutation(api.notes.archive);
   const folders = (useQuery(api.noteFolders.list) ?? []) as SidebarFolder[];
   const createFolder = useMutation(api.noteFolders.create);
+  const updateFolder = useMutation(api.noteFolders.update);
   const removeFolder = useMutation(api.noteFolders.remove);
   const [showNewFolderForm, setShowNewFolderForm] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [newFolderColor, setNewFolderColor] = useState(PRESET_FOLDER_COLORS[0]!);
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   const [subfoldingParentId, setSubfoldingParentId] = useState<string | null>(null);
-  const [, setRenamingFolderId] = useState<string | null>(null);
   const [movingFolderId, setMovingFolderId] = useState<string | null>(null);
   const newFolderInputRef = useRef<HTMLInputElement>(null);
 
@@ -207,6 +207,46 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     setShowNewFolderForm(true);
     setTimeout(() => newFolderInputRef.current?.focus(), 0);
   }
+
+  async function handleRenameFolder(folderId: string, newName: string) {
+    try {
+      await updateFolder({ id: folderId as Id<"noteFolders">, name: newName });
+      toast.success(t("Folder renamed"));
+    } catch {
+      toast.error(t("Failed to rename folder"));
+    }
+  }
+
+  // Auto-expand ancestor folders when navigating to a note
+  useEffect(() => {
+    const noteMatch = pathname.match(/^\/notes\/(.+)$/);
+    if (!noteMatch) return;
+    const activeNoteId = noteMatch[1];
+
+    // Find which folder contains this note and expand all ancestors
+    for (const [folderId, folderNotes] of folderTree.notesByFolder) {
+      if (folderNotes.some((n) => n._id === activeNoteId)) {
+        // Walk up the tree and expand all ancestors
+        const toExpand: string[] = [];
+        let current = folderTree.folderMap.get(folderId);
+        while (current) {
+          toExpand.push(current._id);
+          current = current.parentId ? folderTree.folderMap.get(current.parentId) : undefined;
+        }
+
+        if (toExpand.length > 0) {
+          setCollapsedFolders((prev) => {
+            const needsUpdate = toExpand.some((id) => prev.has(id));
+            if (!needsUpdate) return prev;
+            const next = new Set(prev);
+            for (const id of toExpand) next.delete(id);
+            return next;
+          });
+        }
+        break;
+      }
+    }
+  }, [pathname, folderTree]);
 
   useEffect(() => {
     setMode(getSidebarModeFromPath(pathname));
@@ -563,7 +603,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         onToggle={toggleFolder}
                         onArchiveNote={(e, noteId) => handleArchiveNote(e, noteId, true)}
                         onNewSubfolder={handleNewSubfolder}
-                        onRename={setRenamingFolderId}
+                        onRename={handleRenameFolder}
                         onMove={setMovingFolderId}
                         onDelete={(id) => void handleDeleteFolder(id)}
                       />
