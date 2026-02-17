@@ -13,6 +13,8 @@ import {
   ListFilter,
   Pin,
   Plus,
+  RotateCcw,
+  Search,
   Sparkles,
   Trash2,
 } from "lucide-react";
@@ -64,7 +66,7 @@ type NoteItem = {
   updatedAt: number;
 };
 
-type NoteFilter = "all" | "active" | "archived" | "pinned";
+type NoteFilter = "all" | "active" | "archived" | "pinned" | "trashed";
 type NoteSort = "updated_desc" | "updated_asc" | "title";
 
 type FolderFilterOption = { id: "all" | Id<"noteFolders">; name: string };
@@ -115,6 +117,7 @@ export default function NotesPage() {
   const [filter, setFilter] = useState<NoteFilter>("active");
   const [sortBy, setSortBy] = useState<NoteSort>("updated_desc");
   const [selectedFolderId, setSelectedFolderId] = useState<"all" | Id<"noteFolders">>("all");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [composerTitle, setComposerTitle] = useState("");
   const [composerContent, setComposerContent] = useState("");
@@ -143,11 +146,20 @@ export default function NotesPage() {
     }),
     [filter, selectedFolderId],
   );
-  const notes = useQuery(api.notes.list, queryArgs) as NoteItem[] | undefined;
+  const notes = useQuery(api.notes.list, filter === "trashed" ? "skip" : queryArgs) as
+    | NoteItem[]
+    | undefined;
+  const trashedNotes = useQuery(
+    api.notes.listTrashed,
+    filter === "trashed" ? { limit: 200 } : "skip",
+  ) as NoteItem[] | undefined;
 
   const createNote = useMutation(api.notes.create);
   const moveNote = useMutation(api.notes.moveToFolder);
   const archiveNote = useMutation(api.notes.archive);
+  const restoreNoteMutation = useMutation(api.notes.restoreNote);
+  const permanentlyDeleteMutation = useMutation(api.notes.permanentlyDelete);
+  const emptyTrashMutation = useMutation(api.notes.emptyTrash);
   const createFolder = useMutation(api.noteFolders.create);
   const updateFolder = useMutation(api.noteFolders.update);
   const removeFolder = useMutation(api.noteFolders.remove);
@@ -158,20 +170,30 @@ export default function NotesPage() {
   ];
 
   const visibleNotes = useMemo(() => {
-    const current = notes ?? [];
-    const filtered =
-      filter === "pinned"
-        ? current.filter((note) => note.isPinned)
-        : filter === "archived"
-          ? current
-          : current.filter((note) => !note.isArchived);
+    let current: NoteItem[];
+    if (filter === "trashed") {
+      current = trashedNotes ?? [];
+    } else {
+      const all = notes ?? [];
+      current =
+        filter === "pinned"
+          ? all.filter((note) => note.isPinned)
+          : filter === "archived"
+            ? all
+            : all.filter((note) => !note.isArchived);
+    }
 
-    return [...filtered].sort((a, b) => {
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      current = current.filter((note) => note.title.toLowerCase().includes(q));
+    }
+
+    return [...current].sort((a, b) => {
       if (sortBy === "updated_asc") return a.updatedAt - b.updatedAt;
       if (sortBy === "title") return a.title.localeCompare(b.title);
       return b.updatedAt - a.updatedAt;
     });
-  }, [notes, filter, sortBy]);
+  }, [notes, trashedNotes, filter, sortBy, searchQuery]);
 
   async function handleCreateNote() {
     const title = composerTitle.trim();
@@ -323,7 +345,19 @@ export default function NotesPage() {
     );
   }
 
-  if (notes === undefined) {
+  const [showEmptyTrashConfirm, setShowEmptyTrashConfirm] = useState(false);
+
+  async function handleEmptyTrash() {
+    try {
+      await emptyTrashMutation({});
+      toast.success(t("Trash emptied"));
+      setShowEmptyTrashConfirm(false);
+    } catch {
+      toast.error(t("Failed to empty trash"));
+    }
+  }
+
+  if (filter === "trashed" ? trashedNotes === undefined : notes === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <Loader />
@@ -539,6 +573,17 @@ export default function NotesPage() {
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t("Search notes…")}
+                className="h-8 w-52 pl-8 text-xs"
+              />
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             {folderFilters.map((folder) => (
               <button
                 key={folder.id}
@@ -586,6 +631,9 @@ export default function NotesPage() {
                 <SelectItem value="archived">
                   <T>Archived</T>
                 </SelectItem>
+                <SelectItem value="trashed">
+                  <T>Trash</T>
+                </SelectItem>
               </SelectContent>
             </Select>
             <Select value={sortBy} onValueChange={(value) => setSortBy(value as NoteSort)}>
@@ -600,6 +648,17 @@ export default function NotesPage() {
                 ))}
               </SelectContent>
             </Select>
+            {filter === "trashed" && visibleNotes.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1.5"
+                onClick={() => setShowEmptyTrashConfirm(true)}
+              >
+                <Trash2 className="size-3.5" />
+                <T>Empty trash</T>
+              </Button>
+            )}
           </div>
         </div>
 
@@ -607,7 +666,11 @@ export default function NotesPage() {
           {visibleNotes.length === 0 ? (
             <div className="px-4 py-10 text-center">
               <p className="text-muted-foreground text-sm">
-                <T>No notes match this view.</T>
+                {searchQuery.trim() ? (
+                  <T>No notes match your search.</T>
+                ) : (
+                  <T>No notes match this view.</T>
+                )}
               </p>
             </div>
           ) : (
@@ -643,36 +706,67 @@ export default function NotesPage() {
                   className="flex shrink-0 items-center gap-2"
                   onClick={(event) => event.stopPropagation()}
                 >
-                  <Select
-                    value={note.folderId ?? "none"}
-                    onValueChange={(target) => {
-                      void handleMoveNote(note._id, target as "none" | Id<"noteFolders">);
-                    }}
-                  >
-                    <SelectTrigger size="sm" className="w-40">
-                      <SelectValue placeholder={t("Move")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">
-                        <T>Unfiled</T>
-                      </SelectItem>
-                      {flatFolders.map(({ folder, depth }) => (
-                        <SelectItem key={folder._id} value={folder._id}>
-                          <span style={{ paddingLeft: `${depth * 12}px` }}>{folder.name}</span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    onClick={() => {
-                      void handleArchive(note._id, !note.isArchived);
-                    }}
-                  >
-                    <Archive className="size-3" />
-                    {note.isArchived ? <T>Restore</T> : <T>Archive</T>}
-                  </Button>
+                  {filter === "trashed" ? (
+                    <>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        onClick={() => {
+                          void restoreNoteMutation({ id: note._id }).then(() =>
+                            toast.success(t("Note restored")),
+                          );
+                        }}
+                      >
+                        <RotateCcw className="size-3" />
+                        <T>Restore</T>
+                      </Button>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        onClick={() => {
+                          void permanentlyDeleteMutation({ id: note._id }).then(() =>
+                            toast.success(t("Note permanently deleted")),
+                          );
+                        }}
+                      >
+                        <Trash2 className="size-3" />
+                        <T>Delete</T>
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Select
+                        value={note.folderId ?? "none"}
+                        onValueChange={(target) => {
+                          void handleMoveNote(note._id, target as "none" | Id<"noteFolders">);
+                        }}
+                      >
+                        <SelectTrigger size="sm" className="w-40">
+                          <SelectValue placeholder={t("Move")} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">
+                            <T>Unfiled</T>
+                          </SelectItem>
+                          {flatFolders.map(({ folder, depth }) => (
+                            <SelectItem key={folder._id} value={folder._id}>
+                              <span style={{ paddingLeft: `${depth * 12}px` }}>{folder.name}</span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        onClick={() => {
+                          void handleArchive(note._id, !note.isArchived);
+                        }}
+                      >
+                        <Archive className="size-3" />
+                        {note.isArchived ? <T>Restore</T> : <T>Archive</T>}
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             ))
@@ -709,6 +803,30 @@ export default function NotesPage() {
               onClick={() => deletingFolderId && void handleDeleteFolder(deletingFolderId)}
             >
               <T>Delete</T>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={showEmptyTrashConfirm} onOpenChange={setShowEmptyTrashConfirm}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              <T>Empty trash?</T>
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              <T>All trashed notes will be permanently deleted. This cannot be undone.</T>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel size="sm">
+              <T>Cancel</T>
+            </AlertDialogCancel>
+            <AlertDialogAction
+              size="sm"
+              variant="destructive"
+              onClick={() => void handleEmptyTrash()}
+            >
+              <T>Empty trash</T>
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -13,7 +13,9 @@ import {
   PenLine,
   Pin,
   PinOff,
+  RotateCcw,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -47,6 +49,7 @@ type NoteItem = {
   folderId?: Id<"noteFolders">;
   isPinned?: boolean;
   isArchived: boolean;
+  deletedAt?: number;
   conversationId?: Id<"conversations">;
   updatedAt: number;
   source?: string;
@@ -86,6 +89,7 @@ export default function NoteWorkspacePage({ params }: { params: Promise<{ noteId
   const sendToNoteChat = useMutation(api.messages.send);
   const updateNote = useMutation(api.notes.update);
   const archiveNote = useMutation(api.notes.archive);
+  const restoreFromTrash = useMutation(api.notes.restoreNote);
 
   const editorRef = useRef<NoteEditorHandle>(null);
   const [title, setTitle] = useState("");
@@ -192,6 +196,11 @@ ${snippet}`;
     setSelectedFolderId(note.folderId ?? "none");
     setIsPinned(note.isPinned === true);
 
+    // Sync title from server when user has no local edits (e.g. sidebar rename)
+    if (!hasUnsavedChanges.current) {
+      setTitle(note.title);
+    }
+
     // Detect external AI patch
     if (note.lastAiActionAt !== lastAiActionAt.current && !hasUnsavedChanges.current) {
       lastAiActionAt.current = note.lastAiActionAt;
@@ -199,6 +208,18 @@ ${snippet}`;
       editorRef.current?.setContent(note.content);
     }
   }, [note]);
+
+  // Warn on close when there are unsaved changes
+  useEffect(() => {
+    if (!hasUnsavedChanges.current) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges.current) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirtyTick, saveState]);
 
   // Ensure conversation thread exists
   useEffect(() => {
@@ -272,6 +293,16 @@ ${snippet}`;
       toast.success(note.isArchived ? t("Note restored") : t("Note archived"));
     } catch {
       toast.error(t("Failed to update note"));
+    }
+  }
+
+  async function handleRestoreFromTrash() {
+    if (!note) return;
+    try {
+      await restoreFromTrash({ id: note._id });
+      toast.success(t("Note restored from trash"));
+    } catch {
+      toast.error(t("Failed to restore note"));
     }
   }
 
@@ -387,6 +418,23 @@ ${snippet}`;
       <div className="grid min-h-0 flex-1 gap-6 lg:grid-cols-[1.3fr_1fr]">
         {/* ── Editor panel ── */}
         <div className="flex min-h-0 flex-col gap-3">
+          {note.deletedAt && (
+            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 dark:border-amber-900 dark:bg-amber-950/50">
+              <Trash2 className="size-3.5 text-amber-600 dark:text-amber-400" />
+              <span className="text-xs text-amber-700 dark:text-amber-300">
+                <T>This note is in the trash.</T>
+              </span>
+              <Button
+                size="xs"
+                variant="outline"
+                className="ml-auto gap-1"
+                onClick={handleRestoreFromTrash}
+              >
+                <RotateCcw className="size-3" />
+                <T>Restore</T>
+              </Button>
+            </div>
+          )}
           {/* Title + metadata */}
           <div>
             <input

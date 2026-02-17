@@ -20,8 +20,10 @@ import {
   NotebookText,
   Plus,
   Settings,
+  Search,
   Sparkles,
   SlidersHorizontal,
+  Trash2,
   UserCircle,
   X,
 } from "lucide-react";
@@ -32,6 +34,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type * as React from "react";
 import { toast } from "sonner";
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Sidebar,
@@ -45,16 +57,20 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
-import { buildFolderTree } from "@/lib/folder-tree";
+import {
+  type SidebarNote,
+  buildFolderTree,
+  flattenTreeWithDepth,
+  groupNotesByFolder,
+} from "@/lib/folder-tree";
 import { cn } from "@/lib/utils";
 
 import { FolderTreeItem } from "./folder-tree-item";
 import { MoveFolderDialog } from "./move-folder-dialog";
 import { NavUser } from "./nav-user";
+import { NoteTreeItem } from "./note-tree-item";
 import { ThemeSwitcher } from "./theme-switcher";
 
 type SidebarMode = "nav" | "chats" | "notes" | "settings";
@@ -64,14 +80,6 @@ interface SidebarConversation {
   _creationTime: number;
   channel: "web" | "whatsapp" | "telegram";
   title?: string;
-}
-
-interface SidebarNote {
-  _id: string;
-  _creationTime: number;
-  title?: string;
-  isArchived: boolean;
-  folderId?: string;
 }
 
 interface SidebarFolder {
@@ -142,8 +150,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     isArchived: true,
     limit: 200,
   }) ?? []) as SidebarNote[];
+  const trashedNotes = (useQuery(api.notes.listTrashed, { limit: 200 }) ?? []) as SidebarNote[];
   const archiveConversation = useMutation(api.conversations.archive);
   const archiveNote = useMutation(api.notes.archive);
+  const updateNote = useMutation(api.notes.update);
+  const deleteNote = useMutation(api.notes.deleteNote);
+  const restoreNote = useMutation(api.notes.restoreNote);
+  const permanentlyDeleteNote = useMutation(api.notes.permanentlyDelete);
+  const emptyTrash = useMutation(api.notes.emptyTrash);
+  const moveNoteToFolder = useMutation(api.notes.moveToFolder);
   const folders = (useQuery(api.noteFolders.list) ?? []) as SidebarFolder[];
   const createFolder = useMutation(api.noteFolders.create);
   const updateFolder = useMutation(api.noteFolders.update);
@@ -154,12 +169,44 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   const [subfoldingParentId, setSubfoldingParentId] = useState<string | null>(null);
   const [movingFolderId, setMovingFolderId] = useState<string | null>(null);
+  const [showEmptyTrashConfirm, setShowEmptyTrashConfirm] = useState(false);
+  const [noteSearch, setNoteSearch] = useState("");
   const newFolderInputRef = useRef<HTMLInputElement>(null);
 
+  // Only rebuilds when folders change (structure)
   const folderTree = useMemo(
-    () => buildFolderTree(folders, activeNotes),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- folders/activeNotes refs from useQuery
-    [folders, activeNotes],
+    () => buildFolderTree(folders, []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- folders ref from useQuery
+    [folders],
+  );
+  const flatFolders = useMemo(() => flattenTreeWithDepth(folderTree.roots), [folderTree]);
+
+  // Filter notes by search query
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- activeNotes ref from useQuery
+  const filteredActiveNotes = useMemo(() => {
+    if (!noteSearch.trim()) return activeNotes;
+    const q = noteSearch.trim().toLowerCase();
+    return activeNotes.filter((n) => (n.title ?? "").toLowerCase().includes(q));
+  }, [activeNotes, noteSearch]);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- archivedNotes ref from useQuery
+  const filteredArchivedNotes = useMemo(() => {
+    if (!noteSearch.trim()) return archivedNotes;
+    const q = noteSearch.trim().toLowerCase();
+    return archivedNotes.filter((n) => (n.title ?? "").toLowerCase().includes(q));
+  }, [archivedNotes, noteSearch]);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- trashedNotes ref from useQuery
+  const filteredTrashedNotes = useMemo(() => {
+    if (!noteSearch.trim()) return trashedNotes;
+    const q = noteSearch.trim().toLowerCase();
+    return trashedNotes.filter((n) => (n.title ?? "").toLowerCase().includes(q));
+  }, [trashedNotes, noteSearch]);
+
+  // Only rebuilds when filtered notes change (grouping)
+  const noteGrouping = useMemo(
+    () => groupNotesByFolder(filteredActiveNotes),
+    [filteredActiveNotes],
   );
 
   function toggleFolder(folderId: string) {
@@ -224,7 +271,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     const activeNoteId = noteMatch[1];
 
     // Find which folder contains this note and expand all ancestors
-    for (const [folderId, folderNotes] of folderTree.notesByFolder) {
+    for (const [folderId, folderNotes] of noteGrouping.notesByFolder) {
       if (folderNotes.some((n) => n._id === activeNoteId)) {
         // Walk up the tree and expand all ancestors
         const toExpand: string[] = [];
@@ -246,7 +293,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         break;
       }
     }
-  }, [pathname, folderTree]);
+  }, [pathname, folderTree, noteGrouping]);
 
   useEffect(() => {
     setMode(getSidebarModeFromPath(pathname));
@@ -268,10 +315,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     }
   }
 
-  async function handleArchiveNote(e: React.MouseEvent, noteId: string, isArchived: boolean) {
-    e.preventDefault();
-    e.stopPropagation();
-
+  async function handleArchiveNote(noteId: string, isArchived: boolean) {
     try {
       await archiveNote({
         id: noteId as Parameters<typeof archiveNote>[0]["id"],
@@ -283,6 +327,79 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       }
     } catch {
       toast.error(isArchived ? t("Failed to archive note") : t("Failed to restore note"));
+    }
+  }
+
+  async function handleRenameNote(noteId: string, newTitle: string) {
+    try {
+      await updateNote({ id: noteId as Id<"notes">, title: newTitle });
+      toast.success(t("Note renamed"));
+    } catch {
+      toast.error(t("Failed to rename note"));
+    }
+  }
+
+  async function handleToggleNotePin(noteId: string, isPinned: boolean) {
+    try {
+      await updateNote({ id: noteId as Id<"notes">, isPinned });
+      toast.success(isPinned ? t("Note pinned") : t("Note unpinned"));
+    } catch {
+      toast.error(t("Failed to update note"));
+    }
+  }
+
+  async function handleMoveNoteToFolder(noteId: string, folderId: string | undefined) {
+    try {
+      await moveNoteToFolder({
+        id: noteId as Id<"notes">,
+        folderId: folderId as Id<"noteFolders"> | undefined,
+      });
+      toast.success(t("Note moved"));
+    } catch {
+      toast.error(t("Failed to move note"));
+    }
+  }
+
+  async function handleDeleteNote(noteId: string) {
+    try {
+      await deleteNote({ id: noteId as Id<"notes"> });
+      toast.success(t("Note moved to trash"));
+      if (pathname === `/notes/${noteId}`) {
+        router.push("/notes");
+      }
+    } catch {
+      toast.error(t("Failed to delete note"));
+    }
+  }
+
+  async function handleRestoreNote(noteId: string) {
+    try {
+      await restoreNote({ id: noteId as Id<"notes"> });
+      toast.success(t("Note restored"));
+    } catch {
+      toast.error(t("Failed to restore note"));
+    }
+  }
+
+  async function handlePermanentlyDeleteNote(noteId: string) {
+    try {
+      await permanentlyDeleteNote({ id: noteId as Id<"notes"> });
+      toast.success(t("Note permanently deleted"));
+      if (pathname === `/notes/${noteId}`) {
+        router.push("/notes");
+      }
+    } catch {
+      toast.error(t("Failed to delete note"));
+    }
+  }
+
+  async function handleEmptyTrash() {
+    try {
+      await emptyTrash({});
+      toast.success(t("Trash emptied"));
+      setShowEmptyTrashConfirm(false);
+    } catch {
+      toast.error(t("Failed to empty trash"));
     }
   }
 
@@ -590,6 +707,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </div>
               </div>
             )}
+            <div className="mx-3 mt-2">
+              <div className="relative">
+                <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 size-3 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={noteSearch}
+                  onChange={(e) => setNoteSearch(e.target.value)}
+                  placeholder={t("Search notes…")}
+                  className="text-foreground placeholder:text-muted-foreground border-border w-full rounded-md border bg-transparent px-2 py-1 pl-7 text-xs outline-none"
+                />
+              </div>
+            </div>
             <SidebarGroupContent className="mt-2">
               <SidebarMenu>
                 {folderTree.roots.length > 0 ? (
@@ -598,17 +727,22 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       <FolderTreeItem
                         key={folder._id}
                         folder={folder}
-                        notesByFolder={folderTree.notesByFolder}
+                        notesByFolder={noteGrouping.notesByFolder}
                         collapsedFolders={collapsedFolders}
                         onToggle={toggleFolder}
-                        onArchiveNote={(e, noteId) => handleArchiveNote(e, noteId, true)}
+                        onRenameNote={handleRenameNote}
+                        onToggleNotePin={handleToggleNotePin}
+                        onMoveNoteToFolder={handleMoveNoteToFolder}
+                        onArchiveNote={handleArchiveNote}
+                        onDeleteNote={handleDeleteNote}
+                        allFolders={flatFolders}
                         onNewSubfolder={handleNewSubfolder}
                         onRename={handleRenameFolder}
                         onMove={setMovingFolderId}
                         onDelete={(id) => void handleDeleteFolder(id)}
                       />
                     ))}
-                    {folderTree.unfiledNotes.length > 0 && (
+                    {noteGrouping.unfiledNotes.length > 0 && (
                       <Collapsible
                         open={!collapsedFolders.has("unfiled")}
                         onOpenChange={() => toggleFolder("unfiled")}
@@ -630,26 +764,20 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                           </CollapsibleTrigger>
                           <CollapsibleContent>
                             <SidebarMenuSub>
-                              {folderTree.unfiledNotes.map((note) => {
-                                const isActive = pathname === `/notes/${note._id}`;
-                                const noteTitle = note.title || t("Untitled note");
-                                return (
-                                  <SidebarMenuSubItem key={note._id}>
-                                    <SidebarMenuSubButton asChild size="sm" isActive={isActive}>
-                                      <Link href={`/notes/${note._id}`}>
-                                        <span className="truncate">{noteTitle}</span>
-                                      </Link>
-                                    </SidebarMenuSubButton>
-                                    <button
-                                      type="button"
-                                      onClick={(e) => handleArchiveNote(e, note._id, true)}
-                                      className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground absolute top-0.5 right-1 flex size-5 items-center justify-center rounded-md opacity-0 group-focus-within/menu-sub-item:opacity-100 group-hover/menu-sub-item:opacity-100"
-                                    >
-                                      <Archive className="size-3" />
-                                    </button>
-                                  </SidebarMenuSubItem>
-                                );
-                              })}
+                              {noteGrouping.unfiledNotes.map((note) => (
+                                <NoteTreeItem
+                                  key={note._id}
+                                  note={note}
+                                  isActive={pathname === `/notes/${note._id}`}
+                                  folders={flatFolders}
+                                  variant="nested"
+                                  onRename={handleRenameNote}
+                                  onTogglePin={handleToggleNotePin}
+                                  onMoveToFolder={handleMoveNoteToFolder}
+                                  onArchive={handleArchiveNote}
+                                  onDelete={handleDeleteNote}
+                                />
+                              ))}
                             </SidebarMenuSub>
                           </CollapsibleContent>
                         </SidebarMenuItem>
@@ -657,30 +785,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     )}
                   </>
                 ) : (
-                  activeNotes.map((note) => {
-                    const isActive = pathname === `/notes/${note._id}`;
-                    const noteTitle = note.title || t("Untitled note");
-                    return (
-                      <SidebarMenuItem key={note._id}>
-                        <SidebarMenuButton asChild isActive={isActive} tooltip={noteTitle}>
-                          <Link href={`/notes/${note._id}`}>
-                            <NotebookText className="size-4" />
-                            <span className="truncate">{noteTitle}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                        <SidebarMenuAction
-                          onClick={(e) => handleArchiveNote(e, note._id, true)}
-                          showOnHover
-                        >
-                          <Archive className="size-4" />
-                        </SidebarMenuAction>
-                      </SidebarMenuItem>
-                    );
-                  })
+                  filteredActiveNotes.map((note) => (
+                    <NoteTreeItem
+                      key={note._id}
+                      note={note}
+                      isActive={pathname === `/notes/${note._id}`}
+                      folders={flatFolders}
+                      variant="root"
+                      onRename={handleRenameNote}
+                      onTogglePin={handleToggleNotePin}
+                      onMoveToFolder={handleMoveNoteToFolder}
+                      onArchive={handleArchiveNote}
+                      onDelete={handleDeleteNote}
+                    />
+                  ))
                 )}
-                {activeNotes.length === 0 && (
+                {filteredActiveNotes.length === 0 && (
                   <div className="text-muted-foreground px-3 py-8 text-center text-xs">
-                    <T>No notes yet</T>
+                    {noteSearch.trim() ? <T>No notes match your search</T> : <T>No notes yet</T>}
                   </div>
                 )}
               </SidebarMenu>
@@ -690,7 +812,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               folderMap={folderTree.folderMap}
               onClose={() => setMovingFolderId(null)}
             />
-            {archivedNotes.length > 0 ? (
+            {filteredArchivedNotes.length > 0 ? (
               <>
                 <SidebarGroupContent className="mt-4 px-3">
                   <div className="text-muted-foreground text-[11px] font-medium">
@@ -699,31 +821,89 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 </SidebarGroupContent>
                 <SidebarGroupContent className="mt-2">
                   <SidebarMenu>
-                    {archivedNotes.map((note) => {
-                      const isActive = pathname === `/notes/${note._id}`;
-                      const tooltip = note.title || t("Untitled note");
-
-                      return (
-                        <SidebarMenuItem key={note._id}>
-                          <SidebarMenuButton asChild isActive={isActive} tooltip={tooltip}>
-                            <Link href={`/notes/${note._id}`}>
-                              <NotebookText className="size-4" />
-                              <span className="truncate">{tooltip}</span>
-                            </Link>
-                          </SidebarMenuButton>
-                          <SidebarMenuAction
-                            onClick={(e) => handleArchiveNote(e, note._id, false)}
-                            showOnHover
-                          >
-                            <Archive className="size-4" />
-                          </SidebarMenuAction>
-                        </SidebarMenuItem>
-                      );
-                    })}
+                    {filteredArchivedNotes.map((note) => (
+                      <NoteTreeItem
+                        key={note._id}
+                        note={note}
+                        isActive={pathname === `/notes/${note._id}`}
+                        folders={flatFolders}
+                        variant="root"
+                        onRename={handleRenameNote}
+                        onTogglePin={handleToggleNotePin}
+                        onMoveToFolder={handleMoveNoteToFolder}
+                        onArchive={handleArchiveNote}
+                        onDelete={handleDeleteNote}
+                      />
+                    ))}
                   </SidebarMenu>
                 </SidebarGroupContent>
               </>
             ) : null}
+            {filteredTrashedNotes.length > 0 ? (
+              <>
+                <SidebarGroupContent className="mt-4 px-3">
+                  <div className="text-muted-foreground flex items-center justify-between text-[11px] font-medium">
+                    <span className="flex items-center gap-1">
+                      <Trash2 className="size-3" />
+                      <T>Trash</T>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowEmptyTrashConfirm(true)}
+                      className="text-muted-foreground hover:text-foreground text-[10px] transition-colors"
+                    >
+                      <T>Empty</T>
+                    </button>
+                  </div>
+                </SidebarGroupContent>
+                <SidebarGroupContent className="mt-2">
+                  <SidebarMenu>
+                    {filteredTrashedNotes.map((note) => (
+                      <NoteTreeItem
+                        key={note._id}
+                        note={note}
+                        isActive={pathname === `/notes/${note._id}`}
+                        folders={flatFolders}
+                        variant="root"
+                        onRename={handleRenameNote}
+                        onTogglePin={handleToggleNotePin}
+                        onMoveToFolder={handleMoveNoteToFolder}
+                        onArchive={handleArchiveNote}
+                        onDelete={handlePermanentlyDeleteNote}
+                        onRestore={handleRestoreNote}
+                      />
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </>
+            ) : null}
+            <AlertDialog open={showEmptyTrashConfirm} onOpenChange={setShowEmptyTrashConfirm}>
+              <AlertDialogContent size="sm">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    <T>Empty trash?</T>
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    <T>
+                      All {trashedNotes.length} trashed notes will be permanently deleted. This
+                      cannot be undone.
+                    </T>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel size="sm">
+                    <T>Cancel</T>
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => void handleEmptyTrash()}
+                  >
+                    <T>Empty trash</T>
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </SidebarGroup>
         ) : (
           <SidebarGroup key="settings" className="animate-slide-in-right">
