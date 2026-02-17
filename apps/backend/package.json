@@ -18,12 +18,12 @@
   "dependencies": {
     "@clerk/backend": "^2.30.1",
     "convex": "catalog:",
-    "convex-helpers": "^0.1.111",
-    "svix": "^1.84.1"
+    "convex-helpers": "^0.1.112",
+    "svix": "^1.85.0"
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "@typescript/native-preview": "7.0.0-dev.20260216.1",
+    "@typescript/native-preview": "7.0.0-dev.20260217.1",
     "typescript": "catalog:"
   },
   "knip": {
