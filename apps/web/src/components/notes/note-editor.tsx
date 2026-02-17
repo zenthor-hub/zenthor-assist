@@ -4,7 +4,8 @@ import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import TextAlign from "@tiptap/extension-text-align";
 import Underline from "@tiptap/extension-underline";
-import { BubbleMenu, EditorContent, type Editor, useEditor } from "@tiptap/react";
+import { EditorContent, type Editor, useEditor } from "@tiptap/react";
+import { BubbleMenu } from "@tiptap/react/menus";
 import StarterKit from "@tiptap/starter-kit";
 import {
   AlignCenter,
@@ -26,7 +27,7 @@ import {
   Underline as UnderlineIcon,
   Unlink,
 } from "lucide-react";
-import { forwardRef, useCallback, useImperativeHandle, useState } from "react";
+import { type FormEvent, type Ref, useCallback, useImperativeHandle, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -81,10 +82,15 @@ function getHeadingLabel(editor: Editor): string {
   return "P";
 }
 
-export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function NoteEditor(
-  { initialContent, placeholder, onDirty, onAiAction, disabled = false, className },
+export function NoteEditor({
+  initialContent,
+  placeholder,
+  onDirty,
+  onAiAction,
+  disabled = false,
+  className,
   ref,
-) {
+}: NoteEditorProps & { ref?: Ref<NoteEditorHandle> }) {
   const [linkUrl, setLinkUrl] = useState("");
   const [linkMenuOpen, setLinkMenuOpen] = useState(false);
 
@@ -129,7 +135,9 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
         const incoming = normalizeEditorMarkup(html);
         const current = normalizeEditorMarkup(editor.getHTML());
         if (incoming === current) return;
-        editor.commands.setContent(incoming ? toEditorHtml(html) : "", false);
+        editor.commands.setContent(incoming ? toEditorHtml(html) : "", {
+          emitUpdate: false,
+        });
       },
       getEditor() {
         return editor;
@@ -336,8 +344,8 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-64 p-2" onCloseAutoFocus={(e) => e.preventDefault()}>
             <form
-              onSubmit={(e) => {
-                e.preventDefault();
+              onSubmit={(event: FormEvent<HTMLFormElement>) => {
+                event.preventDefault();
                 applyLink();
               }}
               className="flex gap-1.5"
@@ -436,7 +444,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
             const text = e.state.doc.textBetween(from, to, "\n").trim();
             return text.length >= 10;
           }}
-          tippyOptions={{ placement: "top-start" }}
+          options={{ placement: "top-start" }}
           className="animate-bubble-in bg-popover/95 flex items-center gap-0.5 rounded-xl border p-1 shadow-xl backdrop-blur-xl"
         >
           <span className="text-primary flex items-center gap-1 px-1.5 text-[11px] font-medium">
@@ -504,4 +512,4 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function
       ) : null}
     </div>
   );
-});
+}
