@@ -7,19 +7,20 @@ import * as conversations from "./conversations";
 describe("conversations.getOrCreate", () => {
   it("returns the newest active whatsapp conversation and archives older duplicates", async () => {
     const db = new InMemoryConvexDb();
-    const contactId = "contact_1";
+    const contactIdA = "contact_1";
+    const contactIdB = "contact_2";
 
     const olderConversation = await db.insert("conversations", {
-      contactId,
+      contactId: contactIdA,
       channel: "whatsapp",
-      accountId: "cloud-api",
+      accountId: "default",
       status: "active",
     });
 
     const newerConversation = await db.insert("conversations", {
-      contactId,
+      contactId: contactIdB,
       channel: "whatsapp",
-      accountId: "cloud-api",
+      accountId: "default",
       status: "active",
     });
 
@@ -34,9 +35,9 @@ describe("conversations.getOrCreate", () => {
       conversations.getOrCreate,
       { db },
       {
-        contactId,
+        contactId: contactIdA,
         channel: "whatsapp",
-        accountId: "cloud-api",
+        accountId: "default",
       },
     );
 
@@ -51,12 +52,12 @@ describe("conversations.getOrCreate", () => {
 
   it("creates a new whatsapp conversation when no active one exists", async () => {
     const db = new InMemoryConvexDb();
-    const contactId = "contact_2";
+    const contactId = "contact_3";
 
     await db.insert("conversations", {
       contactId,
       channel: "whatsapp",
-      accountId: "cloud-api",
+      accountId: "default",
       status: "archived",
     });
 

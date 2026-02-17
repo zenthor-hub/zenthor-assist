@@ -17,7 +17,7 @@ async function findContactByPhone(ctx: MutationCtx, chatId: string) {
 }
 
 /**
- * Resolve a single active telegram conversation for a contact/account.
+ * Resolve a single active telegram conversation for this account.
  * Keeps newest active conversation and archives older duplicates.
  */
 async function getOrCreateTelegramConversation(
@@ -27,7 +27,6 @@ async function getOrCreateTelegramConversation(
 ) {
   const conversations = await ctx.db
     .query("conversations")
-    .withIndex("by_contactId", (q) => q.eq("contactId", contactId))
     .filter((q) => q.eq(q.field("channel"), "telegram"))
     .filter((q) => q.eq(q.field("status"), "active"))
     .filter((q) => q.eq(q.field("accountId"), accountId))

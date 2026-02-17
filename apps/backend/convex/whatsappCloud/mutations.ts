@@ -5,19 +5,19 @@ import type { MutationCtx } from "../_generated/server";
 import { internalMutation } from "../_generated/server";
 import { classifyApprovalText } from "../lib/approvalKeywords";
 
-const CLOUD_API_ACCOUNT_ID = "cloud-api";
+const CLOUD_API_ACCOUNT_ID = process.env.WHATSAPP_CLOUD_ACCOUNT_ID ?? "cloud-api";
 
 /**
- * Resolve the active WhatsApp conversation for a contact.
+ * Resolve the active WhatsApp conversation for this account.
  * Keeps the newest active conversation and archives duplicates.
  */
 async function getOrCreateCloudConversation(ctx: MutationCtx, contactId: Id<"contacts">) {
+  const accountId = CLOUD_API_ACCOUNT_ID;
   const conversations = await ctx.db
     .query("conversations")
-    .withIndex("by_contactId", (q) => q.eq("contactId", contactId))
     .filter((q) => q.eq(q.field("channel"), "whatsapp"))
     .filter((q) => q.eq(q.field("status"), "active"))
-    .filter((q) => q.eq(q.field("accountId"), CLOUD_API_ACCOUNT_ID))
+    .filter((q) => q.eq(q.field("accountId"), accountId))
     .collect();
 
   const sorted = conversations.sort((a, b) => b._creationTime - a._creationTime);
@@ -34,7 +34,7 @@ async function getOrCreateCloudConversation(ctx: MutationCtx, contactId: Id<"con
   return await ctx.db.insert("conversations", {
     contactId,
     channel: "whatsapp",
-    accountId: CLOUD_API_ACCOUNT_ID,
+    accountId,
     status: "active",
   });
 }

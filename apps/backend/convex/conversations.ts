@@ -43,12 +43,11 @@ export const getOrCreate = serviceMutation({
       });
     }
 
-    if ((args.channel === "whatsapp" || args.channel === "telegram") && args.contactId) {
+    if (args.channel === "whatsapp" || args.channel === "telegram") {
       const accountId = args.accountId ?? "default";
 
       const active = await ctx.db
         .query("conversations")
-        .withIndex("by_contactId", (q) => q.eq("contactId", args.contactId))
         .filter((q) => q.eq(q.field("channel"), args.channel))
         .filter((q) => q.eq(q.field("status"), "active"))
         .filter((q) => q.eq(q.field("accountId"), accountId))
@@ -72,7 +71,7 @@ export const getOrCreate = serviceMutation({
       });
     }
 
-    throw new ConvexError("Must provide userId for web or contactId for whatsapp/telegram");
+    throw new ConvexError("Must provide userId for web conversations");
   },
 });
 

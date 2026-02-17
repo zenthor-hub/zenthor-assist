@@ -157,10 +157,20 @@ export const getPendingJobs = serviceQuery({
   args: {},
   returns: v.array(agentQueueDoc),
   handler: async (ctx) => {
-    return await ctx.db
+    const pending = await ctx.db
       .query("agentQueue")
       .withIndex("by_status", (q) => q.eq("status", "pending"))
       .collect();
+    const processing = await ctx.db
+      .query("agentQueue")
+      .withIndex("by_status", (q) => q.eq("status", "processing"))
+      .collect();
+
+    const byId = new Map<string, (typeof pending)[number]>();
+    for (const job of pending) byId.set(job._id, job);
+    for (const job of processing) byId.set(job._id, job);
+
+    return [...byId.values()];
   },
 });
 
