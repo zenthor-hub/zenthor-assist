@@ -49,6 +49,11 @@ Notes for backend TypeScript setup:
   - `AI_GATEWAY_API_KEY` (required for `core`/`all` roles; not needed for `whatsapp-cloud`)
   - `AGENT_SECRET` (must match backend `AGENT_SECRET` for service-authenticated calls)
   - `AGENT_ROLE` — one of `all | core | whatsapp | whatsapp-ingress | whatsapp-egress | whatsapp-cloud | telegram`
+  - `CODE_AWARENESS_ENABLED` (`true` to include repository context in prompt; `false` by default)
+  - `CODE_MAINTENANCE_MODE` (`true` to enable `code_write_file` and `code_apply_patch`; requires `CODE_AWARENESS_ENABLED=true`)
+  - `CODE_WORKSPACE_ROOT` (optional absolute/relative path; defaults to process working directory)
+  - `CODE_CONTEXT_FILES` (optional comma-separated paths, defaults to `AGENTS.md, CLAUDE.md, README.md, CHANGELOG.md, package.json, OPENCLAW-COMPARISON.md`)
+  - `CODE_CONTEXT_MAX_BYTES` (optional integer, defaults to `96000`)
   - `GROQ_API_KEY` (recommended for `core`/`all` — WhatsApp voice note transcription)
   - `BLOB_READ_WRITE_TOKEN` (recommended for `core`/`all` — audio blob storage)
   - `WEB_TOOL_URL_ALLOWLIST` (optional comma/whitespace-separated domain allowlist for `browse_url` and `internet_search`; unset = no restrictions)
@@ -108,6 +113,12 @@ CONVEX_URL=<your-convex-url>
 AI_GATEWAY_API_KEY=<gateway-key>
 AGENT_SECRET=<same-as-convex>
 WORKER_ID=agent-core-<env>
+# Optional code-awareness flags (off by default)
+# CODE_AWARENESS_ENABLED=true
+# CODE_MAINTENANCE_MODE=false
+# CODE_WORKSPACE_ROOT=/path/to/agent-repo
+# CODE_CONTEXT_FILES=AGENTS.md,CLAUDE.md,README.md
+# CODE_CONTEXT_MAX_BYTES=96000
 ```
 
 - `agent-whatsapp-cloud`

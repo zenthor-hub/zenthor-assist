@@ -70,6 +70,17 @@ This preserves your notes/tasks “service mindset” while making new capabilit
      - `tool_output.contract_violation` logs
 - Prefer small manifest-level policy over hardcoding approvals unless absolutely needed.
 
+### 7) Self-awareness and code-maintenance behavior
+
+- Code-awareness can be enabled with `CODE_AWARENESS_ENABLED=true`.
+- `code_read_file`, `code_list_files`, and `code_search_files` are then included in available tooling via `alsoAllow`.
+- `CODE_MAINTENANCE_MODE=true` additionally enables:
+  - `code_write_file`
+  - `code_apply_patch` (OpenClaw-style block parser)
+- `loadCodeWorkspaceContext()` prepends selected context files to the system prompt when code awareness is enabled.
+- `CODE_WORKSPACE_ROOT`, `CODE_CONTEXT_FILES`, and `CODE_CONTEXT_MAX_BYTES` control context scope and prompt budget.
+- These tools are constrained to the workspace root via path checks and should only be enabled in trusted environments.
+
 ## 6) Where to adjust behavior next (suggested)
 
 - Add strict, typed plugin contracts at DB/API boundary for `toolContracts`.
