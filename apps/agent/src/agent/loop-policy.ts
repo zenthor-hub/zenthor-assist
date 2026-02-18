@@ -40,6 +40,7 @@ export interface BuildLoopToolPolicyOptions {
     allow?: string[];
     deny?: string[];
   };
+  codeTools?: string[];
 }
 
 export function buildPolicyFingerprint(policy?: ToolPolicy): string {
@@ -53,6 +54,7 @@ export function buildLoopToolPolicy({
   skills,
   pluginPolicy,
   agentPolicy,
+  codeTools,
 }: BuildLoopToolPolicyOptions): LoopToolPolicyResult {
   const channelPolicy = getDefaultPolicy(channel);
   const skillPolicy = buildSkillPolicy(skills);
@@ -60,6 +62,9 @@ export function buildLoopToolPolicy({
   if (skillPolicy) policies.push(skillPolicy);
   if (pluginPolicy) policies.push(pluginPolicy);
   if (agentPolicy) policies.push(agentPolicy);
+  if (codeTools?.length) {
+    policies.push({ alsoAllow: codeTools });
+  }
 
   const mergedPolicy = policies.length > 1 ? mergeToolPolicies(...policies) : channelPolicy;
   const policyMergeSource = [
@@ -67,6 +72,7 @@ export function buildLoopToolPolicy({
     skillPolicy ? "skills" : undefined,
     pluginPolicy ? "plugin" : undefined,
     agentPolicy ? "agent" : undefined,
+    codeTools && codeTools.length > 0 ? "code" : undefined,
   ]
     .filter((source): source is string => source !== undefined)
     .join("+");

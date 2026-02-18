@@ -7,6 +7,12 @@ import { getConvexClient } from "../convex/client";
 import { logger } from "../observability/logger";
 import type { AudioTriggerMessage } from "./audio-processing";
 import { buildConversationMessages, processAudioTrigger } from "./audio-processing";
+import {
+  getCodeToolNames,
+  isCodeAwarenessEnabled,
+  loadCodeWorkspaceContext,
+  resolveWorkspaceRoot,
+} from "./code-context";
 import { compactMessages } from "./compact";
 import { evaluateContext } from "./context-guard";
 import { classifyError, isRetryable } from "./errors";
@@ -111,6 +117,8 @@ export function startAgentLoop() {
       let replyAccountId: string | undefined;
       let isInternalJob = false;
       let assistantMessagePersisted = false;
+      const isCodeAwareEnabled = isCodeAwarenessEnabled();
+      let projectContext = "";
 
       const sendFailureReply = async () => {
         if (
@@ -360,6 +368,20 @@ export function startAgentLoop() {
         replyContactPhone = context.contact?.phone;
         replyAccountId = context.conversation.accountId;
 
+        if (isCodeAwareEnabled) {
+          projectContext = await loadCodeWorkspaceContext({
+            workspaceRoot: resolveWorkspaceRoot(env.CODE_WORKSPACE_ROOT),
+            maxBytes: env.CODE_CONTEXT_MAX_BYTES,
+          }).catch((error) => {
+            void logger.warn("agent.code_context.load_failed", {
+              jobId: job._id,
+              channel,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            return "";
+          });
+        }
+
         // Enqueue typing indicator for messaging channels (processed by their outbound runtimes)
         if ((channel === "whatsapp" || channel === "telegram") && context.contact?.phone) {
           client
@@ -438,6 +460,7 @@ export function startAgentLoop() {
           skills: context.skills ?? [],
           pluginPolicy: pluginTools.policy,
           agentPolicy: agentConfig?.toolPolicy,
+          codeTools: isCodeAwareEnabled ? getCodeToolNames() : undefined,
         });
 
         const mergedTools = {
@@ -519,6 +542,7 @@ export function startAgentLoop() {
               shouldBlock,
               policyFingerprint,
               policyMergeSource,
+              codeContext: projectContext || undefined,
               conversationId: job.conversationId,
               jobId: job._id,
               toolContracts: pluginTools.toolContracts,
@@ -608,6 +632,7 @@ export function startAgentLoop() {
             shouldBlock,
             policyFingerprint,
             policyMergeSource,
+            codeContext: projectContext || undefined,
             conversationId: job.conversationId,
             jobId: job._id,
             toolContracts: pluginTools.toolContracts,
@@ -696,6 +721,7 @@ export function startAgentLoop() {
             shouldBlock,
             policyFingerprint,
             policyMergeSource,
+            codeContext: projectContext || undefined,
             conversationId: job.conversationId,
             jobId: job._id,
             toolContracts: pluginTools.toolContracts,

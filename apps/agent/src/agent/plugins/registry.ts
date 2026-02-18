@@ -2,6 +2,13 @@ import type { Tool } from "ai";
 
 import { browseUrl } from "../tools/browse-url";
 import { calculate } from "../tools/calculate";
+import {
+  codeApplyPatch,
+  codeListFiles,
+  codeReadFile,
+  codeSearchFiles,
+  codeWriteFile,
+} from "../tools/code";
 import { currentTime } from "../tools/current-time";
 import { dateCalc } from "../tools/date-calc";
 import { delegateToSubagent } from "../tools/delegate-to-subagent";
@@ -360,6 +367,104 @@ const coreSubagentPlugin: RuntimePlugin = {
   },
 };
 
+const coreCodeWorkspacePlugin: RuntimePlugin = {
+  name: "core-code-workspace",
+  version: "1.0.0",
+  source: "builtin",
+  manifest: {
+    id: "core-code-workspace",
+    version: "1.0.0",
+    tools: [
+      "code_list_files",
+      "code_read_file",
+      "code_search_files",
+      "code_write_file",
+      "code_apply_patch",
+    ],
+    riskLevel: "low",
+    kind: "integration",
+    source: "builtin",
+    description: "Repository inspection and safe code editing helpers",
+    toolDescriptors: {
+      code_list_files: {
+        name: "code_list_files",
+        strict: true,
+        inputExamples: [
+          {
+            input: {
+              path: ".",
+              recursive: true,
+              maxDepth: 4,
+              maxFiles: 80,
+              includeHidden: false,
+            },
+          },
+        ],
+      },
+      code_read_file: {
+        name: "code_read_file",
+        strict: true,
+        inputExamples: [
+          {
+            input: {
+              path: "README.md",
+              maxBytes: 12000,
+            },
+          },
+        ],
+      },
+      code_search_files: {
+        name: "code_search_files",
+        strict: true,
+        inputExamples: [
+          {
+            input: {
+              query: "agent loop",
+              path: "apps/agent/src",
+              maxMatches: 20,
+              includeHidden: false,
+            },
+          },
+        ],
+      },
+      code_write_file: {
+        name: "code_write_file",
+        requiresApproval: true,
+        strict: true,
+        inputExamples: [
+          {
+            input: {
+              path: "apps/agent/src/agent/new-helper.ts",
+              overwrite: false,
+              content: "export const example = true;",
+            },
+          },
+        ],
+      },
+      code_apply_patch: {
+        name: "code_apply_patch",
+        requiresApproval: true,
+        strict: true,
+        inputExamples: [
+          {
+            input: {
+              patch:
+                "*** Begin Patch\n*** Update File: apps/agent/src/agent/example.ts\nexport const answer = 42\n*** End Patch",
+            },
+          },
+        ],
+      },
+    },
+  },
+  tools: {
+    code_list_files: codeListFiles,
+    code_read_file: codeReadFile,
+    code_search_files: codeSearchFiles,
+    code_write_file: codeWriteFile,
+    code_apply_patch: codeApplyPatch,
+  },
+};
+
 const builtinPlugins: RuntimePlugin[] = [
   coreTimePlugin,
   coreMemoryPlugin,
@@ -369,6 +474,7 @@ const builtinPlugins: RuntimePlugin[] = [
   coreCalculatorPlugin,
   coreDateCalcPlugin,
   coreSubagentPlugin,
+  coreCodeWorkspacePlugin,
 ];
 
 export class PluginRegistry {

@@ -1,6 +1,7 @@
 import { env } from "@zenthor-assist/env/agent";
 
 import { getProviderMode } from "./agent/ai-gateway";
+import { shouldWarnForCodeMaintenanceAlignment } from "./agent/code-startup";
 import { startAgentLoop } from "./agent/loop";
 import {
   getModelCompatibilityErrors,
@@ -37,7 +38,10 @@ async function main() {
   }
 
   // Warn about recommended (non-fatal) env vars that may cause runtime degradation
-  const recommendedEnv = getRecommendedEnvForRole(role);
+  const recommendedEnv = getRecommendedEnvForRole(role, {
+    codeAwarenessEnabled: env.CODE_AWARENESS_ENABLED,
+    codeMaintenanceMode: env.CODE_MAINTENANCE_MODE,
+  });
   for (const key of recommendedEnv) {
     if (!process.env[key]) {
       await logger.lineWarn(
@@ -46,6 +50,25 @@ async function main() {
       );
       void logger.warn("agent.missing_recommended_env", { key, role });
     }
+  }
+
+  if (
+    shouldWarnForCodeMaintenanceAlignment({
+      codeAwarenessEnabled: env.CODE_AWARENESS_ENABLED,
+      codeMaintenanceMode: env.CODE_MAINTENANCE_MODE,
+    })
+  ) {
+    await logger.lineWarn(
+      "[main] CODE_MAINTENANCE_MODE is set but CODE_AWARENESS_ENABLED is false; maintenance tools are disabled.",
+      {
+        codeAwarenessEnabled: env.CODE_AWARENESS_ENABLED,
+        codeMaintenanceMode: env.CODE_MAINTENANCE_MODE,
+      },
+    );
+    void logger.warn("agent.code_tools.misaligned_configuration", {
+      codeAwarenessEnabled: env.CODE_AWARENESS_ENABLED,
+      codeMaintenanceMode: env.CODE_MAINTENANCE_MODE,
+    });
   }
 
   const modelCompatibilityErrors = getModelCompatibilityErrors(role, providerMode, {

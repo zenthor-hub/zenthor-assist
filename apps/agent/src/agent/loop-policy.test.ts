@@ -38,4 +38,22 @@ describe("buildLoopToolPolicy", () => {
     expect(telegramResult.noteAwarePolicy.allow).toContain("calculate");
     expect(telegramResult.noteAwarePolicy.allow).not.toContain("note_create");
   });
+
+  it("adds code tools as additional allowed tools when enabled", () => {
+    const result = buildLoopToolPolicy({
+      channel: "web",
+      skills: [],
+      pluginPolicy: { allow: ["calculate"] },
+      agentPolicy: undefined,
+      codeTools: ["code_list_files", "code_read_file", "code_write_file", "code_apply_patch"],
+    });
+
+    expect(result.policyMergeSource).toBe("channel+plugin+code");
+    expect(result.mergedPolicy.allow).toContain("calculate");
+    expect(result.mergedPolicy.allow).toContain("code_list_files");
+    expect(result.mergedPolicy.allow).toContain("code_read_file");
+    expect(result.mergedPolicy.allow).toContain("code_write_file");
+    expect(result.mergedPolicy.allow).toContain("code_apply_patch");
+    expect(result.noteAwarePolicy.allow).toContain("note_create");
+  });
 });

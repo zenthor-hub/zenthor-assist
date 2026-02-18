@@ -175,6 +175,7 @@ function buildSystemPrompt(
   agentConfig?: AgentConfig,
   channel?: "web" | "whatsapp" | "telegram",
   noteContext?: { noteId?: string; title: string; preview?: string },
+  codeContext?: string,
 ): string {
   const basePrompt = agentConfig?.systemPrompt ?? BASE_SYSTEM_PROMPT;
 
@@ -185,7 +186,9 @@ function buildSystemPrompt(
   }
 
   if (!skills || skills.length === 0) {
-    if (!noteContext) return `${prompt}${NOTE_TOOL_CONFIRMATION_PROMPT}`;
+    if (!noteContext) {
+      return `${prompt}${NOTE_TOOL_CONFIRMATION_PROMPT}${codeContext ? `\n\n## Project Context\n${codeContext}` : ""}`;
+    }
   } else {
     const skillsSection = skills
       .map((s) => {
@@ -198,7 +201,9 @@ function buildSystemPrompt(
     prompt = `${prompt}\n\n## Active Skills\n\n${skillsSection}`;
   }
 
-  if (!noteContext) return `${prompt}${NOTE_TOOL_CONFIRMATION_PROMPT}`;
+  if (!noteContext) {
+    return `${prompt}${NOTE_TOOL_CONFIRMATION_PROMPT}${codeContext ? `\n\n## Project Context\n${codeContext}` : ""}`;
+  }
 
   const commandHints = [
     "/create-note — create a brand-new note (use note_create)",
@@ -243,7 +248,7 @@ Current note preview:
 ${noteContext.preview ?? "(empty)"}
 ${noteIdLine}
 
-${commandPolicy}`;
+${commandPolicy}${codeContext ? `\n\n## Project Context\n${codeContext}` : ""}`;
 }
 
 const DEFAULT_TOOLS_CACHE = new Map<string, Record<string, Tool>>();
@@ -381,6 +386,7 @@ interface GenerateOptions {
     title: string;
     preview?: string;
   };
+  codeContext?: string;
 }
 
 interface ResolvedModelConfig {
@@ -865,6 +871,7 @@ function buildSharedGenerationContext(
       options?.agentConfig,
       options?.channel,
       resolvedNoteContext,
+      options?.codeContext,
     ),
     options,
     conversationMessages,
