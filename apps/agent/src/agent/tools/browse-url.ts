@@ -1,9 +1,15 @@
 import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
 
 import { tool } from "ai";
 import { convert } from "html-to-text";
 import { z } from "zod";
+
+import {
+  isDisallowedHostname,
+  isPrivateIpAddress,
+  matchesHostnameAllowlist,
+  resolveUrlAllowlist,
+} from "./url-guard";
 
 const ALLOWED_PROTOCOLS = ["http:", "https:"] as const;
 const ALLOWED_PORTS = new Set([80, 443]);
@@ -17,93 +23,8 @@ const inputSchema = z.object({
 });
 type BrowseUrlInput = z.infer<typeof inputSchema>;
 
-function isDisallowedHostname(hostname: string): boolean {
-  const normalized = hostname.toLowerCase();
-  return (
-    normalized === "localhost" ||
-    normalized.endsWith(".localhost") ||
-    normalized.endsWith(".local") ||
-    normalized === "localhost.localdomain" ||
-    normalized === "local" ||
-    normalized.endsWith(".internal")
-  );
-}
-
-function isBlockedIPv4(address: string): boolean {
-  const parts = address.split(".").map((part) => Number.parseInt(part, 10));
-  if (parts.length !== 4 || parts.some((part) => Number.isNaN(part) || part < 0 || part > 255)) {
-    return false;
-  }
-
-  const [first, second] = parts;
-  if (first === undefined || second === undefined) {
-    return false;
-  }
-
-  return (
-    first === 10 ||
-    first === 127 ||
-    first === 0 ||
-    first === 255 ||
-    (first === 169 && second === 254) ||
-    (first === 172 && second >= 16 && second <= 31) ||
-    (first === 192 && second === 168) ||
-    (first === 100 && second >= 64 && second <= 127)
-  );
-}
-
-function isBlockedIPv6(address: string): boolean {
-  const normalized = address.toLowerCase();
-  return (
-    normalized === "::" ||
-    normalized === "::1" ||
-    normalized === "0:0:0:0:0:0:0:1" ||
-    normalized.startsWith("fe80") ||
-    normalized.startsWith("fc") ||
-    normalized.startsWith("fd") ||
-    normalized.startsWith("ff") ||
-    normalized.startsWith("2001:db8") ||
-    normalized.startsWith("2002:") ||
-    isMappedIPv6AddressBlocked(normalized)
-  );
-}
-
-function isMappedIPv6AddressBlocked(address: string): boolean {
-  if (!address.startsWith("::ffff:")) return false;
-  const mappedAddress = address.slice("::ffff:".length);
-  if (mappedAddress.includes(".")) {
-    return isBlockedIPv4(mappedAddress);
-  }
-
-  const parts = mappedAddress.split(":");
-  if (parts.length > 2) return false;
-  const paddedParts = parts.map((part) => part.padStart(4, "0"));
-  if (!parts.every((part) => part.length > 0 && part.length <= 4 && /^[0-9a-f]+$/i.test(part)))
-    return false;
-
-  if (parts.length === 1) {
-    const value = Number.parseInt(paddedParts[0]!, 16);
-    if (Number.isNaN(value)) return false;
-    const octets = [
-      (value >>> 24) & 0xff,
-      (value >>> 16) & 0xff,
-      (value >>> 8) & 0xff,
-      value & 0xff,
-    ];
-    return isBlockedIPv4(octets.join("."));
-  }
-
-  const high = Number.parseInt(paddedParts[0]!, 16);
-  const low = Number.parseInt(paddedParts[1]!, 16);
-  if (Number.isNaN(high) || Number.isNaN(low)) return false;
-  const mapped = `${(high >>> 8) & 0xff}.${high & 0xff}.${(low >>> 8) & 0xff}.${low & 0xff}`;
-  return isBlockedIPv4(mapped);
-}
-
-function isBlockedIp(address: string): boolean {
-  const family = isIP(address);
-  if (!family) return false;
-  return family === 4 ? isBlockedIPv4(address) : isBlockedIPv6(address);
+function getConfiguredUrlAllowlist(): string[] {
+  return resolveUrlAllowlist(process.env.WEB_TOOL_URL_ALLOWLIST) ?? [];
 }
 
 function isBlockedPort(port: number, protocol: string): boolean {
@@ -115,7 +36,10 @@ function isBlockedPort(port: number, protocol: string): boolean {
   return false;
 }
 
-async function isPrivateOrBlockedTarget(rawUrl: string): Promise<string | undefined> {
+async function isPrivateOrBlockedTarget(
+  rawUrl: string,
+  urlAllowlist: string[],
+): Promise<string | undefined> {
   let url: URL;
 
   try {
@@ -138,11 +62,15 @@ async function isPrivateOrBlockedTarget(rawUrl: string): Promise<string | undefi
     return "Error: Port not allowed. Use http/https on ports 80 or 443 only.";
   }
 
+  if (urlAllowlist.length > 0 && !matchesHostnameAllowlist(hostname, urlAllowlist)) {
+    return `Error: URL not allowed by policy. Allowed domains: ${urlAllowlist.join(", ")}`;
+  }
+
   if (isDisallowedHostname(hostname)) {
     return "Error: Hostname is blocked for security reasons.";
   }
 
-  if (isBlockedIp(hostname)) {
+  if (isPrivateIpAddress(hostname)) {
     return "Error: Direct IP address target is blocked.";
   }
 
@@ -152,7 +80,7 @@ async function isPrivateOrBlockedTarget(rawUrl: string): Promise<string | undefi
       return "Error: Hostname did not resolve to any addresses.";
     }
 
-    const blocked = addresses.some((record) => isBlockedIp(record.address));
+    const blocked = addresses.some((record) => isPrivateIpAddress(record.address));
     if (blocked) {
       return "Error: Hostname resolves to blocked/private IP range.";
     }
@@ -166,11 +94,12 @@ async function isPrivateOrBlockedTarget(rawUrl: string): Promise<string | undefi
 async function fetchWithRedirectGuard(
   rawUrl: string,
   requestConfig: RequestInit,
+  urlAllowlist: string[],
 ): Promise<Response> {
   let currentUrl = rawUrl;
 
   for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects++) {
-    const blocked = await isPrivateOrBlockedTarget(currentUrl);
+    const blocked = await isPrivateOrBlockedTarget(currentUrl, urlAllowlist);
     if (blocked) {
       throw new Error(blocked);
     }
@@ -209,7 +138,9 @@ function isBinaryContentType(ct: string): boolean {
 }
 
 export async function executeBrowseUrl(input: BrowseUrlInput): Promise<string> {
-  const validationError = await isPrivateOrBlockedTarget(input.url);
+  const configuredAllowlist = getConfiguredUrlAllowlist();
+
+  const validationError = await isPrivateOrBlockedTarget(input.url, configuredAllowlist);
   if (validationError) {
     return validationError;
   }
@@ -224,7 +155,7 @@ export async function executeBrowseUrl(input: BrowseUrlInput): Promise<string> {
   };
 
   try {
-    const response = await fetchWithRedirectGuard(input.url, fetchConfig);
+    const response = await fetchWithRedirectGuard(input.url, fetchConfig, configuredAllowlist);
 
     if (!response.ok) {
       return `Error: HTTP ${response.status} ${response.statusText}`;

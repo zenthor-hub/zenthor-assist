@@ -14,17 +14,24 @@ async function exec(url: string): Promise<string> {
 }
 
 const mockFetch = vi.fn<typeof globalThis.fetch>();
+let originalWebToolUrlAllowlist: string | undefined;
 
 beforeEach(() => {
   mockFetch.mockReset();
   mockLookup.mockReset();
   mockLookup.mockResolvedValue([{ address: "93.184.216.34", family: 4 }]);
+  originalWebToolUrlAllowlist = process.env.WEB_TOOL_URL_ALLOWLIST;
   vi.stubGlobal("fetch", mockFetch);
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  if (originalWebToolUrlAllowlist === undefined) {
+    delete process.env.WEB_TOOL_URL_ALLOWLIST;
+  } else {
+    process.env.WEB_TOOL_URL_ALLOWLIST = originalWebToolUrlAllowlist;
+  }
 });
 
 function makeResponse(body: string, init?: { status?: number; headers?: Record<string, string> }) {
@@ -80,6 +87,11 @@ describe("browseUrl", () => {
       expect(result).toContain("Direct IP address target is blocked");
     });
 
+    it("blocks NAT64-loopback mapped IPv4 addresses", async () => {
+      const result = await exec("http://[64:ff9b::127.0.0.1]");
+      expect(result).toContain("Direct IP address target is blocked");
+    });
+
     it("blocks RFC1918 addresses resolved from hostname", async () => {
       mockLookup.mockResolvedValueOnce([{ address: "10.1.2.3", family: 4 }]);
       const result = await exec("http://example.internal-service.test");
@@ -99,6 +111,22 @@ describe("browseUrl", () => {
     it("blocks non-allowed port targets", async () => {
       const result = await exec("http://example.com:8080");
       expect(result).toContain("Port not allowed");
+    });
+
+    it("blocks URLs outside configured allowlist", async () => {
+      process.env.WEB_TOOL_URL_ALLOWLIST = "example.com, api.github.com";
+      const result = await exec("http://blocked.example");
+      expect(result).toContain("URL not allowed by policy");
+    });
+
+    it("allows URLs in configured allowlist", async () => {
+      process.env.WEB_TOOL_URL_ALLOWLIST = "example.com,*.github.com";
+      mockFetch.mockResolvedValueOnce(
+        makeResponse("OpenClaw docs", { headers: { "content-type": "text/plain" } }),
+      );
+      const result = await exec("https://docs.github.com/agent");
+      expect(result).toBe("OpenClaw docs");
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
     it("blocks redirect to blocked host", async () => {
