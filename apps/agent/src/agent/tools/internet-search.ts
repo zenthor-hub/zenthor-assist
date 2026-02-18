@@ -2,6 +2,8 @@ import { env } from "@zenthor-assist/env/agent";
 import { tool } from "ai";
 import { z } from "zod";
 
+import { filterResultsByAllowlist, resolveUrlAllowlist } from "./url-guard";
+
 const TAVILY_SEARCH_URL = "https://api.tavily.com/search";
 const TIMEOUT_MS = 12_000;
 const DEFAULT_MAX_RESULTS = 5;
@@ -25,7 +27,7 @@ function getTavilyApiKey(): string | null {
 
 export const internetSearch = tool({
   description:
-    "Search the internet for recent or factual information and return ranked source results. Use this for current events, latest updates, fact-checking, and finding relevant URLs before reading pages with browse_url.",
+    "Search the internet for recent or factual information and return ranked source results. Use this for current events, fact-checking, and finding relevant URLs before reading pages with browse_url.",
   inputSchema: z.object({
     query: z.string().describe("Natural-language search query to run on the public web"),
     maxResults: z
@@ -94,12 +96,16 @@ export const internetSearch = tool({
         snippet: r.content ?? "",
         score: r.score ?? null,
       }));
+      const urlAllowlist = resolveUrlAllowlist(process.env.WEB_TOOL_URL_ALLOWLIST);
+      const filteredResults = urlAllowlist
+        ? filterResultsByAllowlist(normalized, urlAllowlist)
+        : normalized;
 
       return {
         provider: "tavily",
         query,
-        resultCount: normalized.length,
-        results: normalized,
+        resultCount: filteredResults.length,
+        results: filteredResults,
       };
     } catch (err) {
       if (err instanceof DOMException && err.name === "TimeoutError") {
