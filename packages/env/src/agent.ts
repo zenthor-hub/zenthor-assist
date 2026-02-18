@@ -22,6 +22,7 @@ const envSchema = z.object({
   AI_CONTEXT_WINDOW: z.coerce.number().optional(),
   AI_EMBEDDING_MODEL: z.string().default("openai/text-embedding-3-small"),
   WEB_SEARCH_PROVIDER: z.enum(["tavily"]).optional().default("tavily"),
+  WEB_TOOL_URL_ALLOWLIST: z.string().optional(),
   TAVILY_API_KEY: z.string().min(1).optional(),
   // OpenAI subscription mode (personal ChatGPT Plus/Pro via Codex endpoint)
   AI_SUBSCRIPTION_BASE_URL: z

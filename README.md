@@ -51,6 +51,7 @@ Notes for backend TypeScript setup:
   - `AGENT_ROLE` — one of `all | core | whatsapp | whatsapp-ingress | whatsapp-egress | whatsapp-cloud | telegram`
   - `GROQ_API_KEY` (recommended for `core`/`all` — WhatsApp voice note transcription)
   - `BLOB_READ_WRITE_TOKEN` (recommended for `core`/`all` — audio blob storage)
+  - `WEB_TOOL_URL_ALLOWLIST` (optional comma/whitespace-separated domain allowlist for `browse_url` and `internet_search`; unset = no restrictions)
   - For `whatsapp-cloud` role: `WHATSAPP_CLOUD_ACCESS_TOKEN`, `WHATSAPP_CLOUD_PHONE_NUMBER_ID`
   - For `telegram` role: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_ACCOUNT_ID`
 - Convex Dashboard env:
