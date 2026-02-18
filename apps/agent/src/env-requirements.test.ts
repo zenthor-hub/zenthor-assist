@@ -123,6 +123,27 @@ describe("getRecommendedEnvForRole", () => {
     expect(recommended).toContain("BLOB_READ_WRITE_TOKEN");
   });
 
+  it("recommends code-awareness context vars when code awareness is enabled", () => {
+    const recommended = getRecommendedEnvForRole("core", {
+      codeAwarenessEnabled: true,
+      codeMaintenanceMode: false,
+    });
+    expect(recommended).toContain("CODE_WORKSPACE_ROOT");
+    expect(recommended).toContain("CODE_CONTEXT_FILES");
+    expect(recommended).toContain("CODE_CONTEXT_MAX_BYTES");
+    expect(recommended).not.toContain("CODE_AWARENESS_ENABLED");
+  });
+
+  it("does not proactively recommend code context vars when awareness is disabled", () => {
+    const recommended = getRecommendedEnvForRole("core", {
+      codeAwarenessEnabled: false,
+      codeMaintenanceMode: false,
+    });
+    expect(recommended).not.toContain("CODE_WORKSPACE_ROOT");
+    expect(recommended).not.toContain("CODE_CONTEXT_FILES");
+    expect(recommended).not.toContain("CODE_CONTEXT_MAX_BYTES");
+  });
+
   it("does not recommend audio deps for whatsapp role", () => {
     const recommended = getRecommendedEnvForRole("whatsapp");
     expect(recommended).not.toContain("GROQ_API_KEY");

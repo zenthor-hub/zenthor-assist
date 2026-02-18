@@ -12,6 +12,11 @@ export interface AgentModelConfig {
   fallbackModel?: string;
 }
 
+interface CodeEnvironmentContext {
+  codeAwarenessEnabled?: boolean;
+  codeMaintenanceMode?: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Required env vars (fatal if missing)
 // ---------------------------------------------------------------------------
@@ -51,10 +56,21 @@ export function getRequiredEnvForRole(
 // Recommended env vars (soft-warn if missing)
 // ---------------------------------------------------------------------------
 
-export function getRecommendedEnvForRole(role: string): string[] {
+export function getRecommendedEnvForRole(
+  role: string,
+  codeOptions: CodeEnvironmentContext = {},
+): string[] {
   const recommended: string[] = [];
   // AGENT_SECRET is needed by all roles for service mutations in production
   recommended.push("AGENT_SECRET");
+
+  if (codeOptions.codeAwarenessEnabled) {
+    recommended.push("CODE_WORKSPACE_ROOT", "CODE_CONTEXT_FILES", "CODE_CONTEXT_MAX_BYTES");
+  }
+
+  if (codeOptions.codeMaintenanceMode) {
+    recommended.push("CODE_MAINTENANCE_MODE");
+  }
 
   if (role === "telegram") {
     recommended.push("TELEGRAM_WEBHOOK_SECRET", "TELEGRAM_ACCOUNT_ID");

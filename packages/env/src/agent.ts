@@ -96,6 +96,19 @@ const envSchema = z.object({
     .enum(["true", "false"])
     .optional()
     .transform((value) => value === "true"),
+  CODE_AWARENESS_ENABLED: z
+    .enum(["true", "false"])
+    .optional()
+    .default("false")
+    .transform((value) => value === "true"),
+  CODE_MAINTENANCE_MODE: z
+    .enum(["true", "false"])
+    .optional()
+    .default("false")
+    .transform((value) => value === "true"),
+  CODE_WORKSPACE_ROOT: z.string().min(1).optional(),
+  CODE_CONTEXT_FILES: z.string().min(1).optional(),
+  CODE_CONTEXT_MAX_BYTES: z.coerce.number().int().min(1).max(1_000_000).optional(),
 });
 
 export const env = envSchema.parse(process.env);
