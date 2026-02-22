@@ -1,6 +1,12 @@
 {
   "mcpServers": {
-    "linear-server": {
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["@playwright/mcp@latest"],
+      "env": {}
+    },
+    "linear-zenthor-assist": {
       "type": "http",
       "url": "https://mcp.linear.app/mcp"
     },
