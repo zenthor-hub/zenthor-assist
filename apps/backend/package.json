@@ -14,7 +14,6 @@
   },
   "dependencies": {
     "@clerk/backend": "^2.32.0",
-    "@convex-dev/aggregate": "^0.2.1",
     "convex": "catalog:",
     "convex-helpers": "^0.1.113",
     "svix": "^1.85.0",
@@ -32,7 +31,6 @@
       "knip"
     ],
     "ignore": [
-      "convex/agent_queue_helpers.ts",
       "convex/**/*.test.ts",
       "tests/_test-fakes.ts",
       "tests/_test-run.ts"

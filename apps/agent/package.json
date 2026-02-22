@@ -38,6 +38,7 @@
     "@sentry/bun": "^10.39.0",
     "@vercel/blob": "^2.2.0",
     "@zenthor-assist/backend": "workspace:*",
+    "@zenthor-assist/env": "workspace:*",
     "@zenthor-assist/observability": "workspace:*",
     "ai": "catalog:",
     "baileys": "^7.0.0-rc.9",
