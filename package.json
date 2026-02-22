@@ -8,12 +8,12 @@
     ],
     "catalog": {
       "ai": "^6.0.89",
-      "@clerk/types": "^4.101.13",
-      "@types/node": "^25.2.3",
-      "convex": "^1.31.7",
+      "@clerk/types": "^4.101.18",
+      "@types/node": "^25.3.0",
+      "convex": "^1.32.0",
       "dotenv": "^17.3.1",
       "typescript": "^5.9.3",
-      "zod": "^4.1.13"
+      "zod": "^4.3.6"
     }
   },
   "type": "module",
@@ -45,21 +45,16 @@
     "release:web:minor": "bun run scripts/release-workspace.ts --workspace web --bump minor",
     "release:web:major": "bun run scripts/release-workspace.ts --workspace web --bump major"
   },
-  "dependencies": {
-    "@zenthor-assist/env": "workspace:*",
-    "dotenv": "catalog:",
-    "zod": "catalog:"
-  },
   "devDependencies": {
     "@types/bun": "^1.3.9",
-    "@types/node": "catalog:",
+    "@types/node": "^25.3.0",
     "@zenthor-assist/config": "workspace:*",
-    "knip": "^5.83.1",
-    "oxfmt": "^0.33.0",
-    "oxlint": "^1.48.0",
-    "turbo": "^2.8.9",
-    "typescript": "catalog:",
+    "knip": "^5.85.0",
+    "oxfmt": "^0.34.0",
+    "oxlint": "^1.49.0",
+    "turbo": "^2.8.10",
+    "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },
-  "packageManager": "bun@1.3.8"
+  "packageManager": "bun@1.3.9"
 }
