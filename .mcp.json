@@ -1,18 +1,18 @@
 {
   "mcpServers": {
-    "playwright": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["@playwright/mcp@latest"],
-      "env": {}
-    },
     "linear-zenthor-assist": {
       "type": "http",
       "url": "https://mcp.linear.app/mcp"
     },
-    "axiom": {
+    "next-devtools": {
+      "type": "stdio",
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://mcp.axiom.co/mcp"]
+      "args": ["next-devtools-mcp@latest"],
+      "env": {}
+    },
+    "clerk": {
+      "type": "http",
+      "url": "https://mcp.clerk.com/mcp"
     },
     "Railway": {
       "type": "stdio",
@@ -20,9 +20,24 @@
       "args": ["@railway/mcp-server"],
       "env": {}
     },
+    "convex": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "convex@latest", "mcp", "start"]
+    },
     "shadcn": {
       "command": "npx",
       "args": ["-y", "shadcn@latest", "mcp"]
+    },
+    "axiom": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.axiom.co/mcp"]
+    },
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["@playwright/mcp@latest"],
+      "env": {}
     }
   }
 }

@@ -1,3 +1,29 @@
-#[mcp_servers.railway]
-#command = "npx"
-#args = ["-y", "@railway/mcp-server"]
+[mcp_servers.linear_zenthor_assist]
+url = "https://mcp.linear.app/mcp"
+
+[mcp_servers.next-devtools]
+command = "npx"
+args = ["next-devtools-mcp@latest"]
+
+[mcp_servers.clerk]
+type = "url"
+url = "https://mcp.clerk.com/mcp"
+
+[mcp_servers.railway]
+command = "npx"
+args = ["-y", "@railway/mcp-server"]
+
+[mcp_servers.convex]
+command = "npx"
+args = ["-y", "convex@latest", "mcp", "start"]
+
+[mcp_servers.shadcn]
+command = "npx"
+args = ["shadcn@latest", "mcp"]
+
+[mcp_servers.axiom_zenthor_assist]
+url = "https://mcp.axiom.co/mcp"
+
+[mcp_servers.playwright]
+command = "npx"
+args = ["@playwright/mcp@latest"]
