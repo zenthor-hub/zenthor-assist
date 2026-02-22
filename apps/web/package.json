@@ -72,16 +72,24 @@
       "oxfmt",
       "knip"
     ],
+    "ignore": [
+      "src/components/ai-elements/confirmation.tsx",
+      "src/components/ai-elements/tool.tsx",
+      "src/components/ui/card.tsx",
+      "src/components/ui/scroll-area.tsx"
+    ],
     "ignoreDependencies": [
       "@zenthor-assist/env",
       "@zenthor-assist/observability"
     ],
     "ignoreIssues": {
       "src/components/ui/**": [
-        "exports"
+        "exports",
+        "types"
       ],
       "src/components/ai-elements/**": [
-        "exports"
+        "exports",
+        "types"
       ],
       "src/components/ui-custom/**": [
         "exports"
