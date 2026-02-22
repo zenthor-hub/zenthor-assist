@@ -2,7 +2,7 @@
 
 ## Repository Snapshot
 
-Verified against this repository on 2026-02-12.
+Verified against this repository on 2026-02-22.
 
 - Monorepo: Bun workspaces + Turborepo
 - Apps:
@@ -65,10 +65,14 @@ Important:
 | agent     | `cd apps/agent && bun run dev:whatsapp`           | Watch mode, WhatsApp runtime (no core loop)                 |
 | agent     | `cd apps/agent && bun run dev:whatsapp-ingress`   | Watch mode, WhatsApp ingress only                           |
 | agent     | `cd apps/agent && bun run dev:whatsapp-egress`    | Watch mode, WhatsApp egress only                            |
+| agent     | `cd apps/agent && bun run dev:whatsapp-cloud`     | Watch mode, WhatsApp Cloud egress loop                      |
+| agent     | `cd apps/agent && bun run dev:telegram`           | Watch mode, Telegram runtime                                  |
 | agent     | `cd apps/agent && bun run start:core`             | Non-watch core mode                                         |
 | agent     | `cd apps/agent && bun run start:whatsapp`         | Non-watch WhatsApp mode                                     |
 | agent     | `cd apps/agent && bun run start:whatsapp-ingress` | Non-watch ingress mode                                      |
 | agent     | `cd apps/agent && bun run start:whatsapp-egress`  | Non-watch egress mode                                       |
+| agent     | `cd apps/agent && bun run start:whatsapp-cloud`   | Non-watch WhatsApp Cloud egress mode                         |
+| agent     | `cd apps/agent && bun run start:telegram`         | Non-watch Telegram mode                                     |
 
 ## Validation Expectations
 
@@ -108,6 +112,8 @@ zenthor-assist/
 │   │       ├── schema.ts             # Data model
 │   │       ├── http.ts               # Convex HTTP router
 │   │       ├── clerk/                # Clerk webhook + sync handlers
+│   │       ├── whatsappCloud/        # WhatsApp Cloud webhook + mutations
+│   │       ├── telegram/            # Telegram webhook handlers
 │   │       └── _generated/           # Generated Convex types (do not edit)
 │   └── agent/
 │       └── src/
@@ -115,7 +121,8 @@ zenthor-assist/
 │           ├── convex/               # Convex client wiring
 │           ├── observability/        # Runtime logging/sentry
 │           ├── whatsapp/             # Baileys integration + lease-aware runtime
-│           └── whatsapp-cloud/      # Meta Cloud API egress runtime
+│           ├── whatsapp-cloud/      # Meta Cloud API egress runtime
+│           └── telegram/            # Telegram runtime + queue bridge
 ├── packages/
 │   ├── config/                       # Shared tsconfig.base.json
 │   ├── env/                          # Typed env schemas (`./web`, `./agent`)
@@ -181,12 +188,14 @@ zenthor-assist/
 - Entry point: `apps/agent/src/index.ts`.
 - Role entry wrappers:
   - `apps/agent/src/index.core.ts`
+  - `apps/agent/src/index.whatsapp-cloud.ts`
   - `apps/agent/src/index.whatsapp-ingress.ts`
   - `apps/agent/src/index.whatsapp-egress.ts`
 - Main loop subscribes to pending jobs via `api.agent.getPendingJobs`, claims with lease/heartbeat semantics, generates responses, and writes results back to Convex.
 - Web conversations use streaming placeholder updates; WhatsApp conversations are queued to outbound delivery via `api.delivery.enqueueOutbound`.
 - Tools are resolved through plugin activation/policy + built-ins, then wrapped with approval flow for risky tool usage.
 - Built-in tool registration starts in `apps/agent/src/agent/tools/index.ts`; provider-specific web search tooling is injected via `tools/web-search.ts`.
+- `AGENT_ROLE=telegram` is handled in `apps/agent/src/index.ts` and routes to Telegram runtime integration.
 
 #### Railway Runtime Split (Common Topology)
 
@@ -284,6 +293,8 @@ Optional observability:
 
 - `AXIOM_TOKEN`
 - `AXIOM_DATASET`
+- `GT_API_KEY`
+- `GT_PROJECT_ID`
 - `OBS_ENABLED`
 - `OBS_SAMPLE_RATE`
 - `OBS_LOG_LEVEL`
@@ -294,20 +305,41 @@ Optional observability:
 Required:
 
 - `CONVEX_URL`
-- `AI_GATEWAY_API_KEY` (required for `core` and `all` roles; optional for `whatsapp-cloud`)
+- `AI_GATEWAY_API_KEY` (required unless `AI_PROVIDER_MODE=openai_subscription`; required in subscription mode are `AI_SUBSCRIPTION_ACCESS_TOKEN`/`AI_SUBSCRIPTION_REFRESH_TOKEN`)
 
 Key optional:
 
+- `AI_PROVIDER_MODE` (`gateway` | `openai_subscription`)
+- `AI_TOOL_STRICT` (`true`/`false`)
+- `AI_TOOL_INPUT_EXAMPLES` (`true`/`false`)
+- `AI_SDK_TELEMETRY` (`true`/`false`)
 - `AI_LITE_MODEL` (default `xai/grok-4.1-fast-reasoning`, used for WhatsApp/lite tier)
 - `AI_MODEL` (default `anthropic/claude-sonnet-4-5-20250929`, used for Web/standard tier)
 - `AI_FALLBACK_MODEL` (power tier fallback, used when primary model errors)
 - `AI_CONTEXT_WINDOW`
 - `AI_EMBEDDING_MODEL` (default `openai/text-embedding-3-small`)
+- `AI_SUBSCRIPTION_BASE_URL`
+- `AI_SUBSCRIPTION_CLIENT_ID`
+- `AI_SUBSCRIPTION_ACCESS_TOKEN`
+- `AI_SUBSCRIPTION_REFRESH_TOKEN`
+- `AI_SUBSCRIPTION_EXPIRES_AT`
+- `AI_SUBSCRIPTION_ACCOUNT_ID`
+- `AI_SUBSCRIPTION_AUTH_METHOD` (`browser` | `device`)
+- `AI_SUBSCRIPTION_OAUTH_PORT`
+- `AI_SUBSCRIPTION_AUTO_LOGIN` (`true`/`false`)
+- `WEB_SEARCH_PROVIDER` (`tavily`)
+- `WEB_TOOL_URL_ALLOWLIST`
+- `TAVILY_API_KEY`
 - `AGENT_SECRET` (recommended for all roles; required in production for service mutations)
-- `AGENT_ROLE` (`all | core | whatsapp | whatsapp-ingress | whatsapp-egress | whatsapp-cloud`)
+- `ZENTHOR_FINANCE_API_URL`
+- `ZENTHOR_FINANCE_SERVICE_KEY`
+- `ZENTHOR_FINANCE_ORG_ID`
+- `AGENT_ROLE` (`all | core | whatsapp | whatsapp-ingress | whatsapp-egress | whatsapp-cloud | telegram`)
 - `WORKER_ID`
 - `AGENT_JOB_LOCK_MS`
 - `AGENT_JOB_HEARTBEAT_MS`
+- `AGENT_MAX_DELEGATION_DEPTH`
+- `AGENT_SUBAGENT_TIMEOUT_MS`
 - `ENABLE_WHATSAPP`
 - `WHATSAPP_ACCOUNT_ID`
 - `WHATSAPP_PHONE`
@@ -318,8 +350,13 @@ Key optional:
 - `WHATSAPP_CLOUD_PHONE_NUMBER_ID` (required for `whatsapp-cloud` role)
 - `WHATSAPP_CLOUD_ACCOUNT_ID` (optional; defaults to `cloud-api`)
 - `WHATSAPP_CLOUD_PHONE` (optional; phone label for the cloud account)
+- `WHATSAPP_CLOUD_VERIFY_TOKEN`
+- `WHATSAPP_CLOUD_APP_SECRET`
 - `GROQ_API_KEY` (recommended for `core`/`all` — required for WhatsApp voice note transcription)
 - `BLOB_READ_WRITE_TOKEN` (recommended for `core`/`all` — used for audio blob storage)
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_WEBHOOK_SECRET`
+- `TELEGRAM_ACCOUNT_ID`
 - `AXIOM_TOKEN`
 - `AXIOM_DATASET`
 - `SENTRY_DSN`
@@ -331,6 +368,11 @@ Key optional:
 - `OBS_SAMPLE_RATE`
 - `OBS_LOG_LEVEL`
 - `OBS_INCLUDE_CONTENT`
+- `CODE_AWARENESS_ENABLED` (`true`|`false`)
+- `CODE_MAINTENANCE_MODE` (`true`|`false`)
+- `CODE_WORKSPACE_ROOT`
+- `CODE_CONTEXT_FILES`
+- `CODE_CONTEXT_MAX_BYTES`
 
 Deployment note:
 
@@ -355,6 +397,14 @@ Todoist integration env (optional):
 - `TODOIST_CLIENT_SECRET`
 - `TODOIST_OAUTH_REDIRECT_URI`
 - `TODOIST_OAUTH_SCOPE` (defaults to `data:read_write`)
+- `TODOIST_API_BASE_URL` (defaults to `https://api.todoist.com/api/v1`)
+- `TODOIST_OAUTH_AUTHORIZE_URL` (defaults to `https://todoist.com/oauth/authorize`)
+- `TODOIST_OAUTH_TOKEN_URL` (defaults to `https://todoist.com/oauth/access_token`)
+- `WHATSAPP_CLOUD_VERIFY_TOKEN`
+- `WHATSAPP_CLOUD_APP_SECRET`
+- `WHATSAPP_CLOUD_PHONE_NUMBER_ID`
+- `TELEGRAM_WEBHOOK_SECRET`
+- `TELEGRAM_ACCOUNT_ID`
 
 ## TypeScript and Style Rules
 
